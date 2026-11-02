@@ -9,6 +9,7 @@ describe("describeUploadError", () => {
     ["image_too_many_pixels", "图片像素总数超过允许上限。"],
     ["animated_not_supported", "阶段 1 不支持动图，请换用静态图片。"],
     ["cors_origin_denied", "当前来源不被允许访问 API。"],
+    ["invalid_upload", "一次只能上传一张图片。"],
     ["storage_error", "原图保存失败，请稍后重试。"],
     ["internal_error", "服务出现未预期错误，请稍后重试。"],
   ])("maps %s to Chinese copy", (code, expected) => {

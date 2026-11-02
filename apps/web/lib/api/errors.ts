@@ -16,6 +16,7 @@ const FRIENDLY_MESSAGES: Record<string, string> = {
   request_timeout: "请求超时，请检查网络或稍后重试。",
   network_error: "无法连接 API 服务，请确认后端已经启动。",
   validation_error: "请求参数不完整，请重新选择文件。",
+  invalid_upload: "一次只能上传一张图片。",
   bad_request: "请求无法处理，请重新选择文件。",
   not_found: "请求的资源不存在。",
   method_not_allowed: "请求方式不被支持。",

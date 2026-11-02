@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -95,6 +97,85 @@ def test_upload_response_has_request_id(client: TestClient):
     assert response.headers["x-request-id"]
 
 
+def test_registry_sha256_and_size_match_uploaded_bytes(client: TestClient, settings: Settings):
+    payload = make_image("PNG", size=(96, 64), noise=True)
+    image_id = upload(client, payload).json()["imageId"]
+
+    registry = json.loads((settings.data_dir / "image_registry.json").read_text(encoding="utf-8"))
+    record = registry["images"][image_id]
+
+    assert record["sha256"] == hashlib.sha256(payload).hexdigest()
+    assert record["bytes"] == len(payload)
+
+
+def test_rejects_multiple_files_in_single_field(client: TestClient):
+    payload = make_image("PNG")
+
+    response = client.post(
+        "/api/v1/images",
+        files=[
+            ("file", ("first.png", payload, "image/png")),
+            ("file", ("second.png", payload, "image/png")),
+        ],
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "invalid_upload"
+    assert body["error"]["details"]["fileCount"] == 2
+
+
+def test_png_with_trailing_markup_is_served_as_nosniff_image(client: TestClient):
+    payload = make_image("PNG") + b"\n<html><script>alert('x')</script></html>"
+
+    response = upload(client, payload)
+
+    assert response.status_code == 201
+    original = client.get(f"/api/v1/images/{response.json()['imageId']}/original")
+    assert original.status_code == 200
+    assert original.headers["content-type"] == "image/png"
+    assert original.headers["x-content-type-options"] == "nosniff"
+    assert "sandbox" in original.headers["content-security-policy"]
+    assert original.content == payload
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "payload"),
+    [
+        ("photo.gif", "image/gif", make_image("GIF")),
+        ("photo.bmp", "image/bmp", make_image("BMP")),
+        ("photo.tiff", "image/tiff", make_image("TIFF")),
+        (
+            "vector.svg",
+            "image/svg+xml",
+            b'<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>',
+        ),
+    ],
+)
+def test_rejects_non_supported_formats(
+    client: TestClient,
+    filename: str,
+    content_type: str,
+    payload: bytes,
+):
+    response = upload(client, payload, filename, content_type)
+
+    assert response.status_code == 415
+    assert response.json()["error"]["code"] == "unsupported_media_type"
+
+
+def test_logs_redact_original_filename_and_image_bytes(client: TestClient, caplog):
+    marker = b"UPLOADED_IMAGE_BYTES_SECRET"
+    payload = make_image("PNG") + marker
+
+    with caplog.at_level(logging.DEBUG):
+        response = upload(client, payload, filename="SECRET_NAME.png")
+
+    assert response.status_code == 201
+    assert "SECRET_NAME" not in caplog.text
+    assert marker.decode("ascii") not in caplog.text
+
+
 def test_registry_survives_app_restart(client: TestClient, settings: Settings):
     payload = make_image("PNG")
     image_id = upload(client, payload).json()["imageId"]
@@ -113,11 +194,29 @@ def test_rejects_unsupported_declared_type(client: TestClient):
     assert response.json()["error"]["code"] == "unsupported_media_type"
 
 
-def test_rejects_spoofed_mime_type(client: TestClient):
-    response = upload(client, make_image("JPEG"), "fake.png", "image/png")
+@pytest.mark.parametrize(
+    ("payload", "filename", "declared_type", "detected_type"),
+    [
+        (make_image("JPEG"), "fake.png", "image/png", "image/jpeg"),
+        (make_image("PNG"), "fake.jpg", "image/jpeg", "image/png"),
+    ],
+)
+def test_rejects_spoofed_mime_type(
+    client: TestClient,
+    payload: bytes,
+    filename: str,
+    declared_type: str,
+    detected_type: str,
+):
+    response = upload(client, payload, filename, declared_type)
 
     assert response.status_code == 415
-    assert response.json()["error"]["code"] == "mime_mismatch"
+    body = response.json()
+    assert body["error"]["code"] == "mime_mismatch"
+    assert body["error"]["details"] == {
+        "declaredMimeType": declared_type,
+        "detectedMimeType": detected_type,
+    }
 
 
 def test_rejects_invalid_image_content(client: TestClient):

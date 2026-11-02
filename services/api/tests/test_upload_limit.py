@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.core.upload_limit import UploadSizeLimitMiddleware
 from app.main import create_app
+from tests.conftest import make_image
 
 
 def _settings(tmp_path: Path, *, max_upload_bytes: int = 1024) -> Settings:
@@ -56,6 +57,27 @@ def test_chunked_body_without_content_length_is_rejected(tmp_path: Path, monkeyp
     assert body["error"]["details"]["maxBytes"] == 1024
     assert response.headers["x-request-id"]
     assert list(spool_dir.iterdir()) == []
+
+
+def test_payload_one_byte_over_default_limit_is_rejected(tmp_path: Path):
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        allowed_origins="http://testserver",
+        log_level="WARNING",
+    )
+    png = make_image("PNG")
+    payload = png + b"\0" * (settings.max_upload_bytes + 1 - len(png))
+
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/v1/images",
+            files={"file": ("twenty-mib.png", payload, "image/png")},
+        )
+
+    assert response.status_code == 413
+    body = response.json()
+    assert body["error"]["code"] == "file_too_large"
+    assert body["error"]["details"]["maxBytes"] == settings.max_upload_bytes
 
 
 def test_declared_oversized_content_length_rejects_without_reading(tmp_path: Path):

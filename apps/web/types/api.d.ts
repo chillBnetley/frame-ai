@@ -79,7 +79,7 @@ export interface components {
         /** Body_upload_image_api_v1_images_post */
         Body_upload_image_api_v1_images_post: {
             /** File */
-            file: string;
+            file: string[];
         };
         /** ErrorBody */
         ErrorBody: {

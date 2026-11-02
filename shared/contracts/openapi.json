@@ -244,8 +244,11 @@
       "Body_upload_image_api_v1_images_post": {
         "properties": {
           "file": {
-            "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
             "title": "File"
           }
         },

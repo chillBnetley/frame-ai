@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +11,31 @@ from fastapi.testclient import TestClient
 from app.core.config import REPO_ROOT, Settings
 from app.services.image_service import ImageService
 from tests.conftest import make_image, upload
+
+
+def test_data_dir_is_identical_from_api_dir_and_repo_root():
+    environment = {
+        **os.environ,
+        "FRAME_DATA_DIR": "data",
+        "PYTHONPATH": str(REPO_ROOT / "services" / "api"),
+    }
+    script = "from app.core.config import Settings; print(Settings().data_dir)"
+
+    resolved: list[str] = []
+    for working_dir in (REPO_ROOT / "services" / "api", REPO_ROOT):
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=working_dir,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
+        )
+        resolved.append(result.stdout.strip())
+
+    assert resolved[0] == resolved[1]
+    assert resolved[0] == str((REPO_ROOT / "data").resolve())
 
 
 def test_relative_data_dir_resolves_against_repo_root(tmp_path, monkeypatch):

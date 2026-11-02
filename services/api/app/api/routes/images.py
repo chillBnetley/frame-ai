@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import get_image_service
+from app.core.errors import AppError
 from app.models.schemas import ErrorResponse, UploadImageResponse
 from app.repositories.image_registry import ImageAssetRecord
 from app.services.image_service import ImageService
@@ -38,10 +39,17 @@ def _content_disposition(disposition: str, filename: str) -> str:
 
 @router.post("", response_model=UploadImageResponse, status_code=201)
 async def upload_image(
-    file: Annotated[UploadFile, File(...)],
+    file: Annotated[list[UploadFile], File(...)],
     service: Annotated[ImageService, Depends(get_image_service)],
 ) -> UploadImageResponse:
-    record = await service.create_from_upload(file)
+    if len(file) != 1:
+        raise AppError(
+            400,
+            "invalid_upload",
+            "Exactly one image file must be uploaded.",
+            {"fileCount": len(file)},
+        )
+    record = await service.create_from_upload(file[0])
     return UploadImageResponse(
         image_id=UUID(record.id),
         original_name=record.original_name,

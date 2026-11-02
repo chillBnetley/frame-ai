@@ -20,6 +20,7 @@ from tests.conftest import make_image, upload
         ("x\r\nSet-Cookie: a=b.png", "x%0D%0ASet-Cookie: a=b.png"),
         ("   ", "image"),
         ("图片🙂.jpg", "图片🙂.jpg"),
+        (r"C:\Windows\System32\evil.png", "evil.png"),
     ],
 )
 def test_malicious_filenames_are_sanitized(
