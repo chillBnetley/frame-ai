@@ -10,6 +10,7 @@
 
 ## 上传与图像
 
+- 单次上传只接受一个 `file` 字段；多个文件返回 `400 invalid_upload`，避免“最后一个文件静默胜出”。
 - 动画 WebP/APNG 返回 `415 animated_not_supported`；阶段 1 不处理多帧。
 - 阶段 1 只登记 EXIF 方向与显示尺寸，不旋转像素；浏览器预览 JPEG 时通常会自动按 EXIF 方向显示。真正的方向归一化与导出元数据剥离在阶段 2/5。
 - 颜色模式 L/P/RGBA/CMYK/I;16 可以上传并登记尺寸；统一转 RGB、alpha 合成与 ICC 转换属于阶段 2 管线。
@@ -17,6 +18,7 @@
 
 ## 工具链
 
+- 根目录 `scripts/verify.py` 汇总全部门槛并打印退出码表；必须用 `services/api/.venv/Scripts/python.exe` 运行，以保证与 CI/交接记录使用同一解释器和依赖。
 - Next.js 16 开发代理默认只转发 10 MB 请求体，会先于 FastAPI 截断大图并返回 500。已在 `apps/web/next.config.ts` 设置 `experimental.proxyClientMaxBodySize: "22mb"`；该值必须高于后端 `FRAME_MAX_UPLOAD_BYTES + FRAME_CONTENT_LENGTH_ALLOWANCE`，真实限制仍由后端执行。修改后需重启开发服务器。
 - `npm audit` 的完整审计包含 dev-only 的 ESLint/minimatch 工具链 moderate 提示；`npm audit --omit=dev` 为 0。下次复查：2026-12-02。
 - 早期 Turbopack 开发期崩溃来自 Turbopack 专用的 `@tailwindcss/turbopack` CSS loader 在 Windows 上拉起的子进程退出（0xc0000142）。已改用标准 `@tailwindcss/postcss` + `postcss.config.mjs`；2026-11-02 实测 Turbopack 与 `npm run dev:webpack` 两种模式都能正确加载样式。`dev:webpack` 继续保留为备用入口。
