@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
-from tests.conftest import make_image, upload
+from tests.conftest import image_row, make_image, upload
 
 
 @pytest.mark.parametrize(
@@ -101,8 +100,7 @@ def test_registry_sha256_and_size_match_uploaded_bytes(client: TestClient, setti
     payload = make_image("PNG", size=(96, 64), noise=True)
     image_id = upload(client, payload).json()["imageId"]
 
-    registry = json.loads((settings.data_dir / "image_registry.json").read_text(encoding="utf-8"))
-    record = registry["images"][image_id]
+    record = image_row(settings, image_id)
 
     assert record["sha256"] == hashlib.sha256(payload).hexdigest()
     assert record["bytes"] == len(payload)

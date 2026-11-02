@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data"
     originals_dirname: str = "originals"
     registry_filename: str = "image_registry.json"
+    database_filename: str = "frame.db"
+    preview_dirname: str = "tmp/previews"
+    preview_ttl_seconds: int = Field(default=3600, gt=0)
+    preview_cleanup_interval_seconds: int = Field(default=600, gt=0)
+    render_max_edge_default: int = Field(default=1600, gt=0)
+    render_max_edge_limit: int = Field(default=2560, gt=0)
+    export_max_rss_mb: int = Field(default=3072, gt=0)
 
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     max_image_pixels: int = Field(default=40_000_000, gt=0)
@@ -59,6 +66,14 @@ class Settings(BaseSettings):
     @property
     def registry_path(self) -> Path:
         return self.data_dir / self.registry_filename
+
+    @property
+    def database_path(self) -> Path:
+        return self.data_dir / self.database_filename
+
+    @property
+    def preview_dir(self) -> Path:
+        return self.data_dir / self.preview_dirname
 
 
 @lru_cache

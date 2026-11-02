@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.core.config import Settings
 from app.main import create_app
+from app.repositories.db import connect
 
 
 @pytest.fixture
@@ -59,3 +60,16 @@ def upload(
     content_type: str = "image/png",
 ):
     return client.post("/api/v1/images", files={"file": (filename, payload, content_type)})
+
+
+def image_row(settings: Settings, image_id: str) -> dict[str, object]:
+    connection = connect(settings.database_path)
+    try:
+        row = connection.execute(
+            "SELECT * FROM image_asset WHERE id = ?",
+            (image_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert row is not None
+    return dict(row)

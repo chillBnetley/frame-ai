@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +11,9 @@ from fastapi import UploadFile
 from starlette.datastructures import Headers
 
 from app.core.config import Settings
-from app.repositories.image_registry import ImageAssetRecord, ImageRegistry
+from app.repositories.db import initialize_database
+from app.repositories.image_registry import ImageAssetRecord
+from app.repositories.image_repo import SqliteImageRepository
 from app.services.image_service import ConsistencyReport, ImageService
 from tests.conftest import make_image
 
@@ -32,22 +33,20 @@ def _record(image_id: str, *, storage_key: str | None = None) -> ImageAssetRecor
     )
 
 
-def test_registry_handles_concurrent_inserts(tmp_path: Path):
-    path = tmp_path / "registry.json"
-    registry = ImageRegistry(path)
+def test_sqlite_repository_handles_concurrent_inserts(tmp_path: Path):
+    path = tmp_path / "frame.db"
+    initialize_database(path)
+    repository = SqliteImageRepository(path)
     barrier = Barrier(50)
 
     def insert() -> None:
         barrier.wait()
-        registry.add(_record(str(uuid4())))
+        repository.add(_record(str(uuid4())))
 
     with ThreadPoolExecutor(max_workers=50) as pool:
         list(pool.map(lambda _: insert(), range(50)))
 
-    assert len(registry.list_ids()) == 50
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["version"] == 1
-    assert len(payload["images"]) == 50
+    assert len(repository.list_ids()) == 50
 
 
 class InMemoryImageRepository:

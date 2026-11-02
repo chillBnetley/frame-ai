@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from unicodedata import normalize as unicode_normalize
 
 import pytest
@@ -9,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.api.routes.images import _content_disposition
 from app.core.config import Settings
 from app.services.image_service import sanitize_original_name
-from tests.conftest import make_image, upload
+from tests.conftest import image_row, make_image, upload
 
 
 @pytest.mark.parametrize(
@@ -45,8 +44,7 @@ def test_malicious_filenames_are_sanitized(
     assert "immutable" in original.headers["cache-control"]
     assert "set-cookie" not in original.headers
 
-    registry = json.loads(settings.registry_path.read_text(encoding="utf-8"))
-    assert registry["images"][body["imageId"]]["original_name"] == expected
+    assert image_row(settings, body["imageId"])["original_name"] == expected
     assert (settings.data_dir / "originals" / f"{body['imageId']}.png").is_file()
     assert not (settings.data_dir.parent / "passwd.png").exists()
 

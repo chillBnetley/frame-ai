@@ -24,10 +24,7 @@ class ImageAssetRecord(BaseModel):
 
 
 class ImageRegistry:
-    """Small, atomic JSON registry for uploaded image metadata.
-
-    Sessions and revisions move to versioned SQLite migrations in phase 3.
-    """
+    """Legacy phase 1 JSON registry, retained as the importer's input format."""
 
     VERSION = 1
 

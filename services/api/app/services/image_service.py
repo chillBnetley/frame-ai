@@ -17,8 +17,11 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.imaging.decoder import DecodedImage, inspect_image, normalize_declared_mime
 from app.repositories.base import ImageRepository
-from app.repositories.image_registry import ImageAssetRecord, ImageRegistry
+from app.repositories.db import initialize_database
+from app.repositories.image_registry import ImageAssetRecord
+from app.repositories.image_repo import SqliteImageRepository
 from app.repositories.original_store import OriginalImageStore
+from app.tools.import_json_registry import maybe_import_legacy_registry
 
 logger = logging.getLogger("frame_ai.images")
 
@@ -69,7 +72,7 @@ class ImageService:
     ) -> None:
         self.settings = settings
         self.store = store or OriginalImageStore(settings.data_dir, settings.originals_dirname)
-        self.registry: ImageRepository = repository or ImageRegistry(settings.registry_path)
+        self.registry: ImageRepository = repository or SqliteImageRepository(settings.database_path)
         self._decode_slots = threading.BoundedSemaphore(2)
 
     def ensure_ready(self) -> None:
@@ -81,6 +84,16 @@ class ImageService:
             raise RuntimeError(
                 f"Insufficient free disk space for image storage: {free_bytes} bytes "
                 f"available, {required_bytes} bytes required."
+            )
+        initialize_database(self.settings.database_path)
+        report = maybe_import_legacy_registry(self.settings)
+        if report is not None:
+            logger.info(
+                "legacy_registry_imported imported=%s already_present=%s skipped=%s backup=%s",
+                report.imported,
+                report.already_present,
+                len(report.skipped),
+                report.backup_path,
             )
         logger.info(
             "storage_ready data_dir=%s originals_dir=%s free_bytes=%s",
