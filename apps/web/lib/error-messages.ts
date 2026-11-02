@@ -1,0 +1,71 @@
+import { ApiClientError } from "@/lib/api/client";
+
+export interface EditorError {
+  code: string;
+  message: string;
+  details: Record<string, unknown>;
+}
+
+const EDITOR_MESSAGES: Record<string, string> = {
+  validation_error: "有参数超出范围，已恢复到上次有效值。",
+  revision_conflict: "编辑状态已更新，已为你刷新。",
+  nothing_to_undo: "没有可撤销的步骤。",
+  nothing_to_redo: "没有可重做的步骤。",
+  session_not_found: "找不到这张图片或会话，可能已被清理。请重新上传。",
+  image_not_found: "找不到这张图片或会话，可能已被清理。请重新上传。",
+  revision_not_found: "找不到这个编辑版本，已为你刷新。",
+  server_busy: "正在处理另一张高清导出，请稍后几秒再试。",
+  preview_expired: "",
+  request_timeout: "请求超时，请稍后重试。",
+  network_error: "无法连接后端服务。请确认已启动 API。",
+  storage_error: "服务保存数据失败，请稍后重试。",
+  internal_error: "服务出现未预期错误，请稍后重试。",
+  http_error: "请求失败，请稍后重试。",
+};
+
+function validationField(details: Record<string, unknown>): string | null {
+  const candidates = [details.field, details.fieldName, details.path];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.length > 0) {
+      return candidate;
+    }
+  }
+  if (Array.isArray(details.fields)) {
+    const first = details.fields.find((field) => typeof field === "string");
+    return typeof first === "string" ? first : null;
+  }
+  return null;
+}
+
+export function editorErrorMessage(
+  code: string,
+  details: Record<string, unknown> = {},
+): string {
+  const base = EDITOR_MESSAGES[code];
+  if (code === "validation_error") {
+    const field = validationField(details);
+    if (field) {
+      return `有参数超出范围，已恢复到上次有效值（${field}）。`;
+    }
+    return base ?? "有参数超出范围，已恢复到上次有效值。";
+  }
+  return base ?? "发生未知错误，请稍后重试。";
+}
+
+export function isSilentEditorError(code: string): boolean {
+  return code === "preview_expired";
+}
+
+export function describeEditorError(error: unknown): EditorError {
+  if (error instanceof ApiClientError) {
+    return {
+      code: error.code,
+      message: editorErrorMessage(error.code, error.details),
+      details: error.details,
+    };
+  }
+  if (error instanceof Error) {
+    return { code: "unknown_error", message: error.message, details: {} };
+  }
+  return { code: "unknown_error", message: "发生未知错误，请稍后重试。", details: {} };
+}

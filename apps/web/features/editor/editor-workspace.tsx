@@ -3,10 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ErrorAlert } from "@/components/error-alert";
-import { CheckCircleIcon, ShieldCheckIcon } from "@/components/icons";
+import { CheckCircleIcon, ImageIcon, ShieldCheckIcon } from "@/components/icons";
 import { HealthIndicator } from "@/features/editor/health-indicator";
+import { useRenderPreview } from "@/features/editor/hooks/use-render-preview";
+import {
+  useSessionActions,
+  useSessionRestore,
+} from "@/features/editor/hooks/use-session";
 import { UploadDropzone } from "@/features/editor/upload-dropzone";
 import { UploadResult } from "@/features/editor/upload-result";
+import {
+  EditorProvider,
+  useEditorDispatch,
+  useEditorState,
+} from "@/features/editor/state/editor-context";
 import { fetchConfig, fetchHealth, uploadImage } from "@/lib/api/client";
 import { describeUploadError } from "@/lib/api/errors";
 import { validateUploadFile, type UploadLimits } from "@/lib/upload-validation";
@@ -81,7 +91,105 @@ function useRuntimeLimits(): UploadLimits | null {
   return limits;
 }
 
-export function EditorWorkspace() {
+function SessionPreviewPanel() {
+  const state = useEditorState();
+  const dispatch = useEditorDispatch();
+  const { preview, retry } = useRenderPreview();
+
+  if (state.phase === "creatingSession") {
+    return (
+      <p className="mt-4 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3 text-xs text-white/45">
+        正在准备编辑会话…
+      </p>
+    );
+  }
+
+  if (state.sessionId === null) {
+    return null;
+  }
+
+  return (
+    <section aria-labelledby="first-render-heading" className="mt-4 rounded-2xl border border-white/8 bg-black/20 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 id="first-render-heading" className="text-sm font-medium text-white">
+            服务端首帧渲染
+          </h3>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
+            Session {state.sessionId.slice(0, 8)} · Revision{" "}
+            {state.activeRevisionId?.slice(0, 8) ?? "—"}
+          </p>
+        </div>
+        <span className="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-white/45">
+          {preview.quality === "draft" ? "草稿预览" : "终稿预览"}
+        </span>
+      </div>
+
+      {state.notice && (
+        <p
+          role="status"
+          className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs text-amber-100"
+        >
+          {state.notice}
+        </p>
+      )}
+
+      {state.error && (
+        <div className="mt-3">
+          <ErrorAlert
+            error={state.error}
+            onDismiss={() => dispatch({ type: "error-cleared" })}
+          />
+        </div>
+      )}
+
+      <div className="mt-3 flex min-h-56 items-center justify-center overflow-hidden rounded-xl bg-black/35 p-3 ring-1 ring-white/8">
+        {preview.url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- previews are content-addressed JPEGs served by the API
+          <img
+            key={`${preview.url}-${preview.version}`}
+            src={preview.url}
+            alt="编辑后的预览"
+            className="max-h-[520px] w-full object-contain"
+            onError={() => void retry()}
+          />
+        ) : (
+          <p className="flex items-center gap-2 text-xs text-white/45">
+            <ImageIcon className="size-4" />
+            {preview.status === "error" ? "预览暂时不可用。" : "正在生成预览…"}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/35">
+        <span>
+          {preview.width > 0
+            ? `${preview.width} × ${preview.height}`
+            : "等待渲染尺寸"}
+          {preview.status === "loading" && preview.url ? " · 更新中" : ""}
+        </span>
+        <div className="flex items-center gap-2">
+          {preview.status === "error" && preview.error?.message && (
+            <span className="text-red-200/80">{preview.error.message}</span>
+          )}
+          <button
+            type="button"
+            onClick={() => void retry()}
+            className="min-h-11 rounded-lg border border-white/12 bg-white/[0.03] px-3 text-xs text-white/65 transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            重新生成预览
+          </button>
+        </div>
+      </div>
+
+      <p className="mt-2 text-[11px] text-white/30">
+        会话 ID 已写入 URL（?session=…），刷新页面会从服务端恢复。
+      </p>
+    </section>
+  );
+}
+
+function EditorWorkspaceInner() {
   const apiStatus = useApiHealth();
   const limits = useRuntimeLimits();
   const [image, setImage] = useState<UploadedImage | null>(null);
@@ -89,6 +197,9 @@ export function EditorWorkspace() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const { startSession } = useSessionActions();
+
+  useSessionRestore();
 
   useEffect(() => {
     return () => abortRef.current?.abort();
@@ -116,6 +227,7 @@ export function EditorWorkspace() {
         if (!controller.signal.aborted) {
           setImage(uploaded);
           setPendingFile(null);
+          void startSession(uploaded.imageId);
         }
       } catch (uploadError) {
         if (!controller.signal.aborted) {
@@ -128,7 +240,7 @@ export function EditorWorkspace() {
         }
       }
     },
-    [limits],
+    [limits, startSession],
   );
 
   const canRetry =
@@ -199,6 +311,8 @@ export function EditorWorkspace() {
             </div>
           )}
 
+          <SessionPreviewPanel />
+
           <p className="sr-only" role="status" aria-live="polite">
             {uploading ? "正在上传照片" : image ? "照片上传完成" : ""}
           </p>
@@ -216,5 +330,13 @@ export function EditorWorkspace() {
         </div>
       </div>
     </section>
+  );
+}
+
+export function EditorWorkspace() {
+  return (
+    <EditorProvider>
+      <EditorWorkspaceInner />
+    </EditorProvider>
   );
 }

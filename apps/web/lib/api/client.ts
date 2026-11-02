@@ -4,6 +4,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, ""
 const UPLOAD_TIMEOUT_MS = 60_000;
 const HEALTH_TIMEOUT_MS = 5_000;
 const CONFIG_TIMEOUT_MS = 5_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export class ApiClientError extends Error {
   readonly code: string;
@@ -85,6 +86,42 @@ function normalizeTransportError(error: unknown): ApiClientError {
     return new ApiClientError("request_timeout", "请求超时，请检查网络或稍后重试。");
   }
   return new ApiClientError("network_error", "无法连接 API 服务，请确认后端已经启动。");
+}
+
+export interface ApiRequestOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+export async function apiRequest(
+  path: string,
+  init: RequestInit = {},
+  options: ApiRequestOptions = {},
+): Promise<Response> {
+  const timeout = createTimeoutSignal(
+    options.signal ?? init.signal ?? undefined,
+    options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+  );
+  try {
+    const response = await fetch(apiUrl(path), { ...init, signal: timeout.signal });
+    if (!response.ok) {
+      throw await responseToError(response);
+    }
+    return response;
+  } catch (error) {
+    throw normalizeTransportError(error);
+  } finally {
+    timeout.cleanup();
+  }
+}
+
+export async function apiJson<T>(
+  path: string,
+  init: RequestInit = {},
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  const response = await apiRequest(path, init, options);
+  return (await response.json()) as T;
 }
 
 export async function uploadImage(

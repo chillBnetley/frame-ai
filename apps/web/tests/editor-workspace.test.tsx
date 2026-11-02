@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EditorWorkspace } from "@/features/editor/editor-workspace";
 
@@ -12,6 +12,23 @@ const UPLOADED_IMAGE = {
   exifOrientation: 1,
   mimeType: "image/png",
   bytes: 2048,
+};
+
+const SESSION_STATE = {
+  sessionId: "9d7c2a11-5b62-4f8e-9a41-0f3c7e6b2d18",
+  imageId: UPLOADED_IMAGE.imageId,
+  activeRevisionId: "6c0f4a92-3d15-4c8b-8f27-1a9e5b6d0c34",
+  headRevisionId: "6c0f4a92-3d15-4c8b-8f27-1a9e5b6d0c34",
+  canUndo: false,
+  canRedo: false,
+  revision: {
+    id: "6c0f4a92-3d15-4c8b-8f27-1a9e5b6d0c34",
+    revisionNo: 1,
+    parentId: null,
+    source: "initial",
+    recipe: { schemaVersion: "1.0", styleId: "natural", styleStrength: 0 },
+    createdAt: "2026-11-02T00:00:00Z",
+  },
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -59,6 +76,21 @@ function mockApi(options: { uploadError?: UploadErrorOption } = {}) {
         );
       }
       return jsonResponse(UPLOADED_IMAGE, 201);
+    }
+    if (url.endsWith("/api/v1/sessions") && init?.method === "POST") {
+      return jsonResponse(SESSION_STATE, 201);
+    }
+    if (url.includes(`/api/v1/sessions/${SESSION_STATE.sessionId}/revisions`)) {
+      return jsonResponse({ items: [], nextCursor: null });
+    }
+    if (url.endsWith(`/api/v1/sessions/${SESSION_STATE.sessionId}/render`)) {
+      return jsonResponse({
+        previewUrl: "/api/v1/previews/mocked-preview",
+        width: 800,
+        height: 600,
+        quality: "final",
+        cacheHit: false,
+      });
     }
     return jsonResponse({ error: { code: "not_found", message: "Not found", details: {} } }, 404);
   });
@@ -109,6 +141,10 @@ async function uploadFile() {
   await userEvent.upload(input, file);
 }
 
+beforeEach(() => {
+  window.history.replaceState({}, "", "/");
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -125,7 +161,7 @@ describe("EditorWorkspace", () => {
 
     expect(await screen.findByAltText("原图预览：street.png")).toBeInTheDocument();
     expect(screen.getByText("street.png")).toBeInTheDocument();
-    expect(screen.getByText("800 × 600")).toBeInTheDocument();
+    expect(screen.getAllByText("800 × 600").length).toBeGreaterThan(0);
     expect(screen.getByText("2.0 KB")).toBeInTheDocument();
     expect(screen.getByText("PNG")).toBeInTheDocument();
     expect(
@@ -138,6 +174,10 @@ describe("EditorWorkspace", () => {
       `/api/v1/images/${UPLOADED_IMAGE.imageId}/original?download=true`,
     );
     expect(download).toHaveAttribute("download", "street.png");
+
+    expect(await screen.findByText("服务端首帧渲染")).toBeInTheDocument();
+    expect(await screen.findByAltText("编辑后的预览")).toBeInTheDocument();
+    expect(window.location.search).toBe(`?session=${SESSION_STATE.sessionId}`);
 
     const uploadCall = fetchMock.mock.calls.find(
       ([input, init]) =>
