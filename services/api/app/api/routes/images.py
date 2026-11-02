@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from typing import Annotated
+from unicodedata import normalize
+from urllib.parse import quote
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import FileResponse
+
+from app.api.deps import get_image_service
+from app.models.schemas import UploadImageResponse
+from app.repositories.image_registry import ImageAssetRecord
+from app.services.image_service import ImageService
+
+router = APIRouter(prefix="/images", tags=["images"])
+
+
+def _content_disposition(disposition: str, filename: str) -> str:
+    ascii_name = normalize("NFKD", filename).encode("ascii", "ignore").decode("ascii").strip()
+    ascii_name = ascii_name.replace('"', "").replace("\\", "") or "image"
+    return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"
+
+
+@router.post("", response_model=UploadImageResponse, status_code=201)
+async def upload_image(
+    file: Annotated[UploadFile, File(...)],
+    service: Annotated[ImageService, Depends(get_image_service)],
+) -> UploadImageResponse:
+    record = await service.create_from_upload(file)
+    return UploadImageResponse(
+        image_id=UUID(record.id),
+        original_name=record.original_name,
+        width=record.width,
+        height=record.height,
+        mime_type=record.mime_type,
+        bytes=record.bytes,
+    )
+
+
+@router.get("/{image_id}/original")
+def get_original_image(
+    image_id: str,
+    service: Annotated[ImageService, Depends(get_image_service)],
+    download: Annotated[bool, Query()] = False,
+) -> FileResponse:
+    record: ImageAssetRecord
+    record, path = service.get_original(image_id)
+    disposition = "attachment" if download else "inline"
+    headers = {
+        "Content-Disposition": _content_disposition(disposition, record.original_name),
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+    }
+    return FileResponse(path, media_type=record.mime_type, headers=headers)

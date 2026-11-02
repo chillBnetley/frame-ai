@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+apps/*/node_modules/
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# next.js
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# environment
+.env
+.env.*
+!.env.example
+
+# runtime image data
+data/
+
+# tooling output
+coverage/
+*.log
+.DS_Store

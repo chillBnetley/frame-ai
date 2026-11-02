@@ -1,0 +1,135 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { EditorWorkspace } from "@/features/editor/editor-workspace";
+
+const UPLOADED_IMAGE = {
+  imageId: "2b1d0f76-4a1e-4de0-8a7b-3c0f2f9c1a55",
+  originalName: "street.png",
+  width: 800,
+  height: 600,
+  mimeType: "image/png",
+  bytes: 2048,
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+interface UploadErrorOption {
+  code: string;
+  message: string;
+  status: number;
+}
+
+function mockApi(options: { uploadError?: UploadErrorOption } = {}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.endsWith("/api/v1/health")) {
+      return jsonResponse({ status: "ok", service: "FRAME AI API", version: "0.1.0", storage: "ready" });
+    }
+    if (url.endsWith("/api/v1/images") && init?.method === "POST") {
+      if (options.uploadError) {
+        return jsonResponse(
+          {
+            error: {
+              code: options.uploadError.code,
+              message: options.uploadError.message,
+              details: {},
+            },
+          },
+          options.uploadError.status,
+        );
+      }
+      return jsonResponse(UPLOADED_IMAGE, 201);
+    }
+    return jsonResponse({ error: { code: "not_found", message: "Not found", details: {} } }, 404);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+async function uploadFile() {
+  const input = screen.getByTestId("file-input");
+  const file = new File([new Uint8Array([1, 2, 3, 4])], "street.png", { type: "image/png" });
+  await userEvent.upload(input, file);
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("EditorWorkspace", () => {
+  it("uploads a photo and shows the original preview and metadata", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    expect(screen.getByText("拖入一张照片")).toBeInTheDocument();
+
+    await uploadFile();
+
+    expect(await screen.findByAltText("原图预览：street.png")).toBeInTheDocument();
+    expect(screen.getByText("street.png")).toBeInTheDocument();
+    expect(screen.getByText("800 × 600")).toBeInTheDocument();
+    expect(screen.getByText("2.0 KB")).toBeInTheDocument();
+    expect(screen.getByText("PNG")).toBeInTheDocument();
+
+    const download = screen.getByRole("link", { name: /下载原图/ });
+    expect(download).toHaveAttribute(
+      "href",
+      `/api/v1/images/${UPLOADED_IMAGE.imageId}/original?download=true`,
+    );
+    expect(download).toHaveAttribute("download", "street.png");
+
+    const uploadCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        typeof input === "string" &&
+        input.endsWith("/api/v1/images") &&
+        (init as RequestInit | undefined)?.method === "POST",
+    );
+    expect(uploadCall).toBeTruthy();
+    expect((uploadCall?.[1] as RequestInit).body).toBeInstanceOf(FormData);
+  });
+
+  it("shows a readable error when the server rejects the file", async () => {
+    mockApi({
+      uploadError: {
+        code: "unsupported_media_type",
+        message: "Only JPEG, PNG, and WebP images are supported.",
+        status: 415,
+      },
+    });
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("仅支持 JPEG、PNG 与 WebP 图片。");
+    expect(alert).toHaveTextContent("unsupported_media_type");
+    expect(screen.queryByRole("button", { name: "重试上传" })).not.toBeInTheDocument();
+  });
+
+  it("offers retry for transient server failures", async () => {
+    mockApi({
+      uploadError: {
+        code: "storage_error",
+        message: "The image could not be registered.",
+        status: 500,
+      },
+    });
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("原图保存失败，请稍后重试。");
+    expect(screen.getByRole("button", { name: "重试上传" })).toBeInTheDocument();
+  });
+});
