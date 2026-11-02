@@ -29,6 +29,8 @@ def test_data_dir_is_identical_from_api_dir_and_repo_root():
             env=environment,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
             timeout=60,
         )
