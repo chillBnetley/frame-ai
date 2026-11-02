@@ -10,7 +10,8 @@ from app.api.errors import register_exception_handlers
 from app.api.routes import health, images
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
-from app.core.middleware import RequestContextMiddleware, UploadSizeLimitMiddleware
+from app.core.middleware import RequestContextMiddleware
+from app.core.upload_limit import UploadSizeLimitMiddleware
 from app.services.image_service import ImageService
 
 API_PREFIX = "/api/v1"
@@ -39,7 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.add_middleware(
         UploadSizeLimitMiddleware,
-        max_bytes=resolved_settings.max_upload_bytes,
+        max_upload_bytes=resolved_settings.max_upload_bytes,
         allowance_bytes=resolved_settings.content_length_allowance,
     )
     app.add_middleware(RequestContextMiddleware)
