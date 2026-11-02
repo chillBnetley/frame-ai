@@ -66,6 +66,43 @@ function mockApi(options: { uploadError?: UploadErrorOption } = {}) {
   return fetchMock;
 }
 
+function mockSlowUpload() {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.endsWith("/api/v1/health")) {
+      return Promise.resolve(
+        jsonResponse({
+          status: "ok",
+          service: "FRAME AI API",
+          version: "0.1.0",
+          storage: { ok: true, writable: true },
+        }),
+      );
+    }
+    if (url.endsWith("/api/v1/config")) {
+      return Promise.resolve(
+        jsonResponse({
+          maxUploadBytes: 20 * 1024 * 1024,
+          maxImagePixels: 40_000_000,
+          allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+        }),
+      );
+    }
+    if (url.endsWith("/api/v1/images") && init?.method === "POST") {
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      });
+    }
+    return Promise.resolve(
+      jsonResponse({ error: { code: "not_found", message: "Not found", details: {} } }, 404),
+    );
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 async function uploadFile() {
   const input = screen.getByTestId("file-input");
   const file = new File([new Uint8Array([1, 2, 3, 4])], "street.png", { type: "image/png" });
@@ -144,5 +181,20 @@ describe("EditorWorkspace", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("原图保存失败，请稍后重试。");
     expect(screen.getByRole("button", { name: "重试上传" })).toBeInTheDocument();
+  });
+
+  it("cancels an in-flight upload and returns to the empty state", async () => {
+    mockSlowUpload();
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+
+    const cancel = await screen.findByRole("button", { name: "取消上传" });
+    await userEvent.click(cancel);
+
+    expect(await screen.findByText("拖入一张照片")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "取消上传" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

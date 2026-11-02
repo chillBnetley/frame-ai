@@ -8,7 +8,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
         <Link
           href="/"
-          className="group flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+          className="group flex min-h-11 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
           aria-label="FRAME AI 首页"
         >
           <span className="grid size-9 place-items-center rounded-lg border border-white/12 bg-white/[0.04] text-accent transition-colors group-hover:border-accent/40 group-hover:bg-accent/10">

@@ -29,7 +29,7 @@ export function ErrorAlert({ error, onRetry, onDismiss }: ErrorAlertProps) {
           <button
             type="button"
             onClick={onRetry}
-            className="rounded-lg border border-red-300/25 bg-red-300/10 px-3 py-1.5 text-xs font-medium text-red-100 transition-colors hover:bg-red-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200"
+            className="min-h-11 rounded-lg border border-red-300/25 bg-red-300/10 px-3 py-1.5 text-xs font-medium text-red-100 transition-colors hover:bg-red-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200"
           >
             重试上传
           </button>
@@ -38,7 +38,7 @@ export function ErrorAlert({ error, onRetry, onDismiss }: ErrorAlertProps) {
           <button
             type="button"
             onClick={onDismiss}
-            className="rounded-lg px-2.5 py-1.5 text-xs text-red-100/60 transition-colors hover:text-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2.5 py-1.5 text-xs text-red-100/60 transition-colors hover:text-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200"
             aria-label="关闭错误提示"
           >
             关闭

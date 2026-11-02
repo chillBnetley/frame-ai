@@ -11,14 +11,6 @@ const nextConfig: NextConfig = {
     // truncate uploads before FastAPI can validate and answer.
     proxyClientMaxBodySize: "22mb",
   },
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
   async rewrites() {
     return [
       {

@@ -12,7 +12,16 @@ import { describeUploadError } from "@/lib/api/errors";
 import { validateUploadFile, type UploadLimits } from "@/lib/upload-validation";
 import type { ApiStatus, UploadedImage, UploadError } from "@/types/image";
 
-const NON_RETRYABLE_CODES = new Set(["file_too_large", "unsupported_media_type", "empty_file"]);
+const NON_RETRYABLE_CODES = new Set([
+  "file_too_large",
+  "payload_too_large",
+  "image_too_many_pixels",
+  "unsupported_media_type",
+  "animated_not_supported",
+  "mime_mismatch",
+  "invalid_image",
+  "empty_file",
+]);
 
 function useApiHealth(): ApiStatus {
   const [status, setStatus] = useState<ApiStatus>("checking");
@@ -125,6 +134,15 @@ export function EditorWorkspace() {
   const canRetry =
     pendingFile !== null && error !== null && !NON_RETRYABLE_CODES.has(error.code);
 
+  const handleCancelUpload = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setUploading(false);
+    setPendingFile(null);
+    setImage(null);
+    setError(null);
+  }, []);
+
   return (
     <section aria-labelledby="workspace-heading" className="relative">
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0c0d0f]/90 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.9)] backdrop-blur-sm">
@@ -167,6 +185,18 @@ export function EditorWorkspace() {
               disabled={uploading}
               maxUploadBytes={limits?.maxUploadBytes}
             />
+          )}
+
+          {uploading && (
+            <div className="mt-3 flex justify-center">
+              <button
+                type="button"
+                onClick={handleCancelUpload}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-white/12 bg-white/[0.03] px-4 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                取消上传
+              </button>
+            </div>
           )}
 
           <p className="sr-only" role="status" aria-live="polite">

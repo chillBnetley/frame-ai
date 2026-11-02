@@ -77,6 +77,7 @@ export function UploadDropzone({
         ref={inputRef}
         type="file"
         accept={FILE_ACCEPT_ATTRIBUTE}
+        aria-label="选择图片文件"
         className="sr-only"
         tabIndex={-1}
         disabled={disabled}
@@ -96,7 +97,7 @@ export function UploadDropzone({
           onClick={openPicker}
           disabled={disabled}
           aria-busy={disabled}
-          className="flex w-full items-center gap-3 rounded-2xl p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait"
+          className="flex min-h-11 w-full items-center gap-3 rounded-2xl p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait"
         >
           <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-accent">
             {disabled ? <Spinner /> : <UploadCloudIcon className="size-5" />}

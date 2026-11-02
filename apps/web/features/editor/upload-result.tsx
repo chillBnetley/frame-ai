@@ -93,7 +93,7 @@ export function UploadResult({ image, uploading, onFileSelected }: UploadResultP
           <a
             href={originalImageUrl(image.imageId, true)}
             download={image.originalName}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-xs font-semibold text-[#101208] transition-colors hover:bg-accent/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-xs font-semibold text-[#101208] transition-colors hover:bg-accent/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <DownloadIcon className="size-4" />
             下载原图
@@ -102,7 +102,7 @@ export function UploadResult({ image, uploading, onFileSelected }: UploadResultP
             href={originalImageUrl(image.imageId)}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2.5 text-xs font-medium text-white/75 transition-colors hover:bg-white/[0.07] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2.5 text-xs font-medium text-white/75 transition-colors hover:bg-white/[0.07] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             新窗口打开
           </a>
