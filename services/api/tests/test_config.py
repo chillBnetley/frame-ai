@@ -17,6 +17,7 @@ def test_data_dir_is_identical_from_api_dir_and_repo_root():
     environment = {
         **os.environ,
         "FRAME_DATA_DIR": "data",
+        "PYTHONIOENCODING": "utf-8",
         "PYTHONPATH": str(REPO_ROOT / "services" / "api"),
     }
     script = "from app.core.config import Settings; print(Settings().data_dir)"
