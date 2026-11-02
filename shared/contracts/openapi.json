@@ -138,6 +138,115 @@
         }
       }
     },
+    "/api/v1/images/{image_id}/analyze": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Analyze Image",
+        "operationId": "analyze_image_api_v1_images__image_id__analyze_post",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AnalyzeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or empty upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Upload or pixel limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported or invalid image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images/{image_id}/original": {
       "get": {
         "tags": [
@@ -237,10 +346,1090 @@
           }
         }
       }
+    },
+    "/api/v1/sessions": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Create Session",
+        "operationId": "create_session_api_v1_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Get Session",
+        "operationId": "get_session_api_v1_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/revisions": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "List Revisions",
+        "operationId": "list_revisions_api_v1_sessions__session_id__revisions_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Create Revision",
+        "operationId": "create_revision_api_v1_sessions__session_id__revisions_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/render": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Render Preview",
+        "operationId": "render_preview_api_v1_sessions__session_id__render_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/undo": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Undo",
+        "operationId": "undo_api_v1_sessions__session_id__undo_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/UndoRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/redo": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Redo",
+        "operationId": "redo_api_v1_sessions__session_id__redo_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/activate": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Activate",
+        "operationId": "activate_api_v1_sessions__session_id__activate_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateRevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/reset": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Reset",
+        "operationId": "reset_api_v1_sessions__session_id__reset_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/compare": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Compare Revision",
+        "operationId": "compare_revision_api_v1_sessions__session_id__compare_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revisionid"
+            }
+          },
+          {
+            "name": "maxEdge",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2560,
+              "minimum": 1,
+              "default": 1600,
+              "title": "Maxedge"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/export": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Export Revision",
+        "operationId": "export_revision_api_v1_sessions__session_id__export_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict or no undo/redo step available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Another export is in progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/previews/{preview_id}": {
+      "get": {
+        "tags": [
+          "previews"
+        ],
+        "summary": "Get Preview",
+        "operationId": "get_preview_api_v1_previews__preview_id__get",
+        "parameters": [
+          {
+            "name": "preview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Preview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Preview expired or unknown",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ActivateRevisionRequest": {
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revisionid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revisionId"
+        ],
+        "title": "ActivateRevisionRequest"
+      },
+      "Adjustments": {
+        "properties": {
+          "exposureEv": {
+            "type": "number",
+            "title": "Exposureev",
+            "default": 0.0,
+            "ge": -3,
+            "le": 3
+          },
+          "contrast": {
+            "type": "number",
+            "title": "Contrast",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "highlights": {
+            "type": "number",
+            "title": "Highlights",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "shadows": {
+            "type": "number",
+            "title": "Shadows",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "tint": {
+            "type": "number",
+            "title": "Tint",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "saturation": {
+            "type": "number",
+            "title": "Saturation",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "vibrance": {
+            "type": "number",
+            "title": "Vibrance",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "clarity": {
+            "type": "number",
+            "title": "Clarity",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "sharpen": {
+            "type": "number",
+            "title": "Sharpen",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          },
+          "denoise": {
+            "type": "number",
+            "title": "Denoise",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          },
+          "vignette": {
+            "type": "number",
+            "title": "Vignette",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "grain": {
+            "type": "number",
+            "title": "Grain",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          },
+          "rotationDeg": {
+            "type": "number",
+            "title": "Rotationdeg",
+            "default": 0.0,
+            "ge": -15,
+            "le": 15
+          },
+          "crop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Crop"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Adjustments"
+      },
+      "AnalysisFeatures": {
+        "properties": {
+          "analyzerVersion": {
+            "type": "string",
+            "title": "Analyzerversion"
+          },
+          "isHeuristic": {
+            "type": "boolean",
+            "title": "Isheuristic"
+          },
+          "size": {
+            "$ref": "#/components/schemas/SizeFeatures"
+          },
+          "luminance": {
+            "$ref": "#/components/schemas/LuminanceFeatures"
+          },
+          "clipping": {
+            "$ref": "#/components/schemas/ClippingFeatures"
+          },
+          "color": {
+            "$ref": "#/components/schemas/ColorFeatures"
+          },
+          "detail": {
+            "$ref": "#/components/schemas/DetailFeatures"
+          },
+          "composition": {
+            "$ref": "#/components/schemas/CompositionFeatures"
+          },
+          "sceneHints": {
+            "$ref": "#/components/schemas/SceneHints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analyzerVersion",
+          "isHeuristic",
+          "size",
+          "luminance",
+          "clipping",
+          "color",
+          "detail",
+          "composition",
+          "sceneHints"
+        ],
+        "title": "AnalysisFeatures"
+      },
+      "AnalyzeRequest": {
+        "properties": {
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          }
+        },
+        "type": "object",
+        "title": "AnalyzeRequest"
+      },
+      "AnalyzeResponse": {
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "features": {
+            "$ref": "#/components/schemas/AnalysisFeatures"
+          },
+          "analyzerVersion": {
+            "type": "string",
+            "title": "Analyzerversion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysisId",
+          "features",
+          "analyzerVersion"
+        ],
+        "title": "AnalyzeResponse"
+      },
       "Body_upload_image_api_v1_images_post": {
         "properties": {
           "file": {
@@ -257,6 +1446,304 @@
           "file"
         ],
         "title": "Body_upload_image_api_v1_images_post"
+      },
+      "CastEstimate": {
+        "properties": {
+          "temperature": {
+            "type": "number",
+            "title": "Temperature"
+          },
+          "tint": {
+            "type": "number",
+            "title": "Tint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "temperature",
+          "tint"
+        ],
+        "title": "CastEstimate"
+      },
+      "ClippingFeatures": {
+        "properties": {
+          "highlightsPct": {
+            "type": "number",
+            "title": "Highlightspct"
+          },
+          "shadowsPct": {
+            "type": "number",
+            "title": "Shadowspct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "highlightsPct",
+          "shadowsPct"
+        ],
+        "title": "ClippingFeatures"
+      },
+      "ColorFeatures": {
+        "properties": {
+          "meanRgb": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Meanrgb"
+          },
+          "castEstimate": {
+            "$ref": "#/components/schemas/CastEstimate"
+          },
+          "saturationMean": {
+            "type": "number",
+            "title": "Saturationmean"
+          },
+          "saturationP95": {
+            "type": "number",
+            "title": "Saturationp95"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meanRgb",
+          "castEstimate",
+          "saturationMean",
+          "saturationP95"
+        ],
+        "title": "ColorFeatures"
+      },
+      "CompareResponse": {
+        "properties": {
+          "original": {
+            "$ref": "#/components/schemas/CompareSide"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CompareSide"
+          }
+        },
+        "type": "object",
+        "required": [
+          "original",
+          "revision"
+        ],
+        "title": "CompareResponse"
+      },
+      "CompareSide": {
+        "properties": {
+          "previewUrl": {
+            "type": "string",
+            "title": "Previewurl"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "previewUrl",
+          "width",
+          "height"
+        ],
+        "title": "CompareSide"
+      },
+      "CompositionFeatures": {
+        "properties": {
+          "horizonTiltDeg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizontiltdeg"
+          },
+          "edgeDensityGrid3x3": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "minItems": 9,
+            "title": "Edgedensitygrid3X3"
+          },
+          "brightnessCentroid": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Brightnesscentroid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "horizonTiltDeg",
+          "edgeDensityGrid3x3",
+          "brightnessCentroid"
+        ],
+        "title": "CompositionFeatures"
+      },
+      "CreateRevisionRequest": {
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/EditRecipe"
+          },
+          "parentRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parentrevisionid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "user",
+              "ai"
+            ],
+            "title": "Source",
+            "default": "user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipe",
+          "parentRevisionId"
+        ],
+        "title": "CreateRevisionRequest"
+      },
+      "CreateSessionRequest": {
+        "properties": {
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imageId"
+        ],
+        "title": "CreateSessionRequest"
+      },
+      "Crop": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X",
+            "ge": 0,
+            "le": 1
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "ge": 0,
+            "le": 1
+          },
+          "w": {
+            "type": "number",
+            "title": "W",
+            "gt": 0,
+            "le": 1
+          },
+          "h": {
+            "type": "number",
+            "title": "H",
+            "gt": 0,
+            "le": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "title": "Crop"
+      },
+      "DetailFeatures": {
+        "properties": {
+          "sharpness": {
+            "type": "number",
+            "title": "Sharpness"
+          },
+          "noiseEstimate": {
+            "type": "number",
+            "title": "Noiseestimate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sharpness",
+          "noiseEstimate"
+        ],
+        "title": "DetailFeatures"
+      },
+      "EditRecipe": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.0",
+            "title": "Schemaversion",
+            "default": "1.0"
+          },
+          "styleId": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "portrait",
+              "landscape",
+              "street",
+              "documentary",
+              "film",
+              "cinematic"
+            ],
+            "title": "Styleid",
+            "default": "natural"
+          },
+          "styleStrength": {
+            "type": "number",
+            "title": "Stylestrength",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          },
+          "adjustments": {
+            "$ref": "#/components/schemas/Adjustments"
+          },
+          "rationale": {
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Rationale"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EditRecipe"
       },
       "ErrorBody": {
         "properties": {
@@ -292,6 +1779,42 @@
           "error"
         ],
         "title": "ErrorResponse"
+      },
+      "ExportRequest": {
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revisionid"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "jpeg",
+              "png"
+            ],
+            "title": "Format"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revisionId",
+          "format"
+        ],
+        "title": "ExportRequest"
       },
       "HTTPValidationError": {
         "properties": {
@@ -334,6 +1857,264 @@
         ],
         "title": "HealthResponse"
       },
+      "LuminanceFeatures": {
+        "properties": {
+          "mean": {
+            "type": "number",
+            "title": "Mean"
+          },
+          "std": {
+            "type": "number",
+            "title": "Std"
+          },
+          "p1": {
+            "type": "number",
+            "title": "P1"
+          },
+          "p5": {
+            "type": "number",
+            "title": "P5"
+          },
+          "p50": {
+            "type": "number",
+            "title": "P50"
+          },
+          "p95": {
+            "type": "number",
+            "title": "P95"
+          },
+          "p99": {
+            "type": "number",
+            "title": "P99"
+          },
+          "histogram32": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "minItems": 32,
+            "title": "Histogram32"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mean",
+          "std",
+          "p1",
+          "p5",
+          "p50",
+          "p95",
+          "p99",
+          "histogram32"
+        ],
+        "title": "LuminanceFeatures"
+      },
+      "RenderRequest": {
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/EditRecipe"
+          },
+          "maxEdge": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2560.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxedge"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "final"
+            ],
+            "title": "Quality",
+            "default": "final"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipe"
+        ],
+        "title": "RenderRequest"
+      },
+      "RenderResponse": {
+        "properties": {
+          "previewUrl": {
+            "type": "string",
+            "title": "Previewurl"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "final"
+            ],
+            "title": "Quality"
+          },
+          "cacheHit": {
+            "type": "boolean",
+            "title": "Cachehit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "previewUrl",
+          "width",
+          "height",
+          "quality",
+          "cacheHit"
+        ],
+        "title": "RenderResponse"
+      },
+      "RevisionListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "RevisionListResponse"
+      },
+      "RevisionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "revisionNo": {
+            "type": "integer",
+            "title": "Revisionno"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parentid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "user",
+              "ai",
+              "reset"
+            ],
+            "title": "Source"
+          },
+          "recipeHash": {
+            "type": "string",
+            "title": "Recipehash"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "revisionNo",
+          "parentId",
+          "source",
+          "recipeHash",
+          "createdAt"
+        ],
+        "title": "RevisionSummary"
+      },
+      "RevisionView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "revisionNo": {
+            "type": "integer",
+            "title": "Revisionno"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parentid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "user",
+              "ai",
+              "reset"
+            ],
+            "title": "Source"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/EditRecipe"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "revisionNo",
+          "parentId",
+          "source",
+          "recipe",
+          "createdAt"
+        ],
+        "title": "RevisionView"
+      },
       "RuntimeConfigResponse": {
         "properties": {
           "maxUploadBytes": {
@@ -360,6 +2141,108 @@
         ],
         "title": "RuntimeConfigResponse"
       },
+      "SceneHints": {
+        "properties": {
+          "isLowLight": {
+            "type": "boolean",
+            "title": "Islowlight"
+          },
+          "isHighKey": {
+            "type": "boolean",
+            "title": "Ishighkey"
+          },
+          "isLowKey": {
+            "type": "boolean",
+            "title": "Islowkey"
+          },
+          "isMonochrome": {
+            "type": "boolean",
+            "title": "Ismonochrome"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isLowLight",
+          "isHighKey",
+          "isLowKey",
+          "isMonochrome"
+        ],
+        "title": "SceneHints"
+      },
+      "SessionState": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "activeRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Activerevisionid"
+          },
+          "headRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Headrevisionid"
+          },
+          "canUndo": {
+            "type": "boolean",
+            "title": "Canundo"
+          },
+          "canRedo": {
+            "type": "boolean",
+            "title": "Canredo"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/RevisionView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sessionId",
+          "imageId",
+          "activeRevisionId",
+          "headRevisionId",
+          "canUndo",
+          "canRedo",
+          "revision"
+        ],
+        "title": "SessionState"
+      },
+      "SizeFeatures": {
+        "properties": {
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "orientation": {
+            "type": "integer",
+            "title": "Orientation"
+          },
+          "aspectRatio": {
+            "type": "number",
+            "title": "Aspectratio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "width",
+          "height",
+          "orientation",
+          "aspectRatio"
+        ],
+        "title": "SizeFeatures"
+      },
       "StorageHealth": {
         "properties": {
           "ok": {
@@ -377,6 +2260,24 @@
           "writable"
         ],
         "title": "StorageHealth"
+      },
+      "UndoRequest": {
+        "properties": {
+          "revisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revisionid"
+          }
+        },
+        "type": "object",
+        "title": "UndoRequest"
       },
       "UploadImageResponse": {
         "properties": {

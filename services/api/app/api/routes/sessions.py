@@ -27,8 +27,10 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
         404: "Session, image, or revision not found",
         409: "Revision conflict or no undo/redo step available",
         422: "Invalid request payload",
-        503: "Another export is in progress",
     }.items()
+}
+_EXPORT_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    503: {"model": ErrorResponse, "description": "Another export is in progress"},
 }
 
 router = APIRouter(prefix="/sessions", tags=["sessions"], responses=_ERROR_RESPONSES)
@@ -140,7 +142,10 @@ def compare_revision(
     return service.compare(session_id, revision_id=revision_id, max_edge=max_edge)
 
 
-@router.post("/{session_id}/export")
+@router.post(
+    "/{session_id}/export",
+    responses=_EXPORT_ERROR_RESPONSES,
+)
 def export_revision(
     session_id: str,
     payload: ExportRequest,

@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/{image_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze Image */
+        post: operations["analyze_image_api_v1_images__image_id__analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/{image_id}/original": {
         parameters: {
             query?: never;
@@ -72,14 +89,427 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Session */
+        post: operations["create_session_api_v1_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session */
+        get: operations["get_session_api_v1_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Revisions */
+        get: operations["list_revisions_api_v1_sessions__session_id__revisions_get"];
+        put?: never;
+        /** Create Revision */
+        post: operations["create_revision_api_v1_sessions__session_id__revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render Preview */
+        post: operations["render_preview_api_v1_sessions__session_id__render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo */
+        post: operations["undo_api_v1_sessions__session_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redo */
+        post: operations["redo_api_v1_sessions__session_id__redo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate */
+        post: operations["activate_api_v1_sessions__session_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset */
+        post: operations["reset_api_v1_sessions__session_id__reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare Revision */
+        get: operations["compare_revision_api_v1_sessions__session_id__compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export Revision */
+        post: operations["export_revision_api_v1_sessions__session_id__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/previews/{preview_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Preview */
+        get: operations["get_preview_api_v1_previews__preview_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActivateRevisionRequest */
+        ActivateRevisionRequest: {
+            /**
+             * Revisionid
+             * Format: uuid
+             */
+            revisionId: string;
+        };
+        /** Adjustments */
+        Adjustments: {
+            /**
+             * Exposureev
+             * @default 0
+             */
+            exposureEv: number;
+            /**
+             * Contrast
+             * @default 0
+             */
+            contrast: number;
+            /**
+             * Highlights
+             * @default 0
+             */
+            highlights: number;
+            /**
+             * Shadows
+             * @default 0
+             */
+            shadows: number;
+            /**
+             * Temperature
+             * @default 0
+             */
+            temperature: number;
+            /**
+             * Tint
+             * @default 0
+             */
+            tint: number;
+            /**
+             * Saturation
+             * @default 0
+             */
+            saturation: number;
+            /**
+             * Vibrance
+             * @default 0
+             */
+            vibrance: number;
+            /**
+             * Clarity
+             * @default 0
+             */
+            clarity: number;
+            /**
+             * Sharpen
+             * @default 0
+             */
+            sharpen: number;
+            /**
+             * Denoise
+             * @default 0
+             */
+            denoise: number;
+            /**
+             * Vignette
+             * @default 0
+             */
+            vignette: number;
+            /**
+             * Grain
+             * @default 0
+             */
+            grain: number;
+            /**
+             * Rotationdeg
+             * @default 0
+             */
+            rotationDeg: number;
+            crop?: components["schemas"]["Crop"] | null;
+        };
+        /** AnalysisFeatures */
+        AnalysisFeatures: {
+            /** Analyzerversion */
+            analyzerVersion: string;
+            /** Isheuristic */
+            isHeuristic: boolean;
+            size: components["schemas"]["SizeFeatures"];
+            luminance: components["schemas"]["LuminanceFeatures"];
+            clipping: components["schemas"]["ClippingFeatures"];
+            color: components["schemas"]["ColorFeatures"];
+            detail: components["schemas"]["DetailFeatures"];
+            composition: components["schemas"]["CompositionFeatures"];
+            sceneHints: components["schemas"]["SceneHints"];
+        };
+        /** AnalyzeRequest */
+        AnalyzeRequest: {
+            /** Sessionid */
+            sessionId?: string | null;
+        };
+        /** AnalyzeResponse */
+        AnalyzeResponse: {
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            features: components["schemas"]["AnalysisFeatures"];
+            /** Analyzerversion */
+            analyzerVersion: string;
+        };
         /** Body_upload_image_api_v1_images_post */
         Body_upload_image_api_v1_images_post: {
             /** File */
             file: string[];
+        };
+        /** CastEstimate */
+        CastEstimate: {
+            /** Temperature */
+            temperature: number;
+            /** Tint */
+            tint: number;
+        };
+        /** ClippingFeatures */
+        ClippingFeatures: {
+            /** Highlightspct */
+            highlightsPct: number;
+            /** Shadowspct */
+            shadowsPct: number;
+        };
+        /** ColorFeatures */
+        ColorFeatures: {
+            /** Meanrgb */
+            meanRgb: number[];
+            castEstimate: components["schemas"]["CastEstimate"];
+            /** Saturationmean */
+            saturationMean: number;
+            /** Saturationp95 */
+            saturationP95: number;
+        };
+        /** CompareResponse */
+        CompareResponse: {
+            original: components["schemas"]["CompareSide"];
+            revision: components["schemas"]["CompareSide"];
+        };
+        /** CompareSide */
+        CompareSide: {
+            /** Previewurl */
+            previewUrl: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
+        /** CompositionFeatures */
+        CompositionFeatures: {
+            /** Horizontiltdeg */
+            horizonTiltDeg: number | null;
+            /** Edgedensitygrid3X3 */
+            edgeDensityGrid3x3: number[];
+            /** Brightnesscentroid */
+            brightnessCentroid: number[];
+        };
+        /** CreateRevisionRequest */
+        CreateRevisionRequest: {
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Parentrevisionid
+             * Format: uuid
+             */
+            parentRevisionId: string;
+            /**
+             * Source
+             * @default user
+             * @enum {string}
+             */
+            source: "user" | "ai";
+        };
+        /** CreateSessionRequest */
+        CreateSessionRequest: {
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+        };
+        /** Crop */
+        Crop: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** W */
+            w: number;
+            /** H */
+            h: number;
+        };
+        /** DetailFeatures */
+        DetailFeatures: {
+            /** Sharpness */
+            sharpness: number;
+            /** Noiseestimate */
+            noiseEstimate: number;
+        };
+        /** EditRecipe */
+        EditRecipe: {
+            /**
+             * Schemaversion
+             * @default 1.0
+             * @constant
+             */
+            schemaVersion: "1.0";
+            /**
+             * Styleid
+             * @default natural
+             * @enum {string}
+             */
+            styleId: "natural" | "portrait" | "landscape" | "street" | "documentary" | "film" | "cinematic";
+            /**
+             * Stylestrength
+             * @default 0
+             */
+            styleStrength: number;
+            adjustments?: components["schemas"]["Adjustments"];
+            /** Rationale */
+            rationale?: string[];
+            /** Warnings */
+            warnings?: string[];
         };
         /** ErrorBody */
         ErrorBody: {
@@ -95,6 +525,21 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /** ExportRequest */
+        ExportRequest: {
+            /**
+             * Revisionid
+             * Format: uuid
+             */
+            revisionId: string;
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "jpeg" | "png";
+            /** Quality */
+            quality?: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -114,6 +559,107 @@ export interface components {
             version: string;
             storage: components["schemas"]["StorageHealth"];
         };
+        /** LuminanceFeatures */
+        LuminanceFeatures: {
+            /** Mean */
+            mean: number;
+            /** Std */
+            std: number;
+            /** P1 */
+            p1: number;
+            /** P5 */
+            p5: number;
+            /** P50 */
+            p50: number;
+            /** P95 */
+            p95: number;
+            /** P99 */
+            p99: number;
+            /** Histogram32 */
+            histogram32: number[];
+        };
+        /** RenderRequest */
+        RenderRequest: {
+            recipe: components["schemas"]["EditRecipe"];
+            /** Maxedge */
+            maxEdge?: number | null;
+            /**
+             * Quality
+             * @default final
+             * @enum {string}
+             */
+            quality: "draft" | "final";
+        };
+        /** RenderResponse */
+        RenderResponse: {
+            /** Previewurl */
+            previewUrl: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /**
+             * Quality
+             * @enum {string}
+             */
+            quality: "draft" | "final";
+            /** Cachehit */
+            cacheHit: boolean;
+        };
+        /** RevisionListResponse */
+        RevisionListResponse: {
+            /** Items */
+            items: components["schemas"]["RevisionSummary"][];
+            /** Nextcursor */
+            nextCursor?: string | null;
+        };
+        /** RevisionSummary */
+        RevisionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Revisionno */
+            revisionNo: number;
+            /** Parentid */
+            parentId: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "initial" | "user" | "ai" | "reset";
+            /** Recipehash */
+            recipeHash: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
+        /** RevisionView */
+        RevisionView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Revisionno */
+            revisionNo: number;
+            /** Parentid */
+            parentId: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "initial" | "user" | "ai" | "reset";
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
         /** RuntimeConfigResponse */
         RuntimeConfigResponse: {
             /** Maxuploadbytes */
@@ -123,12 +669,67 @@ export interface components {
             /** Allowedmimetypes */
             allowedMimeTypes: string[];
         };
+        /** SceneHints */
+        SceneHints: {
+            /** Islowlight */
+            isLowLight: boolean;
+            /** Ishighkey */
+            isHighKey: boolean;
+            /** Islowkey */
+            isLowKey: boolean;
+            /** Ismonochrome */
+            isMonochrome: boolean;
+        };
+        /** SessionState */
+        SessionState: {
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            /**
+             * Activerevisionid
+             * Format: uuid
+             */
+            activeRevisionId: string;
+            /**
+             * Headrevisionid
+             * Format: uuid
+             */
+            headRevisionId: string;
+            /** Canundo */
+            canUndo: boolean;
+            /** Canredo */
+            canRedo: boolean;
+            revision: components["schemas"]["RevisionView"];
+        };
+        /** SizeFeatures */
+        SizeFeatures: {
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Orientation */
+            orientation: number;
+            /** Aspectratio */
+            aspectRatio: number;
+        };
         /** StorageHealth */
         StorageHealth: {
             /** Ok */
             ok: boolean;
             /** Writable */
             writable: boolean;
+        };
+        /** UndoRequest */
+        UndoRequest: {
+            /** Revisionid */
+            revisionId?: string | null;
         };
         /** UploadImageResponse */
         UploadImageResponse: {
@@ -290,6 +891,86 @@ export interface operations {
             };
         };
     };
+    analyze_image_api_v1_images__image_id__analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnalyzeRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyzeResponse"];
+                };
+            };
+            /** @description Invalid or empty upload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Upload or pixel limit exceeded */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unsupported or invalid image */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Storage failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_original_image_api_v1_images__image_id__original_get: {
         parameters: {
             query?: {
@@ -364,6 +1045,622 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_session_api_v1_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_session_api_v1_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_revisions_api_v1_sessions__session_id__revisions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: number | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionListResponse"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_revision_api_v1_sessions__session_id__revisions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    render_preview_api_v1_sessions__session_id__render_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderResponse"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    undo_api_v1_sessions__session_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UndoRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    redo_api_v1_sessions__session_id__redo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_api_v1_sessions__session_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_api_v1_sessions__session_id__reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    compare_revision_api_v1_sessions__session_id__compare_get: {
+        parameters: {
+            query?: {
+                revisionId?: string | null;
+                maxEdge?: number;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareResponse"];
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    export_revision_api_v1_sessions__session_id__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict or no undo/redo step available */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Another export is in progress */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_preview_api_v1_previews__preview_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Preview expired or unknown */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
