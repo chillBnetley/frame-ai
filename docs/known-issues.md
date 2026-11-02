@@ -21,6 +21,6 @@
 - `npm audit` 的完整审计包含 dev-only 的 ESLint/minimatch 工具链 moderate 提示；`npm audit --omit=dev` 为 0。下次复查：2026-12-02。
 - 早期 Turbopack 开发期崩溃来自 Turbopack 专用的 `@tailwindcss/turbopack` CSS loader 在 Windows 上拉起的子进程退出（0xc0000142）。已改用标准 `@tailwindcss/postcss` + `postcss.config.mjs`；2026-11-02 实测 Turbopack 与 `npm run dev:webpack` 两种模式都能正确加载样式。`dev:webpack` 继续保留为备用入口。
 - 在非交互后台 shell 中启动 `next dev` 时，偶尔会留下孤儿 next-server 进程并占用 3000 端口；重新启动前需结束该 PID。正常交互式终端未复现。
-- `next.config.ts` 的 rewrites 在构建时求值。[待 R-15 实测后填写行为结论。]
+- `next.config.ts` 的 rewrites 在构建时求值：2026-11-02 用 `API_INTERNAL_URL=http://127.0.0.1:9999 npm run build` 验证，`.next/routes-manifest.json` 中的目标固定为 `http://127.0.0.1:9999`。部署到新地址必须重新构建，运行期改环境变量无效。
 - 当前无鉴权、限流、病毒扫描；API 只应绑定 `127.0.0.1`，不得暴露公网。
 - 真实 iOS Safari / Android Chrome 真机回归尚未执行；阶段 1 只做了桌面浏览器与窄视口检查。

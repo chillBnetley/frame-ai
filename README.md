@@ -73,9 +73,9 @@ FastAPI
 
 ## 先决条件
 
-- Node.js 20+（本项目在 Node 24.19.0 验证）。
-- npm 10+（本项目在 npm 11.17.0 验证）。
-- Python 3.11+（本项目在 Python 3.14.7 验证）。
+- Node.js 24.19.0（见 `.nvmrc`；`package.json` 要求 `>=24.19.0 <25`）。
+- npm 11.17.0（见 `package.json` 的 `engines`）。
+- Python 3.14.7（见 `.python-version`；代码保持 3.11+ 兼容，mypy 以 3.11 为目标）。
 - Windows、macOS 或 Linux。命令示例以 Windows PowerShell / Git Bash 为主。
 
 ## 本地启动
@@ -118,9 +118,10 @@ cd services/api
 
 ```bash
 cd apps/web
-npm install
+npm ci
 cp .env.example .env.local   # 可选；默认值即可启动
-npm run dev
+npm run dev                  # Turbopack
+# 若开发环境出现 Turbopack 问题：npm run dev:webpack
 ```
 
 打开 <http://127.0.0.1:3000>。Next.js 会把 `/api/v1/*` 代理到 `API_INTERNAL_URL`，默认 `http://127.0.0.1:8000`。
@@ -152,9 +153,9 @@ npm run dev
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `API_INTERNAL_URL` | `http://127.0.0.1:8000` | Next.js 服务端 rewrite 目标 |
+| `API_INTERNAL_URL` | `http://127.0.0.1:8000` | Next.js 服务端 rewrite 目标；在 `next build` 时写入产物，变更后需重新构建 |
 | `NEXT_PUBLIC_API_BASE_URL` | 空 | 空表示走同源代理；填绝对地址则直接访问 API |
-| `NEXT_PUBLIC_MAX_UPLOAD_BYTES` | `20971520` | 前端提示用上限，应与后端一致 |
+| `NEXT_PUBLIC_MAX_UPLOAD_BYTES` | `20971520` | `/api/v1/config` 不可用时的前端回退上限 |
 
 DeepSeek 变量仅在第三阶段接入，当前不会读取：
 
