@@ -58,7 +58,7 @@ FastAPI
 │   ├── lib/                  API 客户端、错误映射、校验与格式化
 │   └── tests/                Vitest + Testing Library
 ├── services/api/             FastAPI 服务
-│   ├── app/api/routes/       health、images 路由
+│   ├── app/api/routes/       health、config、images 路由
 │   ├── app/core/             配置、错误、日志、中间件
 │   ├── app/imaging/          安全解码与图片检查
 │   ├── app/models/           Pydantic 响应/错误模型
@@ -142,7 +142,7 @@ npm run dev
 | --- | --- | --- |
 | `FRAME_ENVIRONMENT` | `development` | 环境标签 |
 | `FRAME_LOG_LEVEL` | `INFO` | `DEBUG/INFO/WARNING/ERROR/CRITICAL` |
-| `FRAME_DATA_DIR` | `<repo>/data` | 本地数据目录；相对路径按进程工作目录解析 |
+| `FRAME_DATA_DIR` | `<repo>/data` | 本地数据目录；相对路径按仓库根目录解析，与启动目录无关 |
 | `FRAME_MAX_UPLOAD_BYTES` | `20971520` | 单文件最大字节数（20 MiB） |
 | `FRAME_MAX_IMAGE_PIXELS` | `40000000` | 最大像素数（40 MP） |
 | `FRAME_CONTENT_LENGTH_ALLOWANCE` | `1048576` | Content-Length 预检给 multipart 的余量 |
@@ -211,8 +211,9 @@ data/
 
 | 方法与路径 | 请求 | 响应 |
 | --- | --- | --- |
-| `GET /api/v1/health` | 无 | `{status, service, version, storage}` |
-| `POST /api/v1/images` | multipart，字段名 `file` | `201 {imageId, originalName, width, height, mimeType, bytes}` |
+| `GET /api/v1/health` | 无 | `{status, service, version, storage: {ok, writable}}`；不返回绝对路径 |
+| `GET /api/v1/config` | 无 | `{maxUploadBytes, maxImagePixels, allowedMimeTypes}`；前端据此更新上传限制 |
+| `POST /api/v1/images` | multipart，字段名 `file` | `201 {imageId, originalName, width, height, exifOrientation, mimeType, bytes}` |
 | `GET /api/v1/images/{imageId}/original` | 无 | 原图字节；`Content-Disposition: inline` |
 | `GET /api/v1/images/{imageId}/original?download=true` | 无 | 原图字节；`Content-Disposition: attachment` |
 

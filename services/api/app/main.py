@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
-from app.api.routes import health, images
+from app.api.routes import config, health, images
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.middleware import CorsPreflightGuardMiddleware, RequestContextMiddleware
@@ -60,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
 
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(config.router, prefix=API_PREFIX)
     app.include_router(images.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)

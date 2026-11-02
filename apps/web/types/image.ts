@@ -20,7 +20,16 @@ export interface HealthResponse {
   status: "ok";
   service: string;
   version: string;
-  storage: "ready";
+  storage: {
+    ok: boolean;
+    writable: boolean;
+  };
+}
+
+export interface RuntimeConfig {
+  maxUploadBytes: number;
+  maxImagePixels: number;
+  allowedMimeTypes: string[];
 }
 
 export type ApiStatus = "checking" | "online" | "offline";

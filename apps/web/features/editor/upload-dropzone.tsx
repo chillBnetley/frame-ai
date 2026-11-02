@@ -10,9 +10,15 @@ interface UploadDropzoneProps {
   onFileSelected: (file: File) => void;
   disabled?: boolean;
   compact?: boolean;
+  maxUploadBytes?: number;
 }
 
-export function UploadDropzone({ onFileSelected, disabled = false, compact = false }: UploadDropzoneProps) {
+export function UploadDropzone({
+  onFileSelected,
+  disabled = false,
+  compact = false,
+  maxUploadBytes = MAX_UPLOAD_BYTES,
+}: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [dragging, setDragging] = useState(false);
@@ -129,7 +135,7 @@ export function UploadDropzone({ onFileSelected, disabled = false, compact = fal
           <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-white/8 bg-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35">
             <span>JPEG · PNG · WebP</span>
             <span aria-hidden="true">/</span>
-            <span>最大 {formatBytes(MAX_UPLOAD_BYTES)}</span>
+            <span>最大 {formatBytes(maxUploadBytes)}</span>
           </span>
         </button>
       )}

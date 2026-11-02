@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import shutil
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,13 @@ from app.repositories.original_store import OriginalImageStore
 logger = logging.getLogger("frame_ai.images")
 
 _CHUNK_SIZE = 64 * 1024
+_MIN_FREE_BYTES = 64 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class StorageStatus:
+    ok: bool
+    writable: bool
 
 
 @dataclass(frozen=True)
@@ -67,6 +75,35 @@ class ImageService:
     def ensure_ready(self) -> None:
         self.settings.data_dir.mkdir(parents=True, exist_ok=True)
         self.store.ensure_ready()
+        free_bytes = shutil.disk_usage(self.settings.data_dir).free
+        required_bytes = max(self.settings.max_upload_bytes * 2, _MIN_FREE_BYTES)
+        if free_bytes < required_bytes:
+            raise RuntimeError(
+                f"Insufficient free disk space for image storage: {free_bytes} bytes "
+                f"available, {required_bytes} bytes required."
+            )
+        logger.info(
+            "storage_ready data_dir=%s originals_dir=%s free_bytes=%s",
+            self.settings.data_dir,
+            self.store.originals_dir,
+            free_bytes,
+        )
+
+    def storage_status(self) -> StorageStatus:
+        data_dir = self.settings.data_dir
+        if not data_dir.is_dir():
+            return StorageStatus(ok=False, writable=False)
+        probe = data_dir / f".health-probe-{uuid4().hex}"
+        try:
+            probe.write_bytes(b"")
+            return StorageStatus(ok=True, writable=True)
+        except OSError:
+            return StorageStatus(ok=False, writable=False)
+        finally:
+            try:
+                probe.unlink()
+            except OSError:
+                pass
 
     def scan_consistency(self) -> ConsistencyReport:
         """Compare stored files with registry records; never deletes anything."""

@@ -35,7 +35,10 @@ class Settings(BaseSettings):
     @field_validator("data_dir")
     @classmethod
     def _absolute_data_dir(cls, value: Path) -> Path:
-        return value.expanduser().resolve()
+        expanded = value.expanduser()
+        if not expanded.is_absolute():
+            expanded = REPO_ROOT / expanded
+        return expanded.resolve()
 
     @field_validator("log_level")
     @classmethod

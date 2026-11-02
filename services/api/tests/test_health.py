@@ -1,17 +1,35 @@
 from __future__ import annotations
 
+from app.services.image_service import StorageStatus
+
 
 def test_health_reports_ready(client):
     response = client.get("/api/v1/health")
 
     assert response.status_code == 200
-    assert response.json() == {
+    payload = response.json()
+    assert payload == {
         "status": "ok",
         "service": "FRAME AI API",
         "version": "0.1.0",
-        "storage": "ready",
+        "storage": {"ok": True, "writable": True},
     }
+    assert set(payload["storage"]) == {"ok", "writable"}
     assert response.headers["x-request-id"]
+
+
+def test_health_reports_storage_not_writable(client, monkeypatch):
+    service = client.app.state.image_service
+    monkeypatch.setattr(
+        service,
+        "storage_status",
+        lambda: StorageStatus(ok=False, writable=False),
+    )
+
+    response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    assert response.json()["storage"] == {"ok": False, "writable": False}
 
 
 def test_health_request_id_is_echoed_when_safe(client):

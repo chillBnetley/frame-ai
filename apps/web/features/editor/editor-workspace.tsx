@@ -7,9 +7,9 @@ import { CheckCircleIcon, ShieldCheckIcon } from "@/components/icons";
 import { HealthIndicator } from "@/features/editor/health-indicator";
 import { UploadDropzone } from "@/features/editor/upload-dropzone";
 import { UploadResult } from "@/features/editor/upload-result";
-import { fetchHealth, uploadImage } from "@/lib/api/client";
+import { fetchConfig, fetchHealth, uploadImage } from "@/lib/api/client";
 import { describeUploadError } from "@/lib/api/errors";
-import { validateUploadFile } from "@/lib/upload-validation";
+import { validateUploadFile, type UploadLimits } from "@/lib/upload-validation";
 import type { ApiStatus, UploadedImage, UploadError } from "@/types/image";
 
 const NON_RETRYABLE_CODES = new Set(["file_too_large", "unsupported_media_type", "empty_file"]);
@@ -45,8 +45,36 @@ function useApiHealth(): ApiStatus {
   return status;
 }
 
+function useRuntimeLimits(): UploadLimits | null {
+  const [limits, setLimits] = useState<UploadLimits | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    fetchConfig()
+      .then((config) => {
+        if (active) {
+          setLimits({
+            maxUploadBytes: config.maxUploadBytes,
+            allowedMimeTypes: config.allowedMimeTypes,
+          });
+        }
+      })
+      .catch(() => {
+        // The env fallback keeps the UI usable while the API is unreachable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return limits;
+}
+
 export function EditorWorkspace() {
   const apiStatus = useApiHealth();
+  const limits = useRuntimeLimits();
   const [image, setImage] = useState<UploadedImage | null>(null);
   const [error, setError] = useState<UploadError | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -57,39 +85,42 @@ export function EditorWorkspace() {
     return () => abortRef.current?.abort();
   }, []);
 
-  const handleFileSelected = useCallback(async (file: File) => {
-    const validation = validateUploadFile(file);
-    if (!validation.ok) {
+  const handleFileSelected = useCallback(
+    async (file: File) => {
+      const validation = validateUploadFile(file, limits ?? undefined);
+      if (!validation.ok) {
+        setPendingFile(file);
+        setError({ code: validation.code, message: validation.message });
+        return;
+      }
+
       setPendingFile(file);
-      setError({ code: validation.code, message: validation.message });
-      return;
-    }
+      setError(null);
+      setImage(null);
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setUploading(true);
 
-    setPendingFile(file);
-    setError(null);
-    setImage(null);
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setUploading(true);
-
-    try {
-      const uploaded = await uploadImage(file, controller.signal);
-      if (!controller.signal.aborted) {
-        setImage(uploaded);
-        setPendingFile(null);
+      try {
+        const uploaded = await uploadImage(file, controller.signal);
+        if (!controller.signal.aborted) {
+          setImage(uploaded);
+          setPendingFile(null);
+        }
+      } catch (uploadError) {
+        if (!controller.signal.aborted) {
+          setError(describeUploadError(uploadError));
+        }
+      } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+          setUploading(false);
+        }
       }
-    } catch (uploadError) {
-      if (!controller.signal.aborted) {
-        setError(describeUploadError(uploadError));
-      }
-    } finally {
-      if (abortRef.current === controller) {
-        abortRef.current = null;
-        setUploading(false);
-      }
-    }
-  }, []);
+    },
+    [limits],
+  );
 
   const canRetry =
     pendingFile !== null && error !== null && !NON_RETRYABLE_CODES.has(error.code);
@@ -131,7 +162,11 @@ export function EditorWorkspace() {
               onFileSelected={handleFileSelected}
             />
           ) : (
-            <UploadDropzone onFileSelected={handleFileSelected} disabled={uploading} />
+            <UploadDropzone
+              onFileSelected={handleFileSelected}
+              disabled={uploading}
+              maxUploadBytes={limits?.maxUploadBytes}
+            />
           )}
 
           <p className="sr-only" role="status" aria-live="polite">

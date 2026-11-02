@@ -15,11 +15,22 @@ class CamelModel(BaseModel):
     )
 
 
+class StorageHealth(CamelModel):
+    ok: bool
+    writable: bool
+
+
 class HealthResponse(CamelModel):
     status: Literal["ok"]
     service: str
     version: str
-    storage: Literal["ready"]
+    storage: StorageHealth
+
+
+class RuntimeConfigResponse(CamelModel):
+    max_upload_bytes: int
+    max_image_pixels: int
+    allowed_mime_types: list[str]
 
 
 class UploadImageResponse(CamelModel):

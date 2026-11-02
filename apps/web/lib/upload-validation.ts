@@ -11,21 +11,34 @@ export const MAX_UPLOAD_BYTES =
 export const ACCEPTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const FILE_ACCEPT_ATTRIBUTE = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
 
+export interface UploadLimits {
+  maxUploadBytes: number;
+  allowedMimeTypes: readonly string[];
+}
+
+export const DEFAULT_UPLOAD_LIMITS: UploadLimits = {
+  maxUploadBytes: MAX_UPLOAD_BYTES,
+  allowedMimeTypes: ACCEPTED_MIME_TYPES,
+};
+
 export type UploadValidation = { ok: true } | ({ ok: false } & UploadError);
 
-export function validateUploadFile(file: File): UploadValidation {
+export function validateUploadFile(
+  file: File,
+  limits: UploadLimits = DEFAULT_UPLOAD_LIMITS,
+): UploadValidation {
   if (file.size <= 0) {
     return { ok: false, code: "empty_file", message: "文件为空，请重新选择。" };
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
+  if (file.size > limits.maxUploadBytes) {
     return {
       ok: false,
       code: "file_too_large",
-      message: `文件超过 ${formatBytes(MAX_UPLOAD_BYTES)} 的上传上限。`,
+      message: `文件超过 ${formatBytes(limits.maxUploadBytes)} 的上传上限。`,
     };
   }
   const mimeType = file.type.toLowerCase();
-  if (mimeType && !ACCEPTED_MIME_TYPES.includes(mimeType as (typeof ACCEPTED_MIME_TYPES)[number])) {
+  if (mimeType && !limits.allowedMimeTypes.includes(mimeType)) {
     return {
       ok: false,
       code: "unsupported_media_type",

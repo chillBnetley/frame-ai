@@ -9,6 +9,7 @@ const UPLOADED_IMAGE = {
   originalName: "street.png",
   width: 800,
   height: 600,
+  exifOrientation: 1,
   mimeType: "image/png",
   bytes: 2048,
 };
@@ -30,7 +31,19 @@ function mockApi(options: { uploadError?: UploadErrorOption } = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.endsWith("/api/v1/health")) {
-      return jsonResponse({ status: "ok", service: "FRAME AI API", version: "0.1.0", storage: "ready" });
+      return jsonResponse({
+        status: "ok",
+        service: "FRAME AI API",
+        version: "0.1.0",
+        storage: { ok: true, writable: true },
+      });
+    }
+    if (url.endsWith("/api/v1/config")) {
+      return jsonResponse({
+        maxUploadBytes: 20 * 1024 * 1024,
+        maxImagePixels: 40_000_000,
+        allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+      });
     }
     if (url.endsWith("/api/v1/images") && init?.method === "POST") {
       if (options.uploadError) {

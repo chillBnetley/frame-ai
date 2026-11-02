@@ -1,8 +1,9 @@
-import type { UploadedImage, HealthResponse } from "@/types/image";
+import type { UploadedImage, HealthResponse, RuntimeConfig } from "@/types/image";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 const UPLOAD_TIMEOUT_MS = 60_000;
 const HEALTH_TIMEOUT_MS = 5_000;
+const CONFIG_TIMEOUT_MS = 5_000;
 
 export class ApiClientError extends Error {
   readonly code: string;
@@ -122,6 +123,24 @@ export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse>
       throw await responseToError(response);
     }
     return (await response.json()) as HealthResponse;
+  } catch (error) {
+    throw normalizeTransportError(error);
+  } finally {
+    timeout.cleanup();
+  }
+}
+
+export async function fetchConfig(signal?: AbortSignal): Promise<RuntimeConfig> {
+  const timeout = createTimeoutSignal(signal, CONFIG_TIMEOUT_MS);
+  try {
+    const response = await fetch(apiUrl("/api/v1/config"), {
+      cache: "no-store",
+      signal: timeout.signal,
+    });
+    if (!response.ok) {
+      throw await responseToError(response);
+    }
+    return (await response.json()) as RuntimeConfig;
   } catch (error) {
     throw normalizeTransportError(error);
   } finally {

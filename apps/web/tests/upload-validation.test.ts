@@ -33,4 +33,18 @@ describe("validateUploadFile", () => {
     const result = validateUploadFile(oversized);
     expect(result).toMatchObject({ ok: false, code: "file_too_large" });
   });
+
+  it("applies limits returned by the runtime config endpoint", () => {
+    const limits = { maxUploadBytes: 4096, allowedMimeTypes: ["image/png"] };
+
+    expect(validateUploadFile(makeFile(4096, "image/png"), limits)).toEqual({ ok: true });
+    expect(validateUploadFile(makeFile(4097, "image/png"), limits)).toMatchObject({
+      ok: false,
+      code: "file_too_large",
+    });
+    expect(validateUploadFile(makeFile(1024, "image/webp"), limits)).toMatchObject({
+      ok: false,
+      code: "unsupported_media_type",
+    });
+  });
 });
