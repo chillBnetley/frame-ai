@@ -75,7 +75,8 @@ def _to_float_rgb(image: Image.Image) -> NDArray[np.float32]:
         rgb_image = image.convert("RGB")
 
     data = np.asarray(rgb_image, dtype=np.float32)
-    return np.ascontiguousarray(data / np.float32(255.0))
+    data /= np.float32(255.0)
+    return np.ascontiguousarray(data)
 
 
 def load_image(

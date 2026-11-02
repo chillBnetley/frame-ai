@@ -19,6 +19,8 @@ coverage.xml
 playwright-report/
 test-results/
 blob-report/
+tests/e2e/.artifacts/
+tests/e2e/.tmp/
 
 # next.js
 .next/

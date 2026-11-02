@@ -40,6 +40,22 @@ def test_write_is_atomic_and_readable(tmp_path: Path):
     assert path.read_bytes() == b"replacement"
 
 
+def test_write_keeps_existing_preview_when_replace_is_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    store = _store(tmp_path)
+    path = store.write(DIGEST, b"stable-bytes")
+
+    def blocked_replace(_source: str, _destination: str) -> None:
+        raise PermissionError("file is open by another reader")
+
+    monkeypatch.setattr("app.services.preview_store.os.replace", blocked_replace)
+
+    assert store.write(DIGEST, b"duplicate-bytes") == path
+    assert path.read_bytes() == b"stable-bytes"
+    assert not list(store.directory.glob("*.tmp"))
+
+
 def test_cleanup_deletes_only_expired_files_inside_the_directory(tmp_path: Path):
     store = _store(tmp_path, ttl=60)
     now = time.time()

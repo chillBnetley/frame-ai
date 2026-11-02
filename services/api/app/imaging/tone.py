@@ -19,16 +19,31 @@ _REC709 = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
 
 def srgb_to_linear(rgb: RgbArray) -> RgbArray:
-    low = rgb / np.float32(12.92)
-    high = np.power((rgb + np.float32(0.055)) / np.float32(1.055), np.float32(2.4))
-    return np.ascontiguousarray(np.where(rgb <= 0.04045, low, high).astype(np.float32))
+    out = np.empty_like(rgb)
+    high = np.empty_like(rgb)
+    np.add(rgb, np.float32(0.055), out=high)
+    np.divide(high, np.float32(1.055), out=high)
+    np.power(high, np.float32(2.4), out=high)
+    np.divide(rgb, np.float32(12.92), out=out)
+    np.copyto(out, high, where=rgb > np.float32(0.04045))
+    return out
 
 
-def linear_to_srgb(rgb: RgbArray) -> RgbArray:
-    clipped = np.clip(rgb, 0.0, 1.0)
-    low = clipped * np.float32(12.92)
-    high = np.float32(1.055) * np.power(clipped, np.float32(1.0 / 2.4)) - np.float32(0.055)
-    return np.ascontiguousarray(np.where(clipped <= 0.0031308, low, high).astype(np.float32))
+def linear_to_srgb(rgb: RgbArray, *, inplace: bool = False) -> RgbArray:
+    if inplace:
+        clipped = rgb
+        np.clip(clipped, 0.0, 1.0, out=clipped)
+    else:
+        clipped = np.clip(rgb, 0.0, 1.0)
+    high_mask = clipped > np.float32(0.0031308)
+    high = np.empty_like(clipped)
+    np.power(clipped, np.float32(1.0 / 2.4), out=high)
+    np.multiply(high, np.float32(1.055), out=high)
+    high -= np.float32(0.055)
+    out = clipped if inplace else np.empty_like(clipped)
+    np.multiply(clipped, np.float32(12.92), out=out)
+    np.copyto(out, high, where=high_mask)
+    return out
 
 
 def luminance_linear(rgb: RgbArray) -> NDArray[np.float32]:

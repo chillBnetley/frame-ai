@@ -74,7 +74,7 @@ def render(
         highlights=adjustments.highlights,
         shadows=adjustments.shadows,
     )
-    perceptual = linear_to_srgb(linear)
+    perceptual = linear_to_srgb(linear, inplace=True)
     perceptual = apply_contrast(perceptual, adjustments.contrast)
     perceptual = apply_color(
         perceptual,
@@ -96,7 +96,7 @@ def render(
     )
 
     return RenderedImage(
-        rgb=to_uint8(perceptual),
+        rgb=to_uint8(perceptual, inplace=True),
         canvas_width=canvas_width,
         canvas_height=canvas_height,
         quality=quality,

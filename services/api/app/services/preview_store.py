@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,7 @@ class PreviewStore:
     def __init__(self, directory: Path, *, ttl_seconds: int) -> None:
         self.directory = directory
         self.ttl_seconds = ttl_seconds
+        self._write_lock = threading.Lock()
 
     def ensure_ready(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -69,15 +71,33 @@ class PreviewStore:
     def write(self, preview_id: str, data: bytes) -> Path:
         destination = self.path_for(preview_id)
         self.ensure_ready()
-        temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
-        try:
-            temporary.write_bytes(data)
-            os.replace(temporary, destination)
-        finally:
+        # Serialize writers: concurrent renders of the same content-addressed
+        # preview otherwise race on Windows' non-atomic replace semantics.
+        with self._write_lock:
+            temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
             try:
-                temporary.unlink()
-            except FileNotFoundError:
-                pass
+                temporary.write_bytes(data)
+                for attempt in range(5):
+                    try:
+                        os.replace(temporary, destination)
+                        return destination
+                    except PermissionError:
+                        if attempt == 4:
+                            # A concurrent reader still holds the old file open.
+                            # Content-addressed previews are identical, so the
+                            # already-published bytes are a valid result.
+                            if destination.is_file():
+                                logger.debug(
+                                    "preview_write_kept_existing preview_id=%s", preview_id
+                                )
+                                return destination
+                            raise
+                        time.sleep(0.02)
+            finally:
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
         return destination
 
     def cleanup(self, *, now: float | None = None) -> CleanupReport:

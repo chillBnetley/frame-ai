@@ -17,10 +17,13 @@ FORMAT_INFO: dict[ImageFormat, tuple[str, str, str]] = {
 JPEG_QUALITY = 90
 
 
-def to_uint8(rgb: NDArray[np.float32]) -> NDArray[np.uint8]:
-    quantized: NDArray[np.uint8] = np.clip(np.rint(rgb * np.float32(255.0)), 0.0, 255.0).astype(
-        np.uint8
-    )
+def to_uint8(rgb: NDArray[np.float32], *, inplace: bool = False) -> NDArray[np.uint8]:
+    scaled = rgb if inplace else rgb * np.float32(255.0)
+    if inplace:
+        np.multiply(scaled, np.float32(255.0), out=scaled)
+    np.rint(scaled, out=scaled)
+    np.clip(scaled, 0.0, 255.0, out=scaled)
+    quantized: NDArray[np.uint8] = scaled.astype(np.uint8)
     return np.ascontiguousarray(quantized)
 
 
