@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run every Phase 1.1 regression gate and print an exit-code table.
+"""Run every Phase 2 regression gate and print an exit-code table.
 
 Usage (from any directory):
     services/api/.venv/Scripts/python.exe scripts/verify.py

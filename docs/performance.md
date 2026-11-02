@@ -1,8 +1,8 @@
 # FRAME AI 阶段 2 性能测量
 
 - 日期：2026-11-02T22:33:47+08:00
-- commit：`38ee7213d322368c7fdcf82ae5a14ea53b182ac0`
-- 工作区：M .gitignore,  M services/api/app/imaging/loader.py,  M services/api/app/imaging/output.py,  M services/api/app/imaging/pipeline.py,  M services/api/app/imaging/tone.py,  M services/api/app/services/preview_store.py,  M services/api/requirements-dev.txt,  M services/api/tests/test_preview_store.py,  M tests/e2e/README.md, ?? docs/performance.md, ?? package-lock.json, ?? package.json, ?? playwright.config.ts, ?? scripts/bench_render.py, ?? tests/e2e/editor.spec.ts, ?? tests/e2e/generate_fixture.py, ?? tests/e2e/global-setup.ts, ?? tests/e2e/support.ts, ?? tests/e2e/verify_export.py
+- commit：`a7e8fcabe209f375d9071ad71f6a35a3fbf4a2a5`（测量时的未提交代码随后提交为该 commit；测量时 HEAD 为 `38ee721`）
+- 工作区：测量时为 `38ee721` + 待提交的基准/优化；提交 `a7e8fca` 后为干净工作区
 - 机器：Windows-11-10.0.26200-SP0
 - CPU：Intel64 Family 6 Model 198 Stepping 2, GenuineIntel（14 逻辑核）
 - 内存：15.4 GiB
@@ -28,11 +28,11 @@
 | --- | --- | --- | --- | --- | --- |
 | 40 MP | 96 MB | 1577 MB | 3072 MB | 2967 ms | PASS |
 
-峰值 RSS 由 10 ms 间隔采样得到，统计 API 进程树（venv 启动器及其子进程）；上限取 `FRAME_EXPORT_MAX_RSS_MB`。该值包含 API 进程基线，是绝对工作集而不是增量。
+峰值 RSS 由 10 ms 间隔采样得到，统计 API 进程树（venv 启动器及其子进程）；上限取 `FRAME_EXPORT_MAX_RSS_MB`。该值包含 API 进程基线，是绝对工作集而不是增量。40 MP 内存结果为**单次采样、单机、单 Pillow/NumPy 版本**，不是所有环境的硬保证。
 
 ## 备注
 
 - 预览项目均检查 `cacheHit=false`，避免缓存命中污染计时。
 - 导出尺寸由响应头 `X-Export-Width/Height` 核对。
 - 全表总耗时 92.0 s。
-- 未达标项目保留原始目标值，原因与建议见阶段 2 交接文档。
+- 本表全部项目达标；实现偏差、单机限制与后续建议见 [阶段 2 交接](handoff/phase-2.md) 与 [已知问题](known-issues.md)。
