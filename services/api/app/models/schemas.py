@@ -27,6 +27,7 @@ class UploadImageResponse(CamelModel):
     original_name: str
     width: int
     height: int
+    exif_orientation: int
     mime_type: str
     bytes: int
 

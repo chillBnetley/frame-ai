@@ -33,6 +33,7 @@ async def upload_image(
         original_name=record.original_name,
         width=record.width,
         height=record.height,
+        exif_orientation=record.exif_orientation,
         mime_type=record.mime_type,
         bytes=record.bytes,
     )

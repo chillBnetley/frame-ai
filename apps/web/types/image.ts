@@ -3,6 +3,7 @@ export interface UploadedImage {
   originalName: string;
   width: number;
   height: number;
+  exifOrientation: number;
   mimeType: string;
   bytes: number;
 }

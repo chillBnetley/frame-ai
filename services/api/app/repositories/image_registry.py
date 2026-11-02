@@ -7,7 +7,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 
 class ImageAssetRecord(BaseModel):
@@ -17,6 +17,7 @@ class ImageAssetRecord(BaseModel):
     mime_type: str
     width: int
     height: int
+    exif_orientation: int = Field(default=1, ge=1, le=8)
     bytes: int
     sha256: str
     created_at: datetime

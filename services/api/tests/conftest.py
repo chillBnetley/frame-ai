@@ -32,17 +32,23 @@ def client(settings: Settings):
 def make_image(
     image_format: str = "PNG",
     size: tuple[int, int] = (64, 48),
-    color: tuple[int, int, int] = (120, 80, 40),
+    color: tuple[int, ...] | int = (120, 80, 40),
     noise: bool = False,
+    mode: str = "RGB",
+    exif_orientation: int | None = None,
 ) -> bytes:
-    mode = "RGB"
     if noise:
         pixels = os.urandom(size[0] * size[1] * 3)
-        image = Image.frombytes(mode, size, pixels)
+        image = Image.frombytes("RGB", size, pixels)
     else:
         image = Image.new(mode, size, color)
     buffer = io.BytesIO()
-    image.save(buffer, format=image_format)
+    save_kwargs: dict[str, object] = {}
+    if exif_orientation is not None:
+        exif = Image.Exif()
+        exif[274] = exif_orientation
+        save_kwargs["exif"] = exif
+    image.save(buffer, format=image_format, **save_kwargs)
     return buffer.getvalue()
 
 

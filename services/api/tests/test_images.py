@@ -32,10 +32,19 @@ def test_upload_supported_formats(
 
     assert response.status_code == 201
     body = response.json()
-    assert set(body) == {"imageId", "originalName", "width", "height", "mimeType", "bytes"}
+    assert set(body) == {
+        "imageId",
+        "originalName",
+        "width",
+        "height",
+        "exifOrientation",
+        "mimeType",
+        "bytes",
+    }
     assert body["originalName"] == filename
     assert body["width"] == 80
     assert body["height"] == 60
+    assert body["exifOrientation"] == 1
     assert body["mimeType"] == expected_mime
     assert body["bytes"] == len(payload)
 
@@ -157,7 +166,7 @@ def test_rejects_image_over_pixel_limit(tmp_path: Path):
         response = upload(test_client, make_image("PNG", size=(64, 48)))
 
     assert response.status_code == 413
-    assert response.json()["error"]["code"] == "image_pixels_exceeded"
+    assert response.json()["error"]["code"] == "image_too_many_pixels"
     assert response.json()["error"]["details"]["maxPixels"] == 1000
 
 

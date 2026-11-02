@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -11,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.imaging.decoder import inspect_image, normalize_declared_mime
+from app.imaging.decoder import DecodedImage, inspect_image, normalize_declared_mime
 from app.repositories.image_registry import ImageAssetRecord, ImageRegistry
 from app.repositories.original_store import OriginalImageStore
 
@@ -33,15 +34,20 @@ class ImageService:
         self.settings = settings
         self.store = OriginalImageStore(settings.data_dir, settings.originals_dirname)
         self.registry = ImageRegistry(settings.registry_path)
+        self._decode_slots = threading.BoundedSemaphore(2)
 
     def ensure_ready(self) -> None:
         self.settings.data_dir.mkdir(parents=True, exist_ok=True)
         self.store.ensure_ready()
 
+    def _inspect(self, data: bytes, declared_mime: str) -> DecodedImage:
+        with self._decode_slots:
+            return inspect_image(data, declared_mime, self.settings.max_image_pixels)
+
     async def create_from_upload(self, upload: UploadFile) -> ImageAssetRecord:
         declared_mime = normalize_declared_mime(upload.content_type)
         data = await self._read_limited(upload, self.settings.max_upload_bytes)
-        decoded = inspect_image(data, declared_mime, self.settings.max_image_pixels)
+        decoded = await run_in_threadpool(self._inspect, data, declared_mime)
 
         image_id = str(uuid4())
         sha256 = hashlib.sha256(data).hexdigest()
@@ -59,6 +65,7 @@ class ImageService:
             mime_type=decoded.mime_type,
             width=decoded.width,
             height=decoded.height,
+            exif_orientation=decoded.exif_orientation,
             bytes=len(data),
             sha256=sha256,
             created_at=datetime.now(UTC),
