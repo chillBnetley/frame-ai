@@ -150,7 +150,7 @@ afterEach(() => {
 });
 
 describe("EditorWorkspace", () => {
-  it("uploads a photo and shows the original preview and metadata", async () => {
+  it("uploads a photo and enters the editor with a server-rendered preview", async () => {
     const fetchMock = mockApi();
     render(<EditorWorkspace />);
 
@@ -159,14 +159,12 @@ describe("EditorWorkspace", () => {
 
     await uploadFile();
 
-    expect(await screen.findByAltText("原图预览：street.png")).toBeInTheDocument();
-    expect(screen.getByText("street.png")).toBeInTheDocument();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+    expect(await screen.findByAltText("编辑后的预览")).toBeInTheDocument();
     expect(screen.getAllByText("800 × 600").length).toBeGreaterThan(0);
-    expect(screen.getByText("2.0 KB")).toBeInTheDocument();
-    expect(screen.getByText("PNG")).toBeInTheDocument();
-    expect(
-      screen.getByText("原图保存在本机，下载原图会包含拍摄位置信息。"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("手动参数")).toBeInTheDocument();
+    expect(screen.getByText("历史与版本")).toBeInTheDocument();
+    expect(window.location.search).toBe(`?session=${SESSION_STATE.sessionId}`);
 
     const download = screen.getByRole("link", { name: /下载原图/ });
     expect(download).toHaveAttribute(
@@ -174,10 +172,6 @@ describe("EditorWorkspace", () => {
       `/api/v1/images/${UPLOADED_IMAGE.imageId}/original?download=true`,
     );
     expect(download).toHaveAttribute("download", "street.png");
-
-    expect(await screen.findByText("服务端首帧渲染")).toBeInTheDocument();
-    expect(await screen.findByAltText("编辑后的预览")).toBeInTheDocument();
-    expect(window.location.search).toBe(`?session=${SESSION_STATE.sessionId}`);
 
     const uploadCall = fetchMock.mock.calls.find(
       ([input, init]) =>
