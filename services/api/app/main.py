@@ -25,6 +25,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         service = ImageService(resolved_settings)
         service.ensure_ready()
+        service.scan_consistency()
         app.state.settings = resolved_settings
         app.state.image_service = service
         yield

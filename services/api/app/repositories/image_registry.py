@@ -66,6 +66,14 @@ class ImageRegistry:
         with self._lock:
             return self._records.get(image_id.lower())
 
+    def exists(self, image_id: str) -> bool:
+        with self._lock:
+            return image_id.lower() in self._records
+
+    def list_ids(self) -> list[str]:
+        with self._lock:
+            return sorted(self._records)
+
     def add(self, record: ImageAssetRecord) -> None:
         with self._lock:
             if record.id in self._records:

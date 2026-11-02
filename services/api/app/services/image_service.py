@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import threading
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -13,12 +14,23 @@ from starlette.concurrency import run_in_threadpool
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.imaging.decoder import DecodedImage, inspect_image, normalize_declared_mime
+from app.repositories.base import ImageRepository
 from app.repositories.image_registry import ImageAssetRecord, ImageRegistry
 from app.repositories.original_store import OriginalImageStore
 
 logger = logging.getLogger("frame_ai.images")
 
 _CHUNK_SIZE = 64 * 1024
+
+
+@dataclass(frozen=True)
+class ConsistencyReport:
+    orphan_files: tuple[str, ...]
+    dangling_records: tuple[str, ...]
+
+    @property
+    def is_consistent(self) -> bool:
+        return not self.orphan_files and not self.dangling_records
 
 
 def sanitize_original_name(filename: str | None) -> str:
@@ -30,15 +42,56 @@ def sanitize_original_name(filename: str | None) -> str:
 
 
 class ImageService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        store: OriginalImageStore | None = None,
+        repository: ImageRepository | None = None,
+    ) -> None:
         self.settings = settings
-        self.store = OriginalImageStore(settings.data_dir, settings.originals_dirname)
-        self.registry = ImageRegistry(settings.registry_path)
+        self.store = store or OriginalImageStore(settings.data_dir, settings.originals_dirname)
+        self.registry: ImageRepository = repository or ImageRegistry(settings.registry_path)
         self._decode_slots = threading.BoundedSemaphore(2)
 
     def ensure_ready(self) -> None:
         self.settings.data_dir.mkdir(parents=True, exist_ok=True)
         self.store.ensure_ready()
+
+    def scan_consistency(self) -> ConsistencyReport:
+        """Compare stored files with registry records; never deletes anything."""
+        registered_files: set[str] = set()
+        dangling_records: list[str] = []
+
+        for image_id in self.registry.list_ids():
+            record = self.registry.get(image_id)
+            if record is None:
+                dangling_records.append(image_id)
+                continue
+            registered_files.add(Path(record.storage_key).name)
+            try:
+                self.store.resolve(record.storage_key)
+            except AppError:
+                dangling_records.append(image_id)
+
+        originals_dir = self.store.originals_dir
+        present_files = {
+            path.name
+            for path in originals_dir.iterdir()
+            if path.is_file() and not path.name.startswith(".")
+        }
+        orphan_files = sorted(present_files - registered_files)
+        report = ConsistencyReport(
+            orphan_files=tuple(orphan_files),
+            dangling_records=tuple(sorted(dangling_records)),
+        )
+        if not report.is_consistent:
+            logger.warning(
+                "storage_consistency orphan_files=%s dangling_records=%s",
+                list(report.orphan_files),
+                list(report.dangling_records),
+            )
+        return report
 
     def _inspect(self, data: bytes, declared_mime: str) -> DecodedImage:
         with self._decode_slots:
