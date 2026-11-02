@@ -7,13 +7,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
-from app.api.routes import config, health, images
+from app.api.routes import config, health, images, sessions
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.middleware import CorsPreflightGuardMiddleware, RequestContextMiddleware
 from app.core.upload_limit import UploadSizeLimitMiddleware
 from app.services.analysis_service import AnalysisService
 from app.services.image_service import ImageService
+from app.services.session_service import SessionService
 
 API_PREFIX = "/api/v1"
 
@@ -30,6 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = resolved_settings
         app.state.image_service = service
         app.state.analysis_service = AnalysisService(resolved_settings, service)
+        app.state.session_service = SessionService(resolved_settings, service)
         yield
 
     app = FastAPI(
@@ -51,7 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=resolved_settings.allowed_origin_list,
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Request-ID"],
+        allow_headers=["Content-Type", "X-Request-ID", "Idempotency-Key"],
         expose_headers=["X-Request-ID"],
         max_age=600,
     )
@@ -64,6 +66,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(config.router, prefix=API_PREFIX)
     app.include_router(images.router, prefix=API_PREFIX)
+    app.include_router(sessions.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict[str, str]:
