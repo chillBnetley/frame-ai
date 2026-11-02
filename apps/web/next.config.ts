@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  experimental: {
+    // The backend enforces the real 20 MiB limit; the dev proxy must not
+    // truncate uploads before FastAPI can validate and answer.
+    proxyClientMaxBodySize: "22mb",
+  },
   turbopack: {
     rules: {
       "*.css": {

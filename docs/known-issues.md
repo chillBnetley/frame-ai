@@ -17,6 +17,7 @@
 
 ## 工具链
 
+- Next.js 16 开发代理默认只转发 10 MB 请求体，会先于 FastAPI 截断大图并返回 500。已在 `apps/web/next.config.ts` 设置 `experimental.proxyClientMaxBodySize: "22mb"`；该值必须高于后端 `FRAME_MAX_UPLOAD_BYTES + FRAME_CONTENT_LENGTH_ALLOWANCE`，真实限制仍由后端执行。修改后需重启开发服务器。
 - `npm audit` 的完整审计包含 dev-only 的 ESLint/minimatch 工具链 moderate 提示；`npm audit --omit=dev` 为 0。下次复查：2026-12-02。
 - Next.js 16 开发期曾出现一次 Turbopack panic（Windows）。已保留 `npm run dev:webpack` 作为官方备用开发方式；生产构建不受影响。
 - `next.config.ts` 的 rewrites 在构建时求值。[待 R-15 实测后填写行为结论。]
