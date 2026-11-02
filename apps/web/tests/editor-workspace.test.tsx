@@ -128,6 +128,9 @@ describe("EditorWorkspace", () => {
     expect(screen.getByText("800 × 600")).toBeInTheDocument();
     expect(screen.getByText("2.0 KB")).toBeInTheDocument();
     expect(screen.getByText("PNG")).toBeInTheDocument();
+    expect(
+      screen.getByText("原图保存在本机，下载原图会包含拍摄位置信息。"),
+    ).toBeInTheDocument();
 
     const download = screen.getByRole("link", { name: /下载原图/ });
     expect(download).toHaveAttribute(

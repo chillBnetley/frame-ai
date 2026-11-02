@@ -107,6 +107,9 @@ export function UploadResult({ image, uploading, onFileSelected }: UploadResultP
             新窗口打开
           </a>
         </div>
+        <p className="text-[11px] leading-relaxed text-white/35">
+          原图保存在本机，下载原图会包含拍摄位置信息。
+        </p>
 
         <UploadDropzone onFileSelected={onFileSelected} disabled={uploading} compact />
 
