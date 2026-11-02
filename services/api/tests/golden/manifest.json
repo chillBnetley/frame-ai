@@ -1,0 +1,86 @@
+{
+  "engineVersion": "frame-engine/1",
+  "tolerance": 1,
+  "sources": {
+    "ramp": "9b15597deaa6671ee74391b1e2262615347e4513421ce69ed3cdca91ff9256e2",
+    "detail": "eaed3a1be871ad6986659facfc57938ff23eff2f91b26d067834830504e0c2cd",
+    "mixed": "f3e4c1fd21840ad16c8855693c013c17fa35c4704a86e8ef879c8ff9347bb00d"
+  },
+  "cases": [
+    {
+      "image": "ramp",
+      "recipe": "neutral",
+      "file": "ramp__neutral.png"
+    },
+    {
+      "image": "ramp",
+      "recipe": "tone",
+      "file": "ramp__tone.png"
+    },
+    {
+      "image": "ramp",
+      "recipe": "color",
+      "file": "ramp__color.png"
+    },
+    {
+      "image": "ramp",
+      "recipe": "geometry",
+      "file": "ramp__geometry.png"
+    },
+    {
+      "image": "ramp",
+      "recipe": "detail",
+      "file": "ramp__detail.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "neutral",
+      "file": "detail__neutral.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "tone",
+      "file": "detail__tone.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "color",
+      "file": "detail__color.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "geometry",
+      "file": "detail__geometry.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "detail",
+      "file": "detail__detail.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "neutral",
+      "file": "mixed__neutral.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "tone",
+      "file": "mixed__tone.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "color",
+      "file": "mixed__color.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "geometry",
+      "file": "mixed__geometry.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "detail",
+      "file": "mixed__detail.png"
+    }
+  ]
+}
