@@ -1,36 +1,9 @@
-export interface UploadedImage {
-  imageId: string;
-  originalName: string;
-  width: number;
-  height: number;
-  exifOrientation: number;
-  mimeType: string;
-  bytes: number;
-}
+import type { components } from "./api";
 
-export interface ApiErrorBody {
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-  };
-}
-
-export interface HealthResponse {
-  status: "ok";
-  service: string;
-  version: string;
-  storage: {
-    ok: boolean;
-    writable: boolean;
-  };
-}
-
-export interface RuntimeConfig {
-  maxUploadBytes: number;
-  maxImagePixels: number;
-  allowedMimeTypes: string[];
-}
+export type UploadedImage = components["schemas"]["UploadImageResponse"];
+export type ApiErrorBody = components["schemas"]["ErrorResponse"];
+export type HealthResponse = components["schemas"]["HealthResponse"];
+export type RuntimeConfig = components["schemas"]["RuntimeConfigResponse"];
 
 export type ApiStatus = "checking" | "online" | "offline";
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from unicodedata import normalize
 from urllib.parse import quote
 from uuid import UUID
@@ -9,11 +9,22 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import get_image_service
-from app.models.schemas import UploadImageResponse
+from app.models.schemas import ErrorResponse, UploadImageResponse
 from app.repositories.image_registry import ImageAssetRecord
 from app.services.image_service import ImageService
 
-router = APIRouter(prefix="/images", tags=["images"])
+_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    code: {"model": ErrorResponse, "description": description}
+    for code, description in {
+        400: "Invalid or empty upload",
+        404: "Image not found",
+        413: "Upload or pixel limit exceeded",
+        415: "Unsupported or invalid image",
+        500: "Storage failure",
+    }.items()
+}
+
+router = APIRouter(prefix="/images", tags=["images"], responses=_ERROR_RESPONSES)
 
 
 def _content_disposition(disposition: str, filename: str) -> str:
