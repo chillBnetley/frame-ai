@@ -4,6 +4,7 @@ from fastapi import Request
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.services.analysis_service import AnalysisService
 from app.services.image_service import ImageService
 
 
@@ -17,5 +18,12 @@ def get_app_settings(request: Request) -> Settings:
 def get_image_service(request: Request) -> ImageService:
     service = getattr(request.app.state, "image_service", None)
     if not isinstance(service, ImageService):
+        raise AppError(503, "service_unavailable", "The service is not ready.")
+    return service
+
+
+def get_analysis_service(request: Request) -> AnalysisService:
+    service = getattr(request.app.state, "analysis_service", None)
+    if not isinstance(service, AnalysisService):
         raise AppError(503, "service_unavailable", "The service is not ready.")
     return service

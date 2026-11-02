@@ -12,6 +12,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.middleware import CorsPreflightGuardMiddleware, RequestContextMiddleware
 from app.core.upload_limit import UploadSizeLimitMiddleware
+from app.services.analysis_service import AnalysisService
 from app.services.image_service import ImageService
 
 API_PREFIX = "/api/v1"
@@ -28,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service.scan_consistency()
         app.state.settings = resolved_settings
         app.state.image_service = service
+        app.state.analysis_service = AnalysisService(resolved_settings, service)
         yield
 
     app = FastAPI(

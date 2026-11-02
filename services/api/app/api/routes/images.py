@@ -5,13 +5,15 @@ from unicodedata import normalize
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import get_image_service
+from app.api.deps import get_analysis_service, get_image_service
 from app.core.errors import AppError
+from app.models.analysis import AnalyzeRequest, AnalyzeResponse
 from app.models.schemas import ErrorResponse, UploadImageResponse
 from app.repositories.image_registry import ImageAssetRecord
+from app.services.analysis_service import AnalysisService
 from app.services.image_service import ImageService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -58,6 +60,20 @@ async def upload_image(
         exif_orientation=record.exif_orientation,
         mime_type=record.mime_type,
         bytes=record.bytes,
+    )
+
+
+@router.post("/{image_id}/analyze", response_model=AnalyzeResponse)
+def analyze_image(
+    image_id: str,
+    analysis: Annotated[AnalysisService, Depends(get_analysis_service)],
+    payload: Annotated[AnalyzeRequest | None, Body()] = None,
+) -> AnalyzeResponse:
+    result = analysis.analyze(image_id)
+    return AnalyzeResponse(
+        analysis_id=result.analysis_id,
+        features=result.features,
+        analyzer_version=result.analyzer_version,
     )
 
 
