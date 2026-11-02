@@ -4,7 +4,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Header, Query, Response
 
-from app.api.deps import get_session_service
+from app.api.deps import get_render_service, get_session_service
+from app.models.render import RenderRequest, RenderResponse
 from app.models.schemas import ErrorResponse
 from app.models.sessions import (
     ActivateRevisionRequest,
@@ -14,6 +15,7 @@ from app.models.sessions import (
     SessionState,
     UndoRequest,
 )
+from app.services.render_service import RenderService
 from app.services.session_service import SessionService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -52,6 +54,22 @@ def list_revisions(
     cursor: Annotated[int | None, Query(ge=1)] = None,
 ) -> RevisionListResponse:
     return service.list_revisions(session_id, limit=limit, cursor=cursor)
+
+
+@router.post("/{session_id}/render", response_model=RenderResponse)
+def render_preview(
+    session_id: str,
+    payload: RenderRequest,
+    service: Annotated[RenderService, Depends(get_render_service)],
+) -> RenderResponse:
+    result = service.render(session_id, payload)
+    return RenderResponse(
+        preview_url=result.preview_url,
+        width=result.width,
+        height=result.height,
+        quality=result.quality,
+        cache_hit=result.cache_hit,
+    )
 
 
 @router.post("/{session_id}/revisions", response_model=SessionState, status_code=201)

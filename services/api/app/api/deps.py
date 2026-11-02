@@ -6,6 +6,7 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.services.analysis_service import AnalysisService
 from app.services.image_service import ImageService
+from app.services.render_service import RenderService
 from app.services.session_service import SessionService
 
 
@@ -33,5 +34,12 @@ def get_analysis_service(request: Request) -> AnalysisService:
 def get_session_service(request: Request) -> SessionService:
     service = getattr(request.app.state, "session_service", None)
     if not isinstance(service, SessionService):
+        raise AppError(503, "service_unavailable", "The service is not ready.")
+    return service
+
+
+def get_render_service(request: Request) -> RenderService:
+    service = getattr(request.app.state, "render_service", None)
+    if not isinstance(service, RenderService):
         raise AppError(503, "service_unavailable", "The service is not ready.")
     return service
