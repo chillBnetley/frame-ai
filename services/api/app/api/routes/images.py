@@ -18,7 +18,10 @@ router = APIRouter(prefix="/images", tags=["images"])
 
 def _content_disposition(disposition: str, filename: str) -> str:
     ascii_name = normalize("NFKD", filename).encode("ascii", "ignore").decode("ascii").strip()
-    ascii_name = ascii_name.replace('"', "").replace("\\", "") or "image"
+    ascii_name = "".join(
+        char for char in ascii_name if char.isprintable() and char not in {'"', "\\"}
+    )[:150]
+    ascii_name = ascii_name or "image"
     return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"
 
 
@@ -50,7 +53,8 @@ def get_original_image(
     disposition = "attachment" if download else "inline"
     headers = {
         "Content-Disposition": _content_disposition(disposition, record.original_name),
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
         "X-Content-Type-Options": "nosniff",
     }
     return FileResponse(path, media_type=record.mime_type, headers=headers)

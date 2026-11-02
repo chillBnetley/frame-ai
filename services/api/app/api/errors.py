@@ -44,11 +44,18 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         details: list[dict[str, Any]] = []
         for error in exc.errors():
+            context = error.get("ctx") or {}
+            limit = {
+                key: context[key]
+                for key in ("ge", "gt", "le", "lt", "max_length", "min_length")
+                if key in context
+            }
             details.append(
                 {
-                    "field": ".".join(str(part) for part in error.get("loc", [])),
+                    "field": ".".join(str(part) for part in error.get("loc", []) if part != "body"),
+                    "rule": error.get("type", "value_error"),
+                    "limit": limit,
                     "message": error.get("msg", "Invalid value."),
-                    "type": error.get("type", "value_error"),
                 }
             )
         return JSONResponse(
@@ -83,4 +90,5 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=500,
             content=error_content("internal_error", "An unexpected error occurred."),
+            headers={"X-Request-ID": _request_id(request)},
         )

@@ -10,7 +10,7 @@ from app.api.errors import register_exception_handlers
 from app.api.routes import health, images
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
-from app.core.middleware import RequestContextMiddleware
+from app.core.middleware import CorsPreflightGuardMiddleware, RequestContextMiddleware
 from app.core.upload_limit import UploadSizeLimitMiddleware
 from app.services.image_service import ImageService
 
@@ -44,7 +44,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_upload_bytes=resolved_settings.max_upload_bytes,
         allowance_bytes=resolved_settings.content_length_allowance,
     )
-    app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.allowed_origin_list,
@@ -54,6 +53,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID"],
         max_age=600,
     )
+    app.add_middleware(
+        CorsPreflightGuardMiddleware,
+        allowed_origins=resolved_settings.allowed_origin_list,
+    )
+    app.add_middleware(RequestContextMiddleware)
 
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(images.router, prefix=API_PREFIX)

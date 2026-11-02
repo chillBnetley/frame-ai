@@ -6,6 +6,7 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from unicodedata import category, normalize
 from uuid import UUID, uuid4
 
 from fastapi import UploadFile
@@ -33,12 +34,21 @@ class ConsistencyReport:
         return not self.orphan_files and not self.dangling_records
 
 
+def _truncate_utf8(value: str, max_bytes: int) -> str:
+    encoded = value.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return value
+    return encoded[:max_bytes].decode("utf-8", "ignore").strip()
+
+
 def sanitize_original_name(filename: str | None) -> str:
     name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1]
-    name = "".join(char for char in name if char.isprintable() and char != "\x00").strip()
+    name = normalize("NFC", name)
+    name = "".join(char for char in name if category(char)[0] != "C")
+    name = name.strip()
     if name in {"", ".", ".."}:
         return "image"
-    return name[:200]
+    return _truncate_utf8(name, 255) or "image"
 
 
 class ImageService:
