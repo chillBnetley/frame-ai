@@ -22,3 +22,14 @@ class RenderResponse(CamelModel):
     height: int
     quality: RenderTier
     cache_hit: bool
+
+
+class CompareSide(CamelModel):
+    preview_url: str
+    width: int
+    height: int
+
+
+class CompareResponse(CamelModel):
+    original: CompareSide
+    revision: CompareSide

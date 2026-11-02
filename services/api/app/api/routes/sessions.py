@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Header, Query, Response
 
-from app.api.deps import get_render_service, get_session_service
-from app.models.render import RenderRequest, RenderResponse
+from app.api.deps import get_export_service, get_render_service, get_session_service
+from app.models.export import ExportRequest
+from app.models.render import CompareResponse, RenderRequest, RenderResponse
 from app.models.schemas import ErrorResponse
 from app.models.sessions import (
     ActivateRevisionRequest,
@@ -15,6 +17,7 @@ from app.models.sessions import (
     SessionState,
     UndoRequest,
 )
+from app.services.export_service import ExportService
 from app.services.render_service import RenderService
 from app.services.session_service import SessionService
 
@@ -24,6 +27,7 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
         404: "Session, image, or revision not found",
         409: "Revision conflict or no undo/redo step available",
         422: "Invalid request payload",
+        503: "Another export is in progress",
     }.items()
 }
 
@@ -124,3 +128,30 @@ def reset(
     service: Annotated[SessionService, Depends(get_session_service)],
 ) -> SessionState:
     return service.reset(session_id)
+
+
+@router.get("/{session_id}/compare", response_model=CompareResponse)
+def compare_revision(
+    session_id: str,
+    service: Annotated[RenderService, Depends(get_render_service)],
+    revision_id: Annotated[UUID | None, Query(alias="revisionId")] = None,
+    max_edge: Annotated[int, Query(alias="maxEdge", ge=1, le=2560)] = 1600,
+) -> CompareResponse:
+    return service.compare(session_id, revision_id=revision_id, max_edge=max_edge)
+
+
+@router.post("/{session_id}/export")
+def export_revision(
+    session_id: str,
+    payload: ExportRequest,
+    service: Annotated[ExportService, Depends(get_export_service)],
+) -> Response:
+    result = service.export(session_id, payload)
+    headers = {
+        "Content-Disposition": f'attachment; filename="{result.filename}"',
+        "X-Export-Width": str(result.width),
+        "X-Export-Height": str(result.height),
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
+    return Response(content=result.data, media_type=result.media_type, headers=headers)

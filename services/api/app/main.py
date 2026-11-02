@@ -14,6 +14,7 @@ from app.core.logging import configure_logging
 from app.core.middleware import CorsPreflightGuardMiddleware, RequestContextMiddleware
 from app.core.upload_limit import UploadSizeLimitMiddleware
 from app.services.analysis_service import AnalysisService
+from app.services.export_service import ExportService
 from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
 from app.services.render_service import RenderService
@@ -46,6 +47,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.analysis_service = AnalysisService(resolved_settings, service)
         app.state.session_service = session_service
         app.state.render_service = render_service
+        app.state.export_service = ExportService(
+            resolved_settings,
+            service,
+            session_service,
+        )
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,
@@ -79,7 +85,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type", "X-Request-ID", "Idempotency-Key"],
-        expose_headers=["X-Request-ID"],
+        expose_headers=[
+            "X-Request-ID",
+            "X-Export-Width",
+            "X-Export-Height",
+            "Content-Disposition",
+        ],
         max_age=600,
     )
     app.add_middleware(

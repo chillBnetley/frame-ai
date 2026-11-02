@@ -137,6 +137,12 @@ class SessionService:
             session = self.repository.get(key)
         return self._state(session)
 
+    def get_revision(self, session_id: str, revision_id: UUID) -> RevisionView:
+        key = _session_key(session_id)
+        with _mapped():
+            record = self.repository.get_revision(key, str(revision_id))
+        return _view(record)
+
     def reset(self, session_id: str) -> SessionState:
         key = _session_key(session_id)
         default = default_recipe()
