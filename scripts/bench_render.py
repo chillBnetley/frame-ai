@@ -131,6 +131,33 @@ def recipe(
     }
 
 
+def full_recipe(*, denoise: float = 0.0) -> dict[str, object]:
+    """Worst-case export recipe used to measure the real upper bound."""
+    return {
+        "schemaVersion": "1.0",
+        "styleId": "natural",
+        "styleStrength": 0.0,
+        "adjustments": {
+            "exposureEv": 0.35,
+            "contrast": 12,
+            "highlights": -20,
+            "shadows": 25,
+            "temperature": 8,
+            "tint": -5,
+            "saturation": 10,
+            "vibrance": 15,
+            "clarity": 10,
+            "sharpen": 20,
+            "denoise": round(denoise, 2),
+            "vignette": -15,
+            "grain": 8,
+            "rotationDeg": 2,
+        },
+        "rationale": [],
+        "warnings": [],
+    }
+
+
 class ApiServer:
     def __init__(self, base_url: str | None, api_pid: int | None) -> None:
         self.base_url = base_url
@@ -253,6 +280,25 @@ def upload(client: httpx.Client, payload: bytes, filename: str) -> dict[str, obj
 def create_session(client: httpx.Client, image_id: str) -> dict[str, object]:
     return _expect(
         client.post("/api/v1/sessions", json={"imageId": image_id}), 201
+    ).json()
+
+
+def create_revision(
+    client: httpx.Client,
+    session_id: str,
+    parent_revision_id: str,
+    request_recipe: dict[str, object],
+) -> dict[str, object]:
+    return _expect(
+        client.post(
+            f"/api/v1/sessions/{session_id}/revisions",
+            json={
+                "recipe": request_recipe,
+                "parentRevisionId": parent_revision_id,
+                "source": "user",
+            },
+        ),
+        201,
     ).json()
 
 
@@ -382,6 +428,7 @@ def export_scenario(
     iterations: int,
     *,
     measure_memory: bool,
+    request_recipe: dict[str, object] | None = None,
 ) -> dict[str, object]:
     image = make_image(source)
     with tempfile.TemporaryDirectory(prefix="frame-ai-bench-image-") as directory:
@@ -393,6 +440,9 @@ def export_scenario(
     session = create_session(client, str(uploaded["imageId"]))
     session_id = str(session["sessionId"])
     revision_id = str(session["activeRevisionId"])
+    if request_recipe is not None:
+        revision = create_revision(client, session_id, revision_id, request_recipe)
+        revision_id = str(revision["activeRevisionId"])
     del payload
     gc.collect()
 
@@ -438,6 +488,7 @@ def export_scenario(
 
     return {
         "source": source.name,
+        "recipe": "full" if request_recipe is not None else "neutral",
         "n": len(durations),
         "p50": statistics.median(durations),
         "p95": percentile(durations, 0.95),
@@ -500,7 +551,7 @@ def pass_fail(value: float, target: float) -> str:
 def build_document(
     *,
     rows: list[tuple[str, str, int, float, float, str, str]],
-    memory: dict[str, object] | None,
+    memories: list[dict[str, object]],
     memory_limit_mb: float,
     upload: dict[str, object],
     iterations: int,
@@ -527,7 +578,7 @@ def build_document(
         (
             "- 方法：本脚本自启单进程 uvicorn（临时数据目录），预览与导出项先热身一次，"
             f"上传项直接测量；再取 {iterations} 次 p50/p95；"
-            f"导出 40 MP 使用 {memory_runs} 次 RSS 采样。"
+            f"导出 40 MP 的中性与满配方各使用 {memory_runs} 次 RSS 采样。"
         ),
         "",
         "## §7.8 对照",
@@ -551,22 +602,27 @@ def build_document(
         "## 导出峰值内存",
         "",
     ]
-    if memory is None:
+    if not memories:
         lines.append("40 MP 导出的内存测量未完成。")
     else:
         lines += [
-            "| 源图 | 基线 RSS | 采样峰值 RSS | 上限 | 用时 | 结果 |",
-            "| --- | --- | --- | --- | --- | --- |",
-            (
-                f"| {memory['source']} | {float(memory['baseline_mb']):.0f} MB "
+            "| 源图 | 配方 | 基线 RSS | 采样峰值 RSS | 上限 | 用时 | 结果 |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for memory in memories:
+            lines.append(
+                f"| {memory['source']} | {memory['recipe']} "
+                f"| {float(memory['baseline_mb']):.0f} MB "
                 f"| {float(memory['peak_mb']):.0f} MB | {memory_limit_mb:.0f} MB "
                 f"| {format_ms(float(memory['p50']))} "
                 f"| {pass_fail(float(memory['peak_mb']), memory_limit_mb)} |"
-            ),
+            )
+        lines += [
             "",
             (
                 "峰值 RSS 由 10 ms 间隔采样得到，统计 API 进程树（venv 启动器及其子进程）；"
                 "上限取 `FRAME_EXPORT_MAX_RSS_MB`。该值包含 API 进程基线，是绝对工作集而不是增量。"
+                "中性配方是下限；满配方（含旋转、局部调整、锐化、颗粒）才是实际最坏情况。"
             ),
         ]
     lines += [
@@ -683,28 +739,74 @@ def main() -> int:
             flush=True,
         )
 
-        try:
-            export24 = export_scenario(
-                client,
-                server,
+        export_cases: list[
+            tuple[str, Source, dict[str, object] | None, str, float | None]
+        ] = [
+            (
+                "12 MP（中性配方）",
+                SOURCES["12mp"],
+                None,
+                "参考（§7.8 仅覆盖 24 MP）",
+                None,
+            ),
+            (
+                "24 MP（中性配方，下限）",
                 SOURCES["24mp"],
-                args.iterations,
-                measure_memory=False,
-            )
-            rows.append(
-                (
-                    "导出 24 MP",
-                    str(export24["source"]),
-                    int(export24["n"]),
-                    float(export24["p50"]),
-                    float(export24["p95"]),
-                    "p95 ≤ 20 s",
-                    pass_fail(float(export24["p95"]), 20_000),
+                None,
+                "p95 ≤ 20 s",
+                20_000,
+            ),
+            (
+                "40 MP（中性配方）",
+                SOURCES["40mp"],
+                None,
+                "参考（§7.8 仅覆盖 24 MP）",
+                None,
+            ),
+            (
+                "12 MP（满配方）",
+                SOURCES["12mp"],
+                full_recipe(),
+                "参考（§7.8 仅覆盖 24 MP）",
+                None,
+            ),
+            ("24 MP（满配方）", SOURCES["24mp"], full_recipe(), "p95 ≤ 20 s", 20_000),
+            (
+                "40 MP（满配方）",
+                SOURCES["40mp"],
+                full_recipe(),
+                "参考（§7.8 仅覆盖 24 MP）",
+                None,
+            ),
+        ]
+        for label, source, request_recipe, target, limit_ms in export_cases:
+            try:
+                export = export_scenario(
+                    client,
+                    server,
+                    source,
+                    args.iterations,
+                    measure_memory=False,
+                    request_recipe=request_recipe,
                 )
-            )
-            print(f"export 24MP: p95={export24['p95']:.0f} ms", flush=True)
-        except Exception as exc:  # noqa: BLE001 - report, keep measuring the rest
-            failures.append(f"24 MP 导出失败：{type(exc).__name__}: {exc}")
+                p95 = float(export["p95"])
+                rows.append(
+                    (
+                        f"导出 {label}",
+                        str(export["source"]),
+                        int(export["n"]),
+                        float(export["p50"]),
+                        p95,
+                        target,
+                        "—" if limit_ms is None else pass_fail(p95, limit_ms),
+                    )
+                )
+                print(
+                    f"export {label}: p95={export['p95']:.0f} ms",
+                    flush=True,
+                )
+            except Exception as exc:  # noqa: BLE001 - report, keep measuring the rest
+                failures.append(f"{label} 导出失败：{type(exc).__name__}: {exc}")
 
         try:
             upload = upload_scenario(client, args.iterations)
@@ -722,27 +824,32 @@ def main() -> int:
                 "bytes": 0,
             }
 
-        memory: dict[str, object] | None = None
-        try:
-            memory = export_scenario(
-                client,
-                server,
-                SOURCES["40mp"],
-                args.memory_runs,
-                measure_memory=True,
-            )
-            print(
-                f"export 40MP peak RSS={memory['peak_mb']:.0f} MB "
-                f"(baseline {memory['baseline_mb']:.0f} MB), {memory['p50']:.0f} ms",
-                flush=True,
-            )
-        except Exception as exc:  # noqa: BLE001
-            failures.append(f"40 MP 导出/内存测量失败：{type(exc).__name__}: {exc}")
+        memories: list[dict[str, object]] = []
+        for label, request_recipe in (("中性配方", None), ("满配方", full_recipe())):
+            try:
+                memory = export_scenario(
+                    client,
+                    server,
+                    SOURCES["40mp"],
+                    args.memory_runs,
+                    measure_memory=True,
+                    request_recipe=request_recipe,
+                )
+                memories.append(memory)
+                print(
+                    f"export 40MP {label} peak RSS={memory['peak_mb']:.0f} MB "
+                    f"(baseline {memory['baseline_mb']:.0f} MB), {memory['p50']:.0f} ms",
+                    flush=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                failures.append(
+                    f"40 MP {label}导出/内存测量失败：{type(exc).__name__}: {exc}"
+                )
 
     total_elapsed = time.perf_counter() - started
     document = build_document(
         rows=rows,
-        memory=memory,
+        memories=memories,
         memory_limit_mb=memory_limit_mb,
         upload=upload,
         iterations=args.iterations,
