@@ -573,14 +573,25 @@ function EditorStage({
                   ? state.save.error?.message ?? "保存失败，请稍后重试。"
                   : "调整会自动提交；也可以手动保存当前版本。"}
               </p>
-              <button
-                type="button"
-                onClick={requestCommit}
-                disabled={!canSave && state.save.status !== "error"}
-                className="min-h-11 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 text-xs text-amber-100 transition-colors hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 disabled:opacity-40"
-              >
-                {state.save.status === "error" ? "重试保存" : "保存修改"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={requestCommit}
+                  disabled={!canSave && state.save.status !== "error"}
+                  className="min-h-11 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 text-xs text-amber-100 transition-colors hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 disabled:opacity-40"
+                >
+                  {state.save.status === "error" ? "重试保存" : "保存修改"}
+                </button>
+                {state.save.status === "error" && dirty && (
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: "draft-discard" })}
+                    className="min-h-11 rounded-lg border border-white/12 px-3 text-xs text-white/55 transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    放弃未保存调整
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

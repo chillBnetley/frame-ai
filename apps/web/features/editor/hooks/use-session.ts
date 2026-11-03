@@ -179,20 +179,23 @@ export function useSessionActions(): SessionActions {
     [dispatch, loadHistory],
   );
 
-  const commit = useCallback(async (): Promise<boolean> => {
+  const saveDraft = useCallback(async (): Promise<{
+    ok: boolean;
+    state: SessionState | null;
+  }> => {
     if (
       phase !== "ready" ||
       sessionId === null ||
       activeRevisionId === null ||
       save.status === "saving"
     ) {
-      return false;
+      return { ok: false, state: null };
     }
 
     const recipe = normalizeRecipe(draft);
     const fingerprint = recipeFingerprint(recipe);
     if (fingerprint === recipeFingerprint(committed)) {
-      return true;
+      return { ok: true, state: null };
     }
 
     const reusableKey =
@@ -213,18 +216,18 @@ export function useSessionActions(): SessionActions {
       );
       dispatch({ type: "save-success", state: result.state });
       void loadHistory(sessionId);
-      return true;
+      return { ok: true, state: result.state };
     } catch (error) {
       const normalized = describeEditorError(error);
       if (error instanceof ApiClientError && error.code === "revision_conflict") {
         await applyConflictState(sessionId, dispatch);
         void loadHistory(sessionId);
-        return false;
+        return { ok: false, state: null };
       }
       const retryable =
         !(error instanceof ApiClientError) || !NON_RETRYABLE_SAVE_CODES.has(error.code);
       dispatch({ type: "save-failure", error: normalized, retryable });
-      return false;
+      return { ok: false, state: null };
     }
   }, [
     activeRevisionId,
@@ -239,15 +242,36 @@ export function useSessionActions(): SessionActions {
     sessionId,
   ]);
 
+  const commit = useCallback(
+    async (): Promise<boolean> => (await saveDraft()).ok,
+    [saveDraft],
+  );
+
   const runHistoryAction = useCallback(
     async (
-      operation: (targetSessionId: string) => Promise<SessionState>,
+      operation: (
+        targetSessionId: string,
+        expectedRevisionId: string | null,
+      ) => Promise<SessionState>,
     ): Promise<boolean> => {
-      if (phase !== "ready" || sessionId === null) {
+      if (phase !== "ready" || sessionId === null || save.status === "saving") {
         return false;
       }
+
+      let expectedRevisionId = activeRevisionId;
+      const dirty = recipeFingerprint(draft) !== recipeFingerprint(committed);
+      if (dirty) {
+        const saved = await saveDraft();
+        if (!saved.ok) {
+          return false;
+        }
+        if (saved.state !== null) {
+          expectedRevisionId = saved.state.activeRevisionId;
+        }
+      }
+
       try {
-        const next = await operation(sessionId);
+        const next = await operation(sessionId, expectedRevisionId);
         dispatch({ type: "session-replaced", state: next });
         void loadHistory(sessionId);
         return true;
@@ -260,12 +284,25 @@ export function useSessionActions(): SessionActions {
         return false;
       }
     },
-    [dispatch, loadHistory, phase, sessionId],
+    [
+      activeRevisionId,
+      committed,
+      dispatch,
+      draft,
+      loadHistory,
+      phase,
+      save.status,
+      saveDraft,
+      sessionId,
+    ],
   );
 
   const undo = useCallback(
-    () => runHistoryAction((targetSessionId) => undoSession(targetSessionId, activeRevisionId)),
-    [activeRevisionId, runHistoryAction],
+    () =>
+      runHistoryAction((targetSessionId, expectedRevisionId) =>
+        undoSession(targetSessionId, expectedRevisionId),
+      ),
+    [runHistoryAction],
   );
 
   const redo = useCallback(

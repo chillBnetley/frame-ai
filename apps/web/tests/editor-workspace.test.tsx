@@ -55,6 +55,7 @@ interface SessionErrorOption extends UploadErrorOption {
 interface MockApiOptions {
   uploadError?: UploadErrorOption;
   sessionError?: SessionErrorOption;
+  revisionError?: UploadErrorOption;
   revisionGate?: Promise<void>;
 }
 
@@ -117,6 +118,18 @@ function mockApi(options: MockApiOptions = {}) {
     ) {
       revisionCount += 1;
       const body = JSON.parse(String(init.body)) as { recipe: unknown };
+      if (options.revisionError) {
+        return jsonResponse(
+          {
+            error: {
+              code: options.revisionError.code,
+              message: options.revisionError.message,
+              details: {},
+            },
+          },
+          options.revisionError.status,
+        );
+      }
       if (options.revisionGate && revisionCount === 1) {
         await options.revisionGate;
       }
@@ -416,5 +429,37 @@ describe("EditorWorkspace", () => {
     const bodies = revisionBodies(fetchMock);
     expect(bodies).toHaveLength(2);
     expect(bodies[1]?.recipe.adjustments?.exposureEv).toBe(2);
+  });
+
+  it("lets the user discard the draft after a failed save", async () => {
+    mockApi({
+      revisionError: {
+        code: "storage_error",
+        message: "The revision could not be stored.",
+        status: 500,
+      },
+    });
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+
+    const slider = screen.getByRole("slider", { name: "曝光" });
+    fireEvent.change(slider, { target: { value: "1.5" } });
+    fireEvent.pointerUp(slider);
+
+    const discard = await screen.findByRole("button", { name: "放弃未保存调整" });
+    expect(screen.getByText("保存失败")).toBeInTheDocument();
+
+    await userEvent.click(discard);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "放弃未保存调整" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("已保存")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "曝光" })).toHaveValue("0");
   });
 });

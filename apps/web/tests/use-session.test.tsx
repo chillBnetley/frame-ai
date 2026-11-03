@@ -287,6 +287,84 @@ describe("useSessionActions history", () => {
     expect(result.current.store.state.canRedo).toBe(true);
   });
 
+  it("saves a dirty draft before undo and targets the saved revision", async () => {
+    const calls: Array<{ path: string; body: Record<string, unknown> }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/revisions`) && init?.method === "POST") {
+          const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+          calls.push({ path: "revision", body });
+          return jsonResponse(
+            sessionState({
+              recipe: body.recipe as EditRecipe,
+              revisionId: NEXT_REVISION_ID,
+              revisionNo: 2,
+              canUndo: true,
+            }),
+            201,
+          );
+        }
+        if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/undo`) && init?.method === "POST") {
+          calls.push({
+            path: "undo",
+            body: JSON.parse(String(init.body)) as Record<string, unknown>,
+          });
+          return jsonResponse(sessionState({ canRedo: true }));
+        }
+        if (url.includes("/revisions?limit=50")) {
+          return jsonResponse({ items: [], nextCursor: null });
+        }
+        return errorResponse("not_found", 404);
+      }),
+    );
+
+    const { result } = actionsHook(readyEditorState(undefined, { canUndo: true }));
+    dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 20 });
+
+    await act(async () => {
+      expect(await result.current.actions.undo()).toBe(true);
+    });
+
+    expect(calls.map((call) => call.path)).toEqual(["revision", "undo"]);
+    expect(calls[1]?.body).toEqual({ revisionId: NEXT_REVISION_ID });
+    expect(result.current.store.state.draft.adjustments.contrast).toBe(0);
+    expect(result.current.store.state.save.status).toBe("saved");
+  });
+
+  it("keeps the dirty draft and skips undo when the pre-history save fails", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        urls.push(url);
+        if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/revisions`) && init?.method === "POST") {
+          return errorResponse("storage_error", 500);
+        }
+        if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/undo`)) {
+          return jsonResponse(sessionState({ canRedo: true }));
+        }
+        if (url.includes("/revisions?limit=50")) {
+          return jsonResponse({ items: [], nextCursor: null });
+        }
+        return errorResponse("not_found", 404);
+      }),
+    );
+
+    const { result } = actionsHook(readyEditorState(undefined, { canUndo: true }));
+    dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 20 });
+
+    await act(async () => {
+      expect(await result.current.actions.undo()).toBe(false);
+    });
+
+    expect(urls.some((url) => url.endsWith("/undo"))).toBe(false);
+    expect(result.current.store.state.draft.adjustments.contrast).toBe(20);
+    expect(result.current.store.state.save.status).toBe("error");
+  });
+
   it("reports nothing_to_undo without changing the session", async () => {
     vi.stubGlobal(
       "fetch",
