@@ -42,14 +42,18 @@ def _add(
     session_id: str,
     exposure: float,
     idempotency_key: str | None,
+    *,
+    parent_id: str | None = None,
 ) -> tuple[str, bool, int]:
     recipe_json, digest = _recipe(exposure)
     while True:
-        session = repository.get(session_id)
+        expected_parent = (
+            parent_id if parent_id is not None else repository.get(session_id).active_revision_id
+        )
         try:
             record, replayed = repository.add_revision(
                 session_id,
-                parent_id=session.active_revision_id,
+                parent_id=expected_parent,
                 recipe_json=recipe_json,
                 recipe_hash=digest,
                 source="user",
@@ -96,11 +100,12 @@ def test_concurrent_retries_with_one_key_insert_exactly_once(
     session_id = _session(client)
     repository = SqliteSessionRepository(settings.database_path)
     key = uuid4().hex
+    parent_id = repository.get(session_id).active_revision_id
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         results = list(
             pool.map(
-                lambda _: _add(repository, session_id, 0.5, key),
+                lambda _: _add(repository, session_id, 0.5, key, parent_id=parent_id),
                 range(WORKERS),
             )
         )
