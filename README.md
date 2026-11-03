@@ -10,10 +10,11 @@
 | --- | --- | --- | --- |
 | 开发阶段 1：可运行骨架与上传预览 | 已完成 | `11dd6d3` | 2026-11-02 |
 | 开发阶段 1.1：阶段 1 审查收尾 | 已完成 | `a494e45` | 2026-11-02 |
-| 开发阶段 2：图像管线与非破坏编辑 | 已完成，等待确认后进入阶段 3 | `a7e8fca`（T2.13 代码验证；T2.14 文档随后提交） | 2026-11-02 |
+| 开发阶段 2：图像管线与非破坏编辑 | 已完成 | `a7e8fca`（T2.13 代码验证；T2.14 文档随后提交） | 2026-11-02 |
+| 开发阶段 2.1：阶段 2 审查修复 | F2-00…F2-13 已提交，文档与全量回归进行中 | `ff07530` | 2026-11-03 |
 | 开发阶段 3：AI 分析与非破坏自动编辑 | 未开始 | — | — |
 
-阶段 1.1 的完整命令、退出码与测试清单见 [docs/handoff/phase-1.1.md](docs/handoff/phase-1.1.md)；阶段 2 的完整交接见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md)。
+阶段 1.1 的完整命令、退出码与测试清单见 [docs/handoff/phase-1.1.md](docs/handoff/phase-1.1.md)；阶段 2 的完整交接见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md)；阶段 2.1 审查修复见 [docs/handoff/phase-2.1.md](docs/handoff/phase-2.1.md)。
 
 ## 当前范围（阶段 2）
 
@@ -22,11 +23,11 @@
 - 安全上传：MIME 与内容双重校验、20 MiB / 40 MP 硬限制、随机 UUID 文件名、原图只读保存。
 - SQLite 持久化：`image_asset / edit_session / edit_revision` 三表、自写版本迁移、阶段 1 JSON 登记表幂等导入。
 - 配方 schema：15 个 `adjustments` 字段、硬范围校验、两位小数限制、规范化哈希。
-- 确定性渲染管线：方向归一 → 缩放 → 几何（旋转内接 + 裁切）→ sRGB→线性 → 曝光 → 白平衡 → 高光/阴影 → 线性→sRGB → 对比度 → 饱和度/自然饱和度 → 局部（清晰度/暗角）→ 细节（降噪/锐化）→ 颗粒 → uint8。
-- 会话与 revision：自动创建初始 revision、提交、撤销、重做、激活任意历史、重置、`Idempotency-Key` 幂等、409 冲突处理。
-- 预览：`draft` 960 px / `final` 1600 px、内容寻址缓存、TTL 清理与 `cacheHit`。
-- 前后对比：同尺寸原图代理与渲染代理，含按住空格查看原图。
-- 导出：从原始分辨率重渲染、JPEG/PNG、剥离全部 EXIF/XMP/IPTC/GPS、嵌入 sRGB ICC、导出串行化。
+- 确定性渲染管线：嵌入 ICC 转 sRGB、EXIF 方向归一 → 缩放 → 几何（旋转内接 + 裁切）→ sRGB→线性 → 曝光 → 白平衡 → 高光/阴影 → 线性→sRGB → 对比度 → 饱和度/自然饱和度 → 局部（清晰度/暗角）→ 细节（降噪/锐化）→ 颗粒 → uint8。
+- 会话与 revision：自动创建初始 revision、提交、撤销、重做、激活任意历史、重置、`Idempotency-Key` 幂等与内容一致性校验、409 冲突处理；历史操作前自动保存未提交草稿。
+- 预览：`draft` 960 px / `final` 1600 px、内容寻址缓存、方向归一代理缓存、TTL 清理与 `cacheHit`；`X-Render-Seq` 保证过期渲染不覆盖新操作。
+- 前后对比：原图侧仅应用相同旋转/裁切，与渲染代理保持同尺寸和像素对齐，含按住空格查看原图。
+- 导出：从原始分辨率重渲染、JPEG/PNG、剥离全部 EXIF/XMP/IPTC/GPS、嵌入 sRGB ICC、导出串行化、运行期内存预算与大图简化降噪提示。
 - 前端编辑工作区：参数面板、裁切/旋转、历史栏、对比视图、导出对话框、可访问性检查。
 - 预览可见性：桌面端左列预览与历史栏固定在视口内、参数面板独立滚动；窄屏在主预览离屏时显示固定迷你预览（对比/裁切/导出时隐藏）。
 - Playwright 端到端（桌面 1280×800 / 1280×640 与窄屏 390×844 / 320×568）与 §7.8 性能基准。
@@ -51,11 +52,13 @@ Next.js rewrite: /api/v1/* → API_INTERNAL_URL (default 127.0.0.1:8000)
   ▼
 FastAPI
   ├─ RequestContextMiddleware      请求 ID、耗时、状态码日志
-  ├─ UploadSizeLimitMiddleware     Content-Length 预检与流式字节限制
+  ├─ LocalOriginGuardMiddleware   Host 白名单、Origin 与跨站写入防护
+  ├─ CorsPreflightGuardMiddleware CORS 预检统一错误信封
+  ├─ UploadSizeLimitMiddleware    Content-Length 预检与流式字节限制
   ├─ ImageService                 解码校验 → originals/<uuid> → image_asset
   ├─ SessionService               revision 事务、undo/redo/activate/reset、幂等
-  ├─ RenderService                loader → pipeline → 预览缓存 → previews/<hash>
-  ├─ ExportService                串行槽位 → 全分辨率重渲染 → 元数据剥离 → 文件流
+  ├─ RenderService                渲染序号 → 代理缓存 → pipeline → previews/<hash>
+  ├─ ExportService                串行槽位 → 内存预算 → 全分辨率重渲染 → 文件流
   ├─ AnalysisService              启发式特征（进程内 LRU，不调用外部模型）
   └─ PreviewStore                 TTL 清理、原子写入
 ```
@@ -65,7 +68,7 @@ FastAPI
 渲染管线固定顺序（D-08）：
 
 ```text
-原图字节 → 方向归一 → 代理缩放 → 旋转内接/裁切 → sRGB→线性
+原图字节 → 嵌入 ICC 转 sRGB（适用时）→ 方向归一 → 代理缩放 → 旋转内接/裁切 → sRGB→线性
         → 曝光 → 白平衡 → 高光/阴影 → 线性→sRGB
         → 对比度 → 饱和度/自然饱和度 → 清晰度/暗角
         → 降噪/锐化 → 颗粒 → uint8
@@ -189,7 +192,8 @@ npm run dev                  # Turbopack
 | `FRAME_PREVIEW_CLEANUP_INTERVAL_SECONDS` | `600` | 运行期预览清理间隔秒数；启动时另清一次 |
 | `FRAME_RENDER_MAX_EDGE_DEFAULT` | `1600` | `final` 预览默认最长边 |
 | `FRAME_RENDER_MAX_EDGE_LIMIT` | `2560` | 预览最长边配置上限；请求字段本身仍限制在 1…2560 |
-| `FRAME_EXPORT_MAX_RSS_MB` | `3072` | 性能脚本的 40 MP 导出峰值内存上限（脚本读取；API 不限制） |
+| `FRAME_EXPORT_MAX_RSS_MB` | `3072` | 导出预估峰值内存上限；超限返回 413 `export_too_large`，性能脚本也据此断言实测 RSS |
+| `FRAME_EXPORT_DENOISE_SIMPLIFY_PIXELS` | `12000000` | 原图像素超过该值且启用降噪时，导出使用简化降噪并返回 `X-Export-Warning` |
 | `FRAME_MAX_UPLOAD_BYTES` | `20971520` | 单文件最大字节数（20 MiB） |
 | `FRAME_MAX_IMAGE_PIXELS` | `40000000` | 最大像素数（40 MP） |
 | `FRAME_CONTENT_LENGTH_ALLOWANCE` | `1048576` | Content-Length 预检给 multipart 的余量 |
@@ -231,7 +235,8 @@ data/
 │   └── 36973fbf-a830-4415-aee4-1314ccdbf739.png
 └── tmp/
     └── previews/
-        └── <sha256>.jpg
+        ├── <sha256>.jpg             内容寻址预览
+        └── proxies/<hash>.jpg       方向归一与缩放代理缓存
 ```
 
 - 原图按服务端生成的 UUID + 实际解码格式扩展名保存；用户文件名不参与路径，原图字节不变。
@@ -241,7 +246,7 @@ data/
   - `edit_session`：`active_revision_id` / `head_revision_id`、状态与时间戳。
   - `edit_revision`：`revision_no`、`parent_id`、配方 JSON 与哈希、`source`、`idempotency_key`；`UNIQUE(session_id, revision_no)` 与 `UNIQUE(session_id, idempotency_key)`。
 - revision 不复制像素，只保存配方；渲染与导出始终读取不可变原图。
-- 预览是内容寻址的 JPEG 缓存，可随时删除；SQLite 与原图是权威数据。
+- 预览与 `previews/proxies/` 代理图都是可丢弃的 JPEG 缓存；SQLite 与原图是权威数据。代理图按 64 px 边长分桶复用，缓存写失败不影响渲染。
 - 阶段 1 的 `image_registry.json` 在首次启动时导入后备份为 `image_registry.json.imported.bak`（重复导入时带时间戳），之后不再写入。
 - 删除整个 `data/` 会清空所有图片、会话、revision 与缓存；当前没有删除接口或保护性清理脚本。
 
@@ -250,7 +255,7 @@ data/
 - **非破坏**：原图只读；revision 只记录配方；导出从原图重渲染。
 - **会话**：上传后自动创建会话与 `source=initial` 的默认配方 revision。
 - **提交**：`POST /revisions` 的 `parentRevisionId` 必须等于当前 `activeRevisionId`，否则 409 `revision_conflict`。
-- **幂等**：同会话内 `Idempotency-Key` 唯一；网络重试复用同一 key 返回 200 与原 revision。
+- **幂等**：同会话内 `Idempotency-Key` 唯一；同 key、同配方哈希与同父 revision 的网络重试返回 200 与原 revision；同 key 但内容或父 revision 不同返回 409 `idempotency_key_reuse`。
 - **undo/redo/activate**：undo 沿 `parent_id` 回退；redo 沿通往 `head` 的路径前进；activate 可切到任意历史 revision 且不改 `head`；在历史中间提交会形成分支并移动 `head`。
 - **reset**：生成 `source=reset` 的默认配方 revision；若活动配方已是默认值则不新增历史。
 - **两位小数**：前端 `roundTo2` 并归一 `-0`；服务端拒绝超过两位小数，不四舍五入（D-11）。
@@ -270,7 +275,7 @@ data/
 | 动画 | 动画 WebP/APNG 返回 `415 animated_not_supported` |
 | 超限 | 文件过大/像素超限返回 `413`，不会静默夹紧 |
 | Alpha | 当前统一合成到白底；导出 PNG 不含 alpha 通道 |
-| 色彩 | L/P/RGBA/CMYK/I;16 等统一转 sRGB RGB；不保留原 ICC 配置 |
+| 色彩 | L/P/RGBA/CMYK/I;16 等统一转 8-bit sRGB RGB；RGB/RGBA 的有效嵌入 ICC 会转换到 sRGB，导出不保留原 ICC 配置 |
 | 方向 | 读取 EXIF 方向并在渲染前烘焙进像素；原图字节保留原始 EXIF |
 
 服务端使用随机文件名与路径隔离；同时限制上传字节数和像素数。前端限制只用于即时提示，不能替代服务端校验。
@@ -299,17 +304,18 @@ data/
 | `POST /sessions`, `GET /sessions/{id}` | 创建/读取会话 |
 | `POST /sessions/{id}/revisions` | 提交 revision（幂等、409 冲突） |
 | `GET /sessions/{id}/revisions` | 分页读取历史 |
-| `POST /sessions/{id}/render` | 渲染预览，返回 `previewUrl/width/height/quality/cacheHit` |
+| `POST /sessions/{id}/render` | 渲染预览，支持 `X-Render-Seq`，返回 `previewUrl/width/height/quality/cacheHit` |
 | `POST /sessions/{id}/undo|redo|activate|reset` | 历史操作 |
-| `GET /sessions/{id}/compare` | 原图与当前 revision 的同尺寸对比 |
-| `POST /sessions/{id}/export` | 全分辨率导出 JPEG/PNG |
+| `GET /sessions/{id}/compare` | 原图侧仅应用旋转/裁切，与当前 revision 同尺寸对比 |
+| `POST /sessions/{id}/export` | 全分辨率导出 JPEG/PNG，带内存预算与简化降噪提示 |
 | `GET /previews/{previewId}` | 内容寻址预览缓存 |
 
-所有响应包含 `X-Request-ID`。除任务书状态码外，阶段 2 新增 `409`（revision 冲突、无可撤销/重做步骤）与 `503 server_busy`（导出串行槽位占用）。
+所有响应包含 `X-Request-ID`。除任务书状态码外，还使用 `400 invalid_host`、`403 origin_not_allowed`/`cors_origin_denied`（本机 Host/Origin 防护）、`409`（revision/幂等冲突、无可撤销/重做步骤、过期渲染）、`413 export_too_large`（导出内存预算）与 `503 server_busy`（导出串行槽位或渲染槽位超时）。
 
 ## 隐私与安全边界
 
 - **仅本机**：API 无鉴权、无限流，必须绑定 `127.0.0.1`（D-13）；不得暴露公网或反向代理到公网。
+- **Host/Origin 防护**：校验 `FRAME_ALLOWED_HOSTS`，并拒绝不在 `FRAME_ALLOWED_ORIGINS` 的写入 Origin 与 `Sec-Fetch-Site: cross-site`，降低 DNS 重绑定和浏览器跨站写入风险；这不是鉴权。
 - 原图、SQLite 与预览只保存在本机数据目录，不上传第三方存储。
 - 阶段 2 不调用 DeepSeek 或任何外部模型；`/analyze` 是本地启发式算法。
 - 密钥只从服务端环境变量读取；`.env`、`data/` 与测试产物已被忽略。
@@ -378,14 +384,15 @@ services/api/.venv/Scripts/python.exe scripts/bench_render.py
 
 | 项目 | p50 | p95 | 目标 |
 | --- | --- | --- | --- |
-| final 预览 1600 px（12 MP） | 288 ms | 298 ms | ≤ 500 ms |
-| draft 预览 960 px 含降噪（6 MP） | 186 ms | 226 ms | ≤ 400 ms |
-| final 预览 1600 px 含降噪（12 MP） | 792 ms | 865 ms | ≤ 2500 ms |
-| 24 MP 导出 | 1700 ms | 1725 ms | ≤ 20 s |
-| 19.2 MiB 上传解码 | 239 ms | 254 ms | ≤ 3000 ms |
-| 40 MP 导出峰值 RSS | — | 1577 MB | ≤ 3072 MB |
+| final 预览 1600 px（12 MP） | 312 ms | 319 ms | ≤ 500 ms |
+| draft 预览 960 px 含降噪（6 MP） | 191 ms | 202 ms | ≤ 400 ms |
+| final 预览 1600 px 含降噪（12 MP） | 843 ms | 883 ms | ≤ 2500 ms |
+| 24 MP 导出（中性配方） | 1779 ms | 1802 ms | ≤ 20 s |
+| 24 MP 导出（满配方） | 11294 ms | 11594 ms | ≤ 20 s |
+| 19.2 MiB 上传解码 | 255 ms | 268 ms | ≤ 3000 ms |
+| 40 MP 导出峰值 RSS（中性 / 满配方） | — | 1584 / 4700 MB | ≤ 3072 MB |
 
-峰值 RSS 统计 API 进程树，包含进程基线；40 MP 内存结果是单次采样、单机数据。
+峰值 RSS 统计 API 进程树，包含进程基线；40 MP 内存结果是单配方单次采样、单机数据。满配方 40 MP 实测超过默认预算，运行期会在解码前按估算返回 413，而不是继续渲染；该预算是保守估算，不是实时 RSS 硬限制。
 
 ## 常见故障
 
@@ -420,9 +427,13 @@ netstat -ano | findstr :3000
 
 通常是另一个标签页/窗口或网络重试改变了活动 revision。前端会重新加载会话；重试提交时必须使用新的 `parentRevisionId` 与新的 `Idempotency-Key`。
 
-**导出返回 503 `server_busy`**
+**导出或渲染返回 503 `server_busy`**
 
-同一进程只允许一个导出。等待 `Retry-After` 后重试；不要并发触发多个导出。
+同一进程只允许一个导出，渲染最多并发 2 个且槽位最多等待 10 秒。等待 `Retry-After` 后重试；不要并发触发多个大图导出。
+
+**导出返回 413 `export_too_large`**
+
+按原图像素与配方估算的峰值内存超过 `FRAME_EXPORT_MAX_RSS_MB`。减少调整项、使用更小图片，或在了解本机内存余量后调高上限；错误详情包含估算值与限制。
 
 **预览返回 404 `preview_expired`**
 
@@ -443,8 +454,8 @@ SQLite 记录仍存在但文件被移动/删除时，预览接口返回 `404 ima
 1. **PNG alpha 未保留**：loader 统一合成到白底，导出 PNG 没有 alpha 通道；与任务书“PNG 保留 alpha”存在差距。
 2. **无真机回归**：只做了桌面 Chromium/Edge 与窄视口；未在真实 iOS Safari / Android Chrome 上验证触控与性能。
 3. **API 无鉴权**：仅支持本机单进程；多 worker 与跨进程并发未验证，`--host` 必须为 `127.0.0.1`。
-4. **40 MP 内存为单机单次采样**：1577 MB 峰值依赖 Pillow/NumPy 版本与机器；`FRAME_EXPORT_MAX_RSS_MB` 只由基准脚本断言。
-5. **预览缓存写入的 Windows 兼容处理**：`os.replace` 遇到目标文件被占用时使用锁/重试与回退；不是跨进程缓存一致性方案。
+4. **大图导出内存是估算与单机采样**：40 MP 满配方实测峰值 4700 MB，超过默认 3072 MB 预算；API 会在解码前按像素与配方估算并拒绝超限导出，但不是实时 RSS 硬限制，结果依赖 Pillow/NumPy/OpenCV 版本与机器。
+5. **缓存写入的 Windows 兼容处理**：预览 `os.replace` 遇到目标文件被占用时使用锁/重试与回退，代理缓存写失败则继续使用内存结果；都不是跨进程缓存一致性方案。
 6. **EXIF 原图下载**：原图字节保留原始 EXIF（含 GPS）；只有导出会剥离元数据。
 7. **AI 未实现**：没有 DeepSeek provider、自动配方或分析持久化；阶段 3 才接入。
 
@@ -452,7 +463,7 @@ SQLite 记录仍存在但文件被移动/删除时，预览接口返回 `404 ima
 
 **阶段：** 开发阶段 2 — 图像管线与非破坏编辑（已完成，等待确认进入阶段 3）。
 
-完整交接（关键文件、验证命令与退出码、测试计数、E2E/性能结果、已知偏差、风险、启动方式、下一阶段建议）见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md)。API 契约见 [docs/api-contract.md](docs/api-contract.md)，决策记录见 [ADR-0002](docs/decisions/ADR-0002-phase-2-decisions.md)，性能数据见 [docs/performance.md](docs/performance.md)。
+完整交接（关键文件、验证命令与退出码、测试计数、E2E/性能结果、已知偏差、风险、启动方式、下一阶段建议）见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md)，阶段 2.1 审查修复见 [docs/handoff/phase-2.1.md](docs/handoff/phase-2.1.md)。API 契约见 [docs/api-contract.md](docs/api-contract.md)，决策记录见 [ADR-0002](docs/decisions/ADR-0002-phase-2-decisions.md) 与 [ADR-0003](docs/decisions/ADR-0003-compare-geometry-alignment.md)，性能数据见 [docs/performance.md](docs/performance.md)。
 
 **本地启动方式：**
 
@@ -468,4 +479,4 @@ npm run dev
 
 打开 <http://127.0.0.1:3000>。
 
-**下一阶段建议：** 先确认阶段 2 交接与已知偏差，再进入开发阶段 3：DeepSeek provider 与 stub、分析结果持久化、自动配方生成与可解释性、失败回退与限流；继续保持原图不可变、导出元数据剥离与本机边界。**T2.14 之后停止，未获确认不进入开发阶段 3。**
+**下一阶段建议：** 先确认阶段 2.1 交接与已知偏差，再进入开发阶段 3：DeepSeek provider 与 stub、分析结果持久化、自动配方生成与可解释性、失败回退与限流；继续保持原图不可变、导出元数据剥离与本机边界。**F2-15 之后停止，未获确认不进入开发阶段 3。**

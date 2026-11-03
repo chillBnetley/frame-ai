@@ -1,8 +1,8 @@
 # ADR-0002：开发阶段 2 决策（D-01…D-13）
 
-- 状态：已接受并已实现（2026-11-02，用户确认全部采用审查报告推荐方案）
+- 状态：已接受并已实现（2026-11-02，用户确认全部采用审查报告推荐方案；2026-11-03 随阶段 2.1 修订 D-03、D-04、D-06、D-09、D-13 的实现说明）
 - 适用：开发阶段 2 —— 图像管线与非破坏编辑
-- 相关文档：[API 契约](../api-contract.md)、[阶段 2 交接](../handoff/phase-2.md)、[性能测量](../performance.md)
+- 相关文档：[API 契约](../api-contract.md)、[ADR-0003](ADR-0003-compare-geometry-alignment.md)、[阶段 2 交接](../handoff/phase-2.md)、[阶段 2.1 交接](../handoff/phase-2.1.md)、[性能测量](../performance.md)
 
 ## 背景
 
@@ -86,7 +86,8 @@
 **决策。**
 
 - 客户端提交 revision 时携带 `Idempotency-Key`（≤200 字符，空串视为未提供）。
-- `UNIQUE(session_id, idempotency_key)`；同 key 重放返回 200 与原 revision，不新增历史。
+- `UNIQUE(session_id, idempotency_key)`；同 key、同规范化配方哈希与同父 revision 的重放返回 200 与原 revision，不新增历史。
+- 同 key 但配方哈希或父 revision 不同，返回 409 `idempotency_key_reuse`，不静默复用旧结果（阶段 2.1 修正）。
 - `parentRevisionId` 必须等于当前 `activeRevisionId`，否则 409 `revision_conflict`，`details.activeRevisionId` 返回服务端当前值。
 - 新建 revision 在 `BEGIN IMMEDIATE` 事务中完成校验、取号、插入与活动/head 更新。
 - `source ∈ {initial,user,ai,reset}`；客户端只能提交 `user` 或 `ai`。
@@ -94,7 +95,7 @@
 **后果。**
 
 - 任务书状态码表没有 409，本决策引入契约扩展，必须写入 API 契约。
-- 同 key 提交不同配方会被视为同一动作；调用方必须每次新意图使用新 key。
+- 调用方必须每次新意图使用新 key；服务端会拒绝同 key 下不同配方或不同父 revision 的请求。
 - 服务端不尝试自动合并冲突，只要求客户端刷新后重试。
 
 **实现与证据。**
@@ -110,13 +111,14 @@
 **决策。**
 
 - 旋转后取最大同比例内接矩形，不引入填充边框。
-- 缩放比例按 `1 / (cos θ + max(w/h, h/w) sin θ)` 计算。
+- 内接画布尺寸按 `1 / (cos θ + max(w/h, h/w) sin θ)` 计算；仿射矩阵的缩放固定为 1.0，只做旋转与平移，内容保持源图比例。
+- **实现修正（阶段 2.1 / F2-01）**：初版把内接缩放同时用于内容，导致旋转后再次缩小并可能采样到源图之外的镜像边缘。现改为只缩小输出画布，不二次缩放内容；`ENGINE_VERSION` 提升为 `frame-engine/2`，旧预览缓存自动失效，已保存的配方不受影响。
 - `crop` 坐标定义在旋转内接后的画布；render 返回该画布的 `width/height`。
-- 插值：draft 用双线性，final/export 用双三次；仿射采样越界处使用 `BORDER_REFLECT_101` 仅作为插值边缘行为，不扩大画布。
+- 插值：draft 用双线性，final/export 用双三次；`BORDER_REFLECT_101` 仅是仿射插值的边缘行为，正确内接几何不会依赖源图之外的像素形成可见内容。
 
 **后果。**
 
-- 旋转会损失四角像素，但输出始终是完整矩形。
+- 旋转会缩小可见画布并损失四角内容，但输出始终是完整矩形，内容不会被二次缩小。
 - 前端必须使用 render 返回的画布尺寸绘制裁切框。
 - 旋转角度范围限制在 −15°…15°，避免过度裁切。
 
@@ -156,6 +158,7 @@
 - 新增 `GET /api/v1/previews/{previewId}`，返回 JPEG。
 - `previewId` 由原图 SHA-256、`ENGINE_VERSION`、规范化 adjustments、实际最长边与质量共同哈希（64 位小写十六进制）。
 - 文件存放在 `data/tmp/previews/`；启动时清理一次，运行中每 `FRAME_PREVIEW_CLEANUP_INTERVAL_SECONDS`（默认 600 秒）清理超过 TTL（默认 3600 秒）的文件。
+- 阶段 2.1 增加 `previews/proxies/` 方向归一/缩放代理缓存，按 64 px 边长分桶复用；命中刷新 mtime，写失败降级为内存渲染，预览 TTL 清理不进入该子目录。
 - 响应带 `Cache-Control: private, max-age=<TTL>`、`nosniff` 与 CSP sandbox。
 - 文件不存在或已过期 → 404 `preview_expired`，前端静默重新 render。
 
@@ -230,7 +233,7 @@
 
 - JPEG：清除 EXIF/XMP/IPTC；质量 ≥90 时 `subsampling=0`；嵌入标准 sRGB ICC。
 - PNG：不写 `eXIf`、`tEXt`、`iTXt`、`zTXt`、`tIME` 等元数据块；嵌入 sRGB ICC。
-- 编码结果必须字节级确定：同一像素与参数重复编码得到相同字节。
+- 编码结果必须字节级确定：同一像素与参数重复编码得到相同字节。阶段 2.1 将 sRGB ICC 头部的 lcms 创建时间固定为 2020-01-01 00:00:00，避免不同进程生成不同 ICC 字节；像素算法与引擎版本不变。
 - 导出文件名使用服务端生成的 `frame-<8位id>.jpg|png`，不使用原始文件名。
 
 **后果。**
@@ -319,7 +322,7 @@
 **决策。**
 
 - API 只绑定 `127.0.0.1`；启动文档固定使用 `--host 127.0.0.1`。
-- 不实现登录、权限、限流或 CSRF 防护。
+- 不实现登录、权限或限流。阶段 2.1 增加本机 Host 白名单、写入 Origin 与 `Sec-Fetch-Site` 检查，降低 DNS 重绑定和浏览器跨站写入风险；这些检查不是鉴权，也不声称是完整 CSRF 防护。
 - 不提供公网部署说明；任何反向代理暴露都不在支持范围内。
 - 日志与错误信息不返回绝对路径、原始文件名、图片字节或密钥。
 

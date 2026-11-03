@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-仓库处于阶段 2：安全上传、SQLite 持久化、非破坏编辑会话、确定性渲染、内容寻址预览、前后对比与全分辨率导出。AI provider、自动配方与分析持久化属于阶段 3。
+仓库处于阶段 2.1 审查修复收尾：安全上传、SQLite 持久化、非破坏编辑会话、确定性渲染、内容寻址预览、前后对比与全分辨率导出。AI provider、自动配方与分析持久化属于阶段 3。
 
 ## 总体结构
 
@@ -15,12 +15,13 @@ Next.js rewrite → API_INTERNAL_URL（默认 http://127.0.0.1:8000）
   ▼
 FastAPI (127.0.0.1 only, D-13)
   ├─ RequestContextMiddleware       请求 ID、耗时、状态码日志
+  ├─ LocalOriginGuardMiddleware    Host 白名单、Origin 与跨站写入防护
   ├─ CorsPreflightGuardMiddleware   CORS 预检边界
   ├─ UploadSizeLimitMiddleware      Content-Length 预检与流式字节限制
   ├─ ImageService                   解码校验 → originals/ → image_asset
   ├─ SessionService                 revision 事务、undo/redo/activate/reset、幂等
-  ├─ RenderService                  loader → pipeline → 预览缓存 → previews/<hash>
-  ├─ ExportService                  串行槽位 → 全分辨率重渲染 → 元数据剥离
+  ├─ RenderService                  渲染序号 → 代理缓存 → pipeline → previews/<hash>
+  ├─ ExportService                  串行槽位 → 内存预算 → 全分辨率重渲染 → 元数据剥离
   ├─ AnalysisService                启发式特征（进程内 LRU）
   └─ PreviewStore                   TTL 清理、原子写入、Windows 占用兜底
 ```
@@ -45,19 +46,21 @@ POST /api/v1/images
 
 ```text
 POST /api/v1/sessions                  → 初始 revision（source=initial）
-POST /api/v1/sessions/{id}/render      → 无状态渲染 + 预览缓存
+POST /api/v1/sessions/{id}/render      → X-Render-Seq + 代理缓存 + 无状态渲染 + 预览缓存
 POST /api/v1/sessions/{id}/revisions   → 事务内校验 parentRevisionId、取号、插入、移动 active/head
 POST /api/v1/sessions/{id}/undo|redo|activate|reset
 ```
 
-- 预览是按配方内容寻址的缓存，不写数据库。
-- revision 提交使用 `BEGIN IMMEDIATE`；`Idempotency-Key` 命中时返回原 revision（200）。
+- 预览是按配方内容寻址的缓存，不写数据库；方向归一/缩放代理图另存于 `previews/proxies/`。
+- 同进程最多并发 2 次渲染，槽位等待上限 10 秒；等待期间被更高 `X-Render-Seq` 取代的请求返回 409，防止旧结果覆盖新操作。
+- revision 提交使用 `BEGIN IMMEDIATE`；`Idempotency-Key` 同 key 同内容命中时返回原 revision（200），内容或父 revision 不同则返回 409。
 - 历史是 `parent_id` 图：`active` 是当前编辑点，`head` 是路径末端；在历史中间提交会形成分支。
 
 ### 渲染管线
 
 ```text
 原图字节
+  → 嵌入 ICC 转 sRGB（适用的 RGB/RGBA 输入）
   → 方向归一（EXIF 1–8）
   → 代理缩放（draft 960 / final 默认 1600 / export 全分辨率）
   → 旋转内接（无填充，最大同比例矩形）
@@ -79,13 +82,14 @@ POST /api/v1/sessions/{id}/undo|redo|activate|reset
 
 ```text
 GET  /api/v1/sessions/{id}/compare
-  → 原图代理（方向归一、同 maxEdge、无编辑）
+  → 原图代理（方向归一、同 maxEdge，仅应用该 revision 的旋转/裁切）
   → 当前 revision 渲染代理
   → 两张同尺寸 JPEG URL
 
 POST /api/v1/sessions/{id}/export
   → 获取单进程导出槽位（失败 503 server_busy）
-  → 从原图全分辨率重渲染
+  → 按像素与配方估算内存（超限 413 export_too_large）
+  → 从原图全分辨率重渲染（大图降噪简化时带 X-Export-Warning）
   → 剥离 EXIF/XMP/IPTC/GPS，嵌入 sRGB ICC
   → JPEG/PNG 文件流 + X-Export-Width/Height
 ```
@@ -96,7 +100,9 @@ POST /api/v1/sessions/{id}/export
 data/
 ├── frame.db                 SQLite（权威）
 ├── originals/<uuid>.<ext>   原图（只读，权威）
-└── tmp/previews/<hash>.jpg  预览缓存（可丢弃）
+└── tmp/previews/
+    ├── <hash>.jpg           预览缓存（可丢弃）
+    └── proxies/<hash>.jpg   方向归一/缩放代理缓存（可丢弃）
 ```
 
 - `image_asset`：图片元数据、显示尺寸、`sha256`、原始方向。
@@ -118,6 +124,7 @@ data/
 
 ## 安全边界
 
+- Host 白名单防止 DNS 重绑定；写入请求校验 Origin 与 `Sec-Fetch-Site`，CORS 预检使用统一错误信封。
 - 服务端判定 MIME 与真实解码格式，声明类型不匹配返回 415。
 - 上传限额同时由纯 ASGI 中间件（实际字节）与业务层（文件字节）执行。
 - 用户文件名只用于展示与下载头；磁盘文件名始终是 UUID。

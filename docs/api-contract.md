@@ -1,10 +1,10 @@
 # FRAME AI API 契约（阶段 2）
 
-- 状态：已实现，2026-11-02
+- 状态：已实现并同步至阶段 2.1，2026-11-03
 - 适用：开发阶段 2（图像管线、非破坏编辑、会话与导出）
 - 机器可读契约：[`shared/contracts/openapi.json`](../shared/contracts/openapi.json)
 - 前端类型：[`apps/web/types/api.d.ts`](../apps/web/types/api.d.ts)
-- 决策依据：[ADR-0002](decisions/ADR-0002-phase-2-decisions.md)
+- 决策依据：[ADR-0002](decisions/ADR-0002-phase-2-decisions.md)、[ADR-0003](decisions/ADR-0003-compare-geometry-alignment.md)
 
 本文细化任务书 §7，并登记所有**相对任务书的契约扩展**（以 ⊕ 标记）。实现以 OpenAPI 与代码为准；两者不一致时先修代码或重新导出契约，不得只改文档。
 
@@ -35,20 +35,33 @@
 | --- | --- |
 | 200 | 读取成功、更新成功、幂等重放 |
 | 201 | 新建图片、会话或 revision |
-| 400 | 请求体本身错误：空文件、多个 `file` 字段、缺少字段 |
+| 400 | 请求体本身错误（空文件、多个 `file` 字段、缺少字段），或 Host 头不在允许列表 |
+| 403 | 写入请求的来源不在允许列表，或浏览器标记为跨站写入 |
 | 404 | 图片、会话、revision 或预览不存在 |
-| 409 ⊕ | 状态冲突：父 revision 不是活动版本、无可撤销/重做步骤 |
-| 413 | 文件字节或像素数超限 |
+| 409 ⊕ | 状态冲突：父 revision 不是活动版本、无可撤销/重做步骤、渲染已被更新请求取代 |
+| 413 | 文件字节、像素数或导出预估内存超限 |
 | 415 | 无法解码、MIME 与内容不符、格式不支持、动画图 |
 | 422 | 字段校验失败（范围、两位小数、crop 越界等） |
 | 500 | 未预期错误或本地存储失败 |
-| 503 | 导出串行槽位被占用，或服务未就绪 |
+| 503 | 导出/渲染串行槽位被占用，或服务未就绪 |
 
-任务书的状态码清单没有 409。并发/历史冲突使用 409 是阶段 2 的契约扩展；具体 `code` 见 §4。
+任务书的状态码清单没有 403、409。并发/历史冲突使用 409、本机来源防护使用 403 是阶段 2 的契约扩展；具体 `code` 见 §4 与 §6。
 
 ### 1.2 本机边界
 
 API 只绑定 `127.0.0.1`，无鉴权、无限流（D-13）。启动命令必须显式使用 `--host 127.0.0.1`；不得把端口暴露到公网或反向代理到公网。任何部署加固都属于后续阶段。
+
+### 1.3 Host 与来源防护（阶段 2.1）
+
+API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏览器跨站写入：
+
+- **Host 校验**：所有 HTTP 请求的 `Host` 主机名必须位于 `FRAME_ALLOWED_HOSTS`（默认 `127.0.0.1,localhost,::1`），否则返回 400 `invalid_host`。列表留空时跳过校验。
+- **来源校验**：仅对非安全方法（`POST` 等，`GET/HEAD/OPTIONS` 不受限）检查：
+  - 带 `Origin` 且不在 `FRAME_ALLOWED_ORIGINS` → 403 `origin_not_allowed`；
+  - 浏览器标记 `Sec-Fetch-Site: cross-site` → 403 `origin_not_allowed`。
+- **CORS 预检**：`OPTIONS` 预检的来源不在允许列表时返回 403 `cors_origin_denied`（统一错误信封，不再直接由 CORS 中间件返回空响应）。
+
+默认允许来源为 `http://localhost:3000,http://127.0.0.1:3000`；通过 Next.js 同源代理访问时无需修改。若前端换端口、换主机名，或使用 `NEXT_PUBLIC_API_BASE_URL` 直连 API，必须同步更新 `FRAME_ALLOWED_ORIGINS`。这些检查不是鉴权，只降低浏览器与被诱导请求的风险。
 
 ## 2. 会话状态对象
 
@@ -149,14 +162,14 @@ API 只绑定 `127.0.0.1`，无鉴权、无限流（D-13）。启动命令必须
 | `POST /api/v1/sessions` | `{imageId}` | 201 会话状态；创建 `source=initial` 的默认配方 revision | 404 `image_not_found`；422 |
 | `GET /api/v1/sessions/{sessionId}` | — | 会话状态 | 404 `session_not_found` |
 | `GET /api/v1/sessions/{sessionId}/revisions` ⊕ | `?limit=20&cursor=3` | `{items:[{id, revisionNo, parentId, source, recipeHash, createdAt}], nextCursor}`；按 `revisionNo` 降序 | 404 `session_not_found`；422 |
-| `POST /api/v1/sessions/{sessionId}/render` | `{recipe, maxEdge?, quality?}` | 200 `{previewUrl, width, height, quality, cacheHit}`；无状态，不写数据库 | 404 `session_not_found`/`image_not_found`；422 `validation_error` |
+| `POST /api/v1/sessions/{sessionId}/render` | `{recipe, maxEdge?, quality?}` + 可选头 `X-Render-Seq` | 200 `{previewUrl, width, height, quality, cacheHit}`；无状态，不写数据库 | 404 `session_not_found`/`image_not_found`；409 `render_superseded`；422 `validation_error`；503 `server_busy` |
 | `POST /api/v1/sessions/{sessionId}/revisions` | `{recipe, parentRevisionId, source?}` + 头 `Idempotency-Key` | 201 新 revision 并设为活动；同 key 同内容重放 200 原 revision | 409 `revision_conflict` / `idempotency_key_reuse`；404；422 |
 | `POST /api/v1/sessions/{sessionId}/undo` | 可选 `{revisionId}` | 会话状态；仅移动 `active` | 409 `nothing_to_undo`；409 `revision_conflict`（客户端期望版本不符） |
 | `POST /api/v1/sessions/{sessionId}/redo` ⊕ | — | 会话状态；沿通往 `head` 的路径前进一步 | 409 `nothing_to_redo` |
 | `POST /api/v1/sessions/{sessionId}/activate` ⊕ | `{revisionId}` | 会话状态；切到会话内任意 revision，不改 `head` | 404 `revision_not_found` |
 | `POST /api/v1/sessions/{sessionId}/reset` | — | 会话状态；若活动配方已是默认配方，直接返回当前状态且不新增 revision | 404 |
 | `GET /api/v1/sessions/{sessionId}/compare` | `?revisionId=&maxEdge=1600` | `{original:{previewUrl,width,height}, revision:{previewUrl,width,height}}` | 404 |
-| `POST /api/v1/sessions/{sessionId}/export` | `{revisionId, format:"jpeg"\|"png", quality?}` | 文件流 + `Content-Disposition` + `X-Export-Width/Height` | 404；422；503 `server_busy` |
+| `POST /api/v1/sessions/{sessionId}/export` | `{revisionId, format:"jpeg"\|"png", quality?}` | 文件流 + `Content-Disposition` + `X-Export-Width/Height`；降噪简化时带 `X-Export-Warning` | 404；413 `export_too_large`；422；503 `server_busy` |
 | `GET /api/v1/previews/{previewId}` ⊕ | — | `image/jpeg` | 404 `preview_expired` |
 
 #### 提交 revision 与幂等
@@ -176,7 +189,7 @@ Content-Type: application/json
 - `parentRevisionId` 必须等于当前 `activeRevisionId`，否则 409 `revision_conflict`，`details.activeRevisionId` 给出服务端当前值。
 - 同一会话内 `Idempotency-Key` 唯一；网络重试必须复用同一个 key。重放返回原 revision 与会话状态，HTTP 200。key 最多 200 字符，空串按未提供处理。
 - 同 key 但 `recipe` 哈希或 `parentRevisionId` 与首次请求不一致时返回 409 `idempotency_key_reuse`，`details.revisionId` 给出已占用该 key 的 revision；不会静默返回旧 revision。
-- 不要在 key 下提交不同意图的配方；服务端把同 key 视为同一动作。
+- 不要在同一 key 下提交不同意图的配方；服务端会拒绝内容或父 revision 不一致的重用。
 - 新建 revision 在 `BEGIN IMMEDIATE` 事务中完成校验、取号、插入与活动/head 更新；单进程串行，不产生重复 `revisionNo`。
 - 在历史中间提交会从该 revision 分支，并把 `head` 移到新节点；旧分支仍可 activate。
 
@@ -190,8 +203,11 @@ Content-Type: application/json
 
 ### 4.3 render 与预览
 
-```json
+```http
 POST /api/v1/sessions/{sessionId}/render
+X-Render-Seq: 42
+Content-Type: application/json
+
 {
   "recipe": { "...": "..." },
   "maxEdge": 1600,
@@ -215,13 +231,16 @@ POST /api/v1/sessions/{sessionId}/render
 - 响应中的 `width/height` 是**旋转内接并裁切后的画布尺寸**，前端据此绘制裁切框与对比容器（D-04）。引擎版本 `frame-engine/2` 起，旋转只缩小画布，内容不再二次缩放，画布不包含源图之外的像素。
 - render 无状态：不改会话、不新增 revision，只可能写入预览缓存文件。
 - `cacheHit=true` 表示命中内容寻址缓存，未重新渲染。
+- `X-Render-Seq` 是可选的非负整数，客户端在同一会话内单调递增。服务端按会话记录最大序号；等待渲染槽位期间若出现更新的序号，当前请求返回 409 `render_superseded`，不写入预览。前端静默忽略该错误，因为更新请求会提供结果。命中缓存时直接返回，不做 superseded 检查。
+- 同进程最多并发执行 2 次渲染；等待槽位超过 10 秒返回 503 `server_busy`，带 `Retry-After: 1`。
+- 预览渲染的方向归一/缩放代理图另缓存于 `data/tmp/previews/proxies/`，键含原图 SHA-256、代理版本与按 64 px 向上取整的最长边。命中时刷新 mtime，再缩放到请求边长；写入失败只记录日志并继续使用内存中的代理图。
 
 `previewId` 由原图 SHA-256、引擎版本、规范化 adjustments、实际边长与质量共同哈希得到（64 位小写十六进制）。`GET /previews/{previewId}`：
 
 - 返回 JPEG，`Cache-Control: private, max-age=<FRAME_PREVIEW_TTL_SECONDS>`。
 - 带 `X-Content-Type-Options: nosniff` 与 CSP `default-src 'none'; sandbox`。
 - 文件不存在或已清理 → 404 `preview_expired`；前端应静默重新 render，不弹错误。
-- 预览文件位于 `data/tmp/previews/`，按 mtime 超过 TTL（默认 3600 秒）清理；启动时清一次，运行中每 10 分钟清一次。清理只处理该目录内的普通文件，跳过符号链接。
+- 预览文件位于 `data/tmp/previews/`，按 mtime 超过 TTL（默认 3600 秒）清理；启动时清一次，运行中每 10 分钟清一次。清理只处理该目录内的普通文件，跳过符号链接与子目录；`proxies/` 内的代理图不会被预览清理误删。
 
 ### 4.4 compare
 
@@ -265,6 +284,7 @@ POST /api/v1/sessions/{sessionId}/export
 - `Content-Type: image/jpeg` 或 `image/png`。
 - `Content-Disposition: attachment; filename="frame-<8位id>.jpg"`（或 `.png`）。
 - `X-Export-Width`、`X-Export-Height`：实际导出像素尺寸，等于旋转/裁切后的完整画布尺寸。
+- 原图超过 `FRAME_EXPORT_DENOISE_SIMPLIFY_PIXELS`（默认 12 MP）且启用了降噪时，全分辨率导出使用与 draft 相同的较小降噪搜索窗口，并带 `X-Export-Warning: denoise_simplified`；无简化时省略此头。前端应向用户显示“大图导出使用简化降噪”。
 - `Cache-Control: no-store`、`X-Content-Type-Options: nosniff`。
 
 规则：
@@ -273,7 +293,8 @@ POST /api/v1/sessions/{sessionId}/export
 - `revisionId` 必须属于该会话，否则 404 `revision_not_found`。
 - JPEG `quality` 1…100，默认 92；quality ≥ 90 时 `subsampling=0`。PNG 忽略 quality。
 - 导出串行化：同一进程同时只允许一个导出；第二个请求返回 503 `server_busy`，带 `Retry-After: 2`。
-- 元数据：剥离全部 EXIF/XMP/IPTC（含 GPS）；嵌入标准 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。
+- 解码前按原图像素数与配方估算峰值内存：中性配方按 45 B/px，其余按 120 B/px，另加 150 MB 基线。估算超过 `FRAME_EXPORT_MAX_RSS_MB`（默认 3072）时返回 413 `export_too_large`，`details.estimatedPeakMb/limitMb/pixels` 给出估算与上限，避免大图导出拖垮进程。
+- 元数据：剥离全部 EXIF/XMP/IPTC（含 GPS）；嵌入标准 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。ICC 头部创建时间固定，保证同一像素与参数跨进程编码逐字节一致。
 - 原图字节不被改写；日志只记录 sessionId、revisionId、格式、字节数与耗时。
 
 #### 阶段 2 的 PNG alpha 限制
@@ -284,12 +305,15 @@ POST /api/v1/sessions/{sessionId}/export
 
 | 扩展 | 说明 |
 | --- | --- |
-| ⊕ 409 状态码 | `revision_conflict`、`nothing_to_undo`、`nothing_to_redo`；任务书状态码表无 409 |
+| ⊕ 403 / 409 状态码 | `origin_not_allowed`/`cors_origin_denied`、`revision_conflict`/`nothing_to_undo`/`nothing_to_redo`/`render_superseded`；任务书状态码表无 403、409 |
 | ⊕ `GET /sessions/{id}/revisions` | 历史条分页；按 `revisionNo` 降序，`cursor` 为上一页最后一条的 `revisionNo` |
 | ⊕ `GET /previews/{previewId}` | 内容寻址预览路由（D-06） |
 | ⊕ `POST /sessions/{id}/redo` | 沿 head 路径前进（D-02） |
 | ⊕ `POST /sessions/{id}/activate` | 历史切换；不改 head（D-02） |
 | ⊕ `render.quality` / `cacheHit` | `draft`/`final` 两档与缓存命中标记 |
+| ⊕ `X-Render-Seq` / `render_superseded` | 同会话单调渲染序号；过期渲染返回 409，避免旧结果覆盖新操作 |
+| ⊕ `X-Export-Warning` / `export_too_large` | 大图简化降噪提示与导出内存预算拒绝 |
+| ⊕ Host/Origin 防护 | 本机 Host 白名单、写入请求 Origin 与 `Sec-Fetch-Site` 检查 |
 | ⊕ `POST /images/{id}/analyze` | 阶段 2 启发式特征端点；`sessionId` 仅保留兼容，不改变行为 |
 
 ## 6. 错误码
@@ -298,6 +322,9 @@ POST /api/v1/sessions/{sessionId}/export
 | --- | --- | --- |
 | `invalid_upload` | 400 | 上传字段不是恰好一个文件 |
 | `empty_file` | 400 | 文件为空 |
+| `invalid_host` | 400 | Host 主机名不在 `FRAME_ALLOWED_HOSTS` |
+| `origin_not_allowed` | 403 | 写入请求的 Origin 不在允许列表，或 `Sec-Fetch-Site` 为 `cross-site` |
+| `cors_origin_denied` | 403 | CORS 预检的 Origin 不在允许列表 |
 | `not_found` | 404 | 通用路由不存在 |
 | `image_not_found` | 404 | 图片 ID 不存在 |
 | `image_file_missing` | 404 | 登记存在但原图文件缺失 |
@@ -308,9 +335,11 @@ POST /api/v1/sessions/{sessionId}/export
 | `idempotency_key_reuse` | 409 | 同一 Idempotency-Key 被用于不同配方或不同父 revision |
 | `nothing_to_undo` | 409 | 已到历史根节点 |
 | `nothing_to_redo` | 409 | 当前路径上没有下一步 |
+| `render_superseded` | 409 | 等待渲染期间已有更高 `X-Render-Seq` 的请求；前端静默忽略 |
 | `payload_too_large` | 413 | 请求体超过中间件上限 |
 | `file_too_large` | 413 | 单文件超过 `FRAME_MAX_UPLOAD_BYTES` |
 | `image_too_many_pixels` | 413 | 像素数超过 `FRAME_MAX_IMAGE_PIXELS` |
+| `export_too_large` | 413 | 导出预估峰值内存超过 `FRAME_EXPORT_MAX_RSS_MB` |
 | `unsupported_media_type` | 415 | 声明 MIME 不在允许列表 |
 | `invalid_image` | 415 | 内容无法解码或尺寸非法 |
 | `mime_mismatch` | 415 | 声明 MIME 与真实格式不符 |
@@ -319,11 +348,11 @@ POST /api/v1/sessions/{sessionId}/export
 | `storage_error` | 500 | 原图或登记写入失败 |
 | `storage_conflict` | 500 | 存储键冲突 |
 | `internal_error` | 500 | 未预期错误 |
-| `server_busy` | 503 | 已有导出占用串行槽位 |
+| `server_busy` | 503 | 已有导出占用串行槽位，或渲染槽位等待超过 10 秒 |
 | `service_unavailable` | 503 | 服务未就绪 |
 | `rate_limited` / `provider_unavailable` | 429 / 502 | 预留：阶段 2 不使用；阶段 3 接入 AI provider 时启用 |
 
-阶段 1 已约定的错误码与文案映射（前端 `apps/web/lib/error-messages.ts`）保持不变；新增 409 的映射为“编辑状态已更新，已为你刷新”。
+阶段 1 已约定的错误码与文案映射（前端 `apps/web/lib/error-messages.ts`）保持不变；`revision_conflict` 映射为“编辑状态已更新，已为你刷新”，`idempotency_key_reuse` 提示保存请求与已有版本冲突；`render_superseded` 与 `preview_expired` 静默处理。`export_too_large` 会展示预估内存与上限。
 
 ## 7. 契约同步流程
 
@@ -331,7 +360,7 @@ POST /api/v1/sessions/{sessionId}/export
 2. 在 `services/api` 运行 `python scripts/export_openapi.py` 重新生成 `shared/contracts/openapi.json`。
 3. 在 `apps/web` 运行 `npm run gen:api` 重新生成 `types/api.d.ts`。
 4. 提交前运行 `python scripts/export_openapi.py --check` 与 `npm run check:api`；两者必须退出 0。
-5. 同步更新本文与 `docs/handoff/phase-2.md` 中受影响的行为说明。
+5. 同步更新本文与当前阶段交接（`docs/handoff/phase-2.md` 或 `docs/handoff/phase-2.1.md`）中受影响的行为说明。
 
 ## 8. 复跑示例
 
