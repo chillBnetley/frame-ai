@@ -193,7 +193,8 @@ npm run dev                  # Turbopack
 | `FRAME_MAX_UPLOAD_BYTES` | `20971520` | 单文件最大字节数（20 MiB） |
 | `FRAME_MAX_IMAGE_PIXELS` | `40000000` | 最大像素数（40 MP） |
 | `FRAME_CONTENT_LENGTH_ALLOWANCE` | `1048576` | Content-Length 预检给 multipart 的余量 |
-| `FRAME_ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | 允许直接跨域访问 API 的来源 |
+| `FRAME_ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | 允许直接跨域写入 API 的来源 |
+| `FRAME_ALLOWED_HOSTS` | `127.0.0.1,localhost,::1` | 接受的 Host 头（防 DNS 重绑定）；留空则跳过校验 |
 
 前端读取（放在 `apps/web/.env.local` 或 shell 环境）：
 

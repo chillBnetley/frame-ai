@@ -237,6 +237,7 @@ def test_rejects_file_over_size_limit(tmp_path: Path):
         max_upload_bytes=1024,
         max_image_pixels=10_000_000,
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="WARNING",
     )
     payload = make_image("PNG", size=(128, 128), noise=True)
@@ -256,6 +257,7 @@ def test_rejects_image_over_pixel_limit(tmp_path: Path):
         max_upload_bytes=1024 * 1024,
         max_image_pixels=1000,
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="WARNING",
     )
 

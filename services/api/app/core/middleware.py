@@ -5,6 +5,7 @@ import logging
 import re
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -14,6 +15,31 @@ from app.models.schemas import error_content
 logger = logging.getLogger("frame_ai.http")
 
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+async def _send_error(
+    scope: Scope,
+    send: Send,
+    *,
+    status: int,
+    code: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+    extra_headers: list[tuple[bytes, bytes]] | None = None,
+) -> None:
+    body = json.dumps(error_content(code, message, details)).encode("utf-8")
+    headers = [
+        (b"content-type", b"application/json"),
+        (b"content-length", str(len(body)).encode("ascii")),
+    ]
+    headers.extend(extra_headers or [])
+    state: dict[str, Any] = scope.get("state", {})
+    request_id = state.get("request_id")
+    if isinstance(request_id, str) and request_id:
+        headers.append((b"x-request-id", request_id.encode("ascii")))
+    await send({"type": "http.response.start", "status": status, "headers": headers})
+    await send({"type": "http.response.body", "body": body})
 
 
 class RequestContextMiddleware:
@@ -85,21 +111,72 @@ class CorsPreflightGuardMiddleware:
         await self.app(scope, receive, send)
 
     async def _reject(self, scope: Scope, send: Send) -> None:
-        body = json.dumps(
-            error_content(
-                "cors_origin_denied",
-                "The request origin is not allowed.",
-                {"origin": Headers(scope=scope).get("origin", "")},
+        await _send_error(
+            scope,
+            send,
+            status=403,
+            code="cors_origin_denied",
+            message="The request origin is not allowed.",
+            details={"origin": Headers(scope=scope).get("origin", "")},
+            extra_headers=[(b"vary", b"Origin")],
+        )
+
+
+class LocalOriginGuardMiddleware:
+    """Reject cross-site writes and unexpected Host headers (DNS rebinding)."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        allowed_origins: list[str],
+        allowed_hosts: list[str],
+    ) -> None:
+        self.app = app
+        self.allowed_origins = set(allowed_origins)
+        self.allowed_hosts = {host.lower() for host in allowed_hosts}
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        host = (urlsplit("//" + headers.get("host", "")).hostname or "").lower()
+        if self.allowed_hosts and host not in self.allowed_hosts:
+            await _send_error(
+                scope,
+                send,
+                status=400,
+                code="invalid_host",
+                message="The Host header is not allowed.",
             )
-        ).encode("utf-8")
-        headers = [
-            (b"content-type", b"application/json"),
-            (b"content-length", str(len(body)).encode("ascii")),
-            (b"vary", b"Origin"),
-        ]
-        state: dict[str, Any] = scope.get("state", {})
-        request_id = state.get("request_id")
-        if isinstance(request_id, str) and request_id:
-            headers.append((b"x-request-id", request_id.encode("ascii")))
-        await send({"type": "http.response.start", "status": 403, "headers": headers})
-        await send({"type": "http.response.body", "body": body})
+            return
+
+        if scope.get("method") not in _SAFE_METHODS:
+            origin = headers.get("origin")
+            if (
+                origin is not None
+                and "*" not in self.allowed_origins
+                and origin not in self.allowed_origins
+            ):
+                await _send_error(
+                    scope,
+                    send,
+                    status=403,
+                    code="origin_not_allowed",
+                    message="The request origin is not allowed.",
+                    details={"origin": origin},
+                )
+                return
+            if headers.get("sec-fetch-site") == "cross-site":
+                await _send_error(
+                    scope,
+                    send,
+                    status=403,
+                    code="origin_not_allowed",
+                    message="Cross-site writes are not allowed.",
+                )
+                return
+
+        await self.app(scope, receive, send)

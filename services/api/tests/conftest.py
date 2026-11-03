@@ -20,6 +20,7 @@ def settings(tmp_path: Path) -> Settings:
         max_upload_bytes=1024 * 1024,
         max_image_pixels=1_000_000,
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="WARNING",
     )
 

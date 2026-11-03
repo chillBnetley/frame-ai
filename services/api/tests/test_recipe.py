@@ -46,6 +46,7 @@ def _recipe_client(tmp_path) -> TestClient:
         max_upload_bytes=1024 * 1024,
         max_image_pixels=1_000_000,
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="WARNING",
     )
     app = create_app(settings)

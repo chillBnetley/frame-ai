@@ -43,6 +43,7 @@ def test_unexpected_error_hides_traceback_and_keeps_request_id(tmp_path: Path, c
         max_upload_bytes=1024 * 1024,
         max_image_pixels=1_000_000,
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="DEBUG",
     )
     app = create_app(settings)
@@ -99,6 +100,7 @@ def test_middleware_payload_limit_uses_error_envelope(tmp_path: Path):
         content_length_allowance=0,
         max_image_pixels=1_000_000,
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="WARNING",
     )
 

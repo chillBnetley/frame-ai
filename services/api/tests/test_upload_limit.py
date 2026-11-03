@@ -20,6 +20,7 @@ def _settings(tmp_path: Path, *, max_upload_bytes: int = 1024) -> Settings:
         max_image_pixels=1_000_000,
         content_length_allowance=0,
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="WARNING",
     )
 
@@ -63,6 +64,7 @@ def test_payload_one_byte_over_default_limit_is_rejected(tmp_path: Path):
     settings = Settings(
         data_dir=tmp_path / "data",
         allowed_origins="http://testserver",
+        allowed_hosts="testserver",
         log_level="WARNING",
     )
     png = make_image("PNG")

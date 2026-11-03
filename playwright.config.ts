@@ -25,6 +25,8 @@ const webServer = [
     env: {
       FRAME_DATA_DIR: DATA_DIR,
       FRAME_LOG_LEVEL: "WARNING",
+      FRAME_ALLOWED_ORIGINS:
+        process.env.E2E_FRAME_ALLOWED_ORIGINS ?? BASE_URL,
       PYTHONUNBUFFERED: "1",
     },
     url: `${API_URL}/api/v1/health`,

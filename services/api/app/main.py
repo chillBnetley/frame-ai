@@ -11,7 +11,11 @@ from app.api.errors import register_exception_handlers
 from app.api.routes import config, health, images, previews, sessions
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
-from app.core.middleware import CorsPreflightGuardMiddleware, RequestContextMiddleware
+from app.core.middleware import (
+    CorsPreflightGuardMiddleware,
+    LocalOriginGuardMiddleware,
+    RequestContextMiddleware,
+)
 from app.core.upload_limit import UploadSizeLimitMiddleware
 from app.services.analysis_service import AnalysisService
 from app.services.export_service import ExportService
@@ -97,6 +101,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CorsPreflightGuardMiddleware,
         allowed_origins=resolved_settings.allowed_origin_list,
+    )
+    app.add_middleware(
+        LocalOriginGuardMiddleware,
+        allowed_origins=resolved_settings.allowed_origin_list,
+        allowed_hosts=resolved_settings.allowed_host_list,
     )
     app.add_middleware(RequestContextMiddleware)
 

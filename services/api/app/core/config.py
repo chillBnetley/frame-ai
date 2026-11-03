@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     content_length_allowance: int = Field(default=1024 * 1024, ge=0)
 
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    allowed_hosts: str = "127.0.0.1,localhost,::1"
 
     @field_validator("data_dir")
     @classmethod
@@ -59,6 +60,10 @@ class Settings(BaseSettings):
     @property
     def allowed_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def allowed_host_list(self) -> list[str]:
+        return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
 
     @property
     def originals_dir(self) -> Path:
