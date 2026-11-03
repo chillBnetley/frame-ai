@@ -18,6 +18,7 @@ const EDITOR_MESSAGES: Record<string, string> = {
   not_found: "服务接口不存在，可能是后端版本过旧。请重启 API 后重试。",
   server_busy: "正在处理另一张高清导出，请稍后几秒再试。",
   preview_expired: "",
+  render_superseded: "",
   request_timeout: "请求超时，请稍后重试。",
   network_error: "无法连接后端服务。请确认已启动 API。",
   storage_error: "服务保存数据失败，请稍后重试。",
@@ -73,7 +74,7 @@ export function editorErrorMessage(
 }
 
 export function isSilentEditorError(code: string): boolean {
-  return code === "preview_expired";
+  return code === "preview_expired" || code === "render_superseded";
 }
 
 export function describeEditorError(error: unknown): EditorError {

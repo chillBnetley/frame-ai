@@ -29,6 +29,10 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
         422: "Invalid request payload",
     }.items()
 }
+_RENDER_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    409: {"model": ErrorResponse, "description": "A newer render request superseded this one"},
+    503: {"model": ErrorResponse, "description": "Rendering is busy"},
+}
 _EXPORT_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     413: {"model": ErrorResponse, "description": "Export would exceed the memory budget"},
     503: {"model": ErrorResponse, "description": "Another export is in progress"},
@@ -63,13 +67,18 @@ def list_revisions(
     return service.list_revisions(session_id, limit=limit, cursor=cursor)
 
 
-@router.post("/{session_id}/render", response_model=RenderResponse)
+@router.post(
+    "/{session_id}/render",
+    response_model=RenderResponse,
+    responses=_RENDER_ERROR_RESPONSES,
+)
 def render_preview(
     session_id: str,
     payload: RenderRequest,
     service: Annotated[RenderService, Depends(get_render_service)],
+    render_seq: Annotated[int | None, Header(alias="X-Render-Seq", ge=0)] = None,
 ) -> RenderResponse:
-    result = service.render(session_id, payload)
+    result = service.render(session_id, payload, render_seq=render_seq)
     return RenderResponse(
         preview_url=result.preview_url,
         width=result.width,
@@ -133,7 +142,11 @@ def reset(
     return service.reset(session_id)
 
 
-@router.get("/{session_id}/compare", response_model=CompareResponse)
+@router.get(
+    "/{session_id}/compare",
+    response_model=CompareResponse,
+    responses={503: {"model": ErrorResponse, "description": "Rendering is busy"}},
+)
 def compare_revision(
     session_id: str,
     service: Annotated[RenderService, Depends(get_render_service)],

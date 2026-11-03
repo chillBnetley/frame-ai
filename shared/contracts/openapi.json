@@ -664,6 +664,23 @@
               "type": "string",
               "title": "Session Id"
             }
+          },
+          {
+            "name": "X-Render-Seq",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Render-Seq"
+            }
           }
         ],
         "requestBody": {
@@ -698,7 +715,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "A newer render request superseded this one",
             "content": {
               "application/json": {
                 "schema": {
@@ -709,6 +726,16 @@
           },
           "422": {
             "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Rendering is busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1075,6 +1102,16 @@
           },
           "422": {
             "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Rendering is busy",
             "content": {
               "application/json": {
                 "schema": {

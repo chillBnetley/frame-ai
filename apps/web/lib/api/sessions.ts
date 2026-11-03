@@ -68,12 +68,13 @@ export async function renderPreview(
   sessionId: string,
   request: { recipe: EditRecipe; quality: "draft" | "final"; maxEdge?: number },
   signal?: AbortSignal,
+  renderSeq: number = Date.now(),
 ): Promise<RenderResponse> {
   return apiJson<RenderResponse>(
     sessionPath(sessionId, "/render"),
     {
       method: "POST",
-      headers: JSON_HEADERS,
+      headers: { ...JSON_HEADERS, "X-Render-Seq": String(renderSeq) },
       body: JSON.stringify({
         recipe: request.recipe,
         quality: request.quality,

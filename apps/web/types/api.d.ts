@@ -1259,7 +1259,9 @@ export interface operations {
     render_preview_api_v1_sessions__session_id__render_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Render-Seq"?: number | null;
+            };
             path: {
                 session_id: string;
             };
@@ -1289,7 +1291,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description A newer render request superseded this one */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1300,6 +1302,15 @@ export interface operations {
             };
             /** @description Invalid request payload */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rendering is busy */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1556,6 +1567,15 @@ export interface operations {
             };
             /** @description Invalid request payload */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rendering is busy */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

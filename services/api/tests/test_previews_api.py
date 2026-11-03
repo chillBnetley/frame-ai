@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -13,6 +14,7 @@ from PIL import Image
 from app.core.config import Settings
 from app.main import create_app
 from app.repositories.db import connect
+from app.services.render_service import RenderService
 from tests.conftest import make_image, upload
 
 PREVIEW_PATH = re.compile(r"^/api/v1/previews/([0-9a-f]{64})$")
@@ -50,6 +52,15 @@ def _render(
     response = client.post(f"/api/v1/sessions/{session['sessionId']}/render", json=body)
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def _wait_for_sequence(service: RenderService, session_id: str, seq: int) -> None:
+    deadline = time.monotonic() + 10
+    latest = service._latest_seq
+    while latest.get(session_id, 0) < seq:
+        if time.monotonic() > deadline:
+            raise AssertionError(f"render sequence {seq} was not recorded")
+        time.sleep(0.005)
 
 
 def _row_counts(settings: Settings) -> tuple[int, int]:
@@ -216,3 +227,70 @@ def test_startup_cleanup_only_touches_expired_preview_files(
     assert fresh.is_file()
     assert outside.is_file()
     assert tmp_path in settings.data_dir.parents
+
+
+def test_older_queued_render_is_superseded_by_a_newer_sequence(client: TestClient):
+    session = _session(client)
+    service = client.app.state.render_service
+    session_id = str(session["sessionId"])
+    url = f"/api/v1/sessions/{session_id}/render"
+    assert service._slots.acquire(blocking=False)
+    assert service._slots.acquire(blocking=False)
+    released = False
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            older = pool.submit(
+                client.post,
+                url,
+                json={"recipe": {"adjustments": {"exposureEv": 0.1}}},
+                headers={"X-Render-Seq": "10"},
+            )
+            _wait_for_sequence(service, session_id, 10)
+            newer = pool.submit(
+                client.post,
+                url,
+                json={"recipe": {"adjustments": {"exposureEv": 0.9}}},
+                headers={"X-Render-Seq": "20"},
+            )
+            _wait_for_sequence(service, session_id, 20)
+            service._slots.release()
+            service._slots.release()
+            released = True
+            older_response = older.result(timeout=30)
+            newer_response = newer.result(timeout=30)
+    finally:
+        if not released:
+            service._slots.release()
+            service._slots.release()
+
+    assert older_response.status_code == 409
+    assert older_response.json()["error"]["code"] == "render_superseded"
+    assert newer_response.status_code == 200
+    assert newer_response.json()["cacheHit"] is False
+
+
+def test_render_slot_timeout_returns_server_busy(
+    client: TestClient,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.services.render_service.RENDER_SLOT_TIMEOUT_SECONDS",
+        0.05,
+    )
+    session = _session(client)
+    service = client.app.state.render_service
+    url = f"/api/v1/sessions/{session['sessionId']}/render"
+    assert service._slots.acquire(blocking=False)
+    assert service._slots.acquire(blocking=False)
+    try:
+        response = client.post(
+            url,
+            json={"recipe": {"adjustments": {"exposureEv": 0.2}}},
+        )
+    finally:
+        service._slots.release()
+        service._slots.release()
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "server_busy"
+    assert response.headers["retry-after"] == "1"

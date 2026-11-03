@@ -88,7 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=resolved_settings.allowed_origin_list,
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Request-ID", "Idempotency-Key"],
+        allow_headers=["Content-Type", "X-Request-ID", "X-Render-Seq", "Idempotency-Key"],
         expose_headers=[
             "X-Request-ID",
             "X-Export-Width",

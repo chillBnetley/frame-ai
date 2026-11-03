@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import threading
+from collections import OrderedDict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
@@ -19,6 +22,8 @@ from app.services.preview_store import PreviewStore
 from app.services.session_service import SessionService
 
 PREVIEW_URL_PREFIX = "/api/v1/previews"
+RENDER_SLOT_TIMEOUT_SECONDS = 10.0
+MAX_TRACKED_RENDER_SEQUENCES = 256
 
 
 @dataclass(frozen=True)
@@ -52,8 +57,46 @@ class RenderService:
             ttl_seconds=settings.preview_ttl_seconds,
         )
         self._slots = threading.BoundedSemaphore(max_concurrent_renders)
+        self._latest_seq: OrderedDict[str, int] = OrderedDict()
+        self._seq_lock = threading.Lock()
 
-    def render(self, session_id: str, request: RenderRequest) -> RenderResult:
+    @contextmanager
+    def _render_slot(self) -> Iterator[None]:
+        if not self._slots.acquire(timeout=RENDER_SLOT_TIMEOUT_SECONDS):
+            raise AppError(
+                503,
+                "server_busy",
+                "Rendering is busy; retry shortly.",
+                headers={"Retry-After": "1"},
+            )
+        try:
+            yield
+        finally:
+            self._slots.release()
+
+    def _note_seq(self, session_id: str, seq: int | None) -> None:
+        if seq is None:
+            return
+        with self._seq_lock:
+            self._latest_seq[session_id] = max(seq, self._latest_seq.get(session_id, 0))
+            self._latest_seq.move_to_end(session_id)
+            while len(self._latest_seq) > MAX_TRACKED_RENDER_SEQUENCES:
+                self._latest_seq.popitem(last=False)
+
+    def _superseded(self, session_id: str, seq: int | None) -> bool:
+        if seq is None:
+            return False
+        with self._seq_lock:
+            return seq < self._latest_seq.get(session_id, 0)
+
+    def render(
+        self,
+        session_id: str,
+        request: RenderRequest,
+        *,
+        render_seq: int | None = None,
+    ) -> RenderResult:
+        self._note_seq(session_id, render_seq)
         state = self.sessions.get(session_id)
         record, path = self.images.get_original(str(state.image_id))
         edge = self._resolve_edge(request.quality, request.max_edge)
@@ -70,10 +113,16 @@ class RenderService:
         if cached is not None:
             return RenderResult(preview_id, cached[0], cached[1], request.quality, True)
 
-        with self._slots:
+        with self._render_slot():
             cached = self.previews.dimensions(preview_id)
             if cached is not None:
                 return RenderResult(preview_id, cached[0], cached[1], request.quality, True)
+            if self._superseded(session_id, render_seq):
+                raise AppError(
+                    409,
+                    "render_superseded",
+                    "A newer render request replaced this one.",
+                )
 
             proxy = load_proxy(
                 path,
@@ -152,7 +201,7 @@ class RenderService:
         if cached is not None:
             return preview_id, cached[0], cached[1]
 
-        with self._slots:
+        with self._render_slot():
             cached = self.previews.dimensions(preview_id)
             if cached is not None:
                 return preview_id, cached[0], cached[1]

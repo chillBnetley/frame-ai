@@ -16,6 +16,7 @@ import { readyEditorState } from "./session-fixtures";
 
 interface PendingRequest {
   body: Record<string, unknown>;
+  headers: Record<string, string>;
   signal: AbortSignal;
   resolve: (response: Response) => void;
 }
@@ -33,6 +34,7 @@ function installRenderMock() {
       new Promise<Response>((resolve) => {
         pending.push({
           body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+          headers: (init?.headers ?? {}) as Record<string, string>,
           signal: init?.signal as AbortSignal,
           resolve,
         });
@@ -111,6 +113,7 @@ describe("useRenderPreview", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(pending[0]?.body.quality).toBe("final");
+    expect(Number(pending[0]?.headers["X-Render-Seq"])).toBeGreaterThan(0);
 
     await resolveRequest(pending, 0, renderResponse("/previews/first", "final"));
 

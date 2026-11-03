@@ -72,6 +72,13 @@ describe("describeEditorError", () => {
     );
   });
 
+  it("keeps a superseded render silent", () => {
+    expect(isSilentEditorError("render_superseded")).toBe(true);
+    expect(
+      describeEditorError(new ApiClientError("render_superseded", "newer request")).message,
+    ).toBe("");
+  });
+
   it("wraps unknown failures", () => {
     expect(describeEditorError(new Error("boom"))).toEqual({
       code: "unknown_error",
