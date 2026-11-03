@@ -6,7 +6,6 @@ import { ErrorAlert } from "@/components/error-alert";
 import {
   CheckCircleIcon,
   DownloadIcon,
-  ImageIcon,
   RefreshIcon,
   ShieldCheckIcon,
 } from "@/components/icons";
@@ -15,8 +14,11 @@ import { CompareView } from "@/features/editor/components/compare-view";
 import { CropOverlay } from "@/features/editor/components/crop-overlay";
 import { ExportDialog } from "@/features/editor/components/export-dialog";
 import { HistoryBar } from "@/features/editor/components/history-bar";
+import { PreviewImage } from "@/features/editor/components/preview-image";
+import { PreviewMonitor } from "@/features/editor/components/preview-monitor";
 import { HealthIndicator } from "@/features/editor/health-indicator";
 import { useExport } from "@/features/editor/hooks/use-export";
+import { usePreviewVisibility } from "@/features/editor/hooks/use-preview-visibility";
 import { useRenderPreview } from "@/features/editor/hooks/use-render-preview";
 import {
   clearSessionUrl,
@@ -163,6 +165,8 @@ function EditorStage({
   const dispatch = useEditorDispatch();
   const { commit, undo, redo, reset, activate } = useSessionActions();
   const { preview, requestFinal, retry } = useRenderPreview();
+  const { sentinelRef: previewSentinelRef, isVisible: previewVisible } =
+    usePreviewVisibility();
   const exporter = useExport();
 
   const [compareOpen, setCompareOpen] = useState(false);
@@ -275,6 +279,17 @@ function EditorStage({
     setCompareOpen((value) => !value);
   }, [cropBefore, cropMode, dispatch]);
 
+  const handleReturnToPreview = useCallback(() => {
+    const surface = document.getElementById("editor-preview-surface");
+    const reduceMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    surface?.scrollIntoView?.({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "center",
+    });
+  }, []);
+
   const handleExport = useCallback(
     (format: "jpeg" | "png", quality: number | null) => {
       if (state.activeRevisionId === null) {
@@ -295,26 +310,33 @@ function EditorStage({
 
   const previewError =
     preview.status === "error" && preview.error?.message ? preview.error.message : null;
+  const monitorVisible =
+    state.phase === "ready" &&
+    !previewVisible &&
+    preview.url !== null &&
+    !compareOpen &&
+    !cropMode &&
+    !exportOpen;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="grid content-start gap-4">
+      <div className="editor-preview-column grid content-start gap-4">
         <section
           aria-labelledby="editor-preview-heading"
-          className="rounded-2xl border border-white/8 bg-black/20 p-4 sm:p-5"
+          className="editor-preview-card rounded-2xl border border-white/8 bg-black/20 p-4 sm:p-5"
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 id="editor-preview-heading" className="text-sm font-medium text-white">
                 编辑预览
               </h3>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
+              <p className="editor-preview-meta mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
                 Session {state.sessionId.slice(0, 8)} · Revision{" "}
                 {state.activeRevisionId?.slice(0, 8) ?? "—"}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-white/45">
+              <span className="editor-preview-quality rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-white/45">
                 {preview.quality === "draft"
                   ? "草稿预览"
                   : preview.quality === "final"
@@ -435,6 +457,7 @@ function EditorStage({
             <div className="mt-3">
               <ErrorAlert
                 error={state.error}
+                stage="编辑操作"
                 onDismiss={() => dispatch({ type: "error-cleared" })}
               />
             </div>
@@ -484,28 +507,16 @@ function EditorStage({
               )
             ) : (
               <>
-                <div className="relative flex min-h-64 items-center justify-center overflow-hidden rounded-xl bg-black/35 p-3 ring-1 ring-white/8">
-                  {preview.status === "loading" && (
-                    <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-white/5">
-                      <div className="h-full w-1/3 animate-pulse bg-accent/70" />
-                    </div>
-                  )}
-                  {preview.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- previews are content-addressed JPEGs served by the API
-                    <img
-                      key={`${preview.url}-${preview.version}`}
-                      src={preview.url}
-                      alt="编辑后的预览"
-                      className="max-h-[520px] w-full object-contain"
-                      onError={() => void retry()}
-                    />
-                  ) : (
-                    <p className="flex items-center gap-2 text-xs text-white/45">
-                      <ImageIcon className="size-4" />
-                      {previewError ? "预览暂时不可用。" : "正在生成预览…"}
-                    </p>
-                  )}
-                </div>
+                <PreviewImage
+                  id="editor-preview-surface"
+                  containerRef={previewSentinelRef}
+                  preview={preview}
+                  alt="编辑后的预览"
+                  errorMessage={previewError}
+                  onError={() => void retry()}
+                  className="editor-preview-canvas relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-black/35 p-3 ring-1 ring-white/8 sm:min-h-64"
+                  imageClassName="editor-preview-image w-full object-contain"
+                />
 
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/35">
                   <span>
@@ -516,8 +527,11 @@ function EditorStage({
                   </span>
                   <div className="flex items-center gap-2">
                     {previewError && (
-                      <span role="alert" className="text-red-200/80">
-                        {previewError}
+                      <span role="alert" className="text-red-700">
+                        生成预览失败：{previewError} · {preview.error?.code}
+                        {preview.error?.requestId
+                          ? ` · 请求 ID ${preview.error.requestId}`
+                          : ""}
                       </span>
                     )}
                     <button
@@ -552,27 +566,32 @@ function EditorStage({
             </div>
           )}
 
-          <p className="mt-2 text-[11px] text-white/30">
+          <p className="editor-preview-hint mt-2 text-[11px] text-white/30">
             会话 ID 已写入 URL（?session=…），刷新页面会从服务端恢复。
           </p>
         </section>
 
-        <HistoryBar
-          canUndo={selectCanUndo(state)}
-          canRedo={selectCanRedo(state)}
-          canReset={selectCanReset(state)}
-          busy={saving}
-          items={state.history}
-          activeRevisionId={state.activeRevisionId}
-          onUndo={() => void undo()}
-          onRedo={() => void redo()}
-          onReset={() => void reset()}
-          onActivate={(revisionId) => void activate(revisionId)}
-        />
+        <div className="editor-history">
+          <HistoryBar
+            canUndo={selectCanUndo(state)}
+            canRedo={selectCanRedo(state)}
+            canReset={selectCanReset(state)}
+            busy={saving}
+            items={state.history}
+            activeRevisionId={state.activeRevisionId}
+            onUndo={() => void undo()}
+            onRedo={() => void redo()}
+            onReset={() => void reset()}
+            onActivate={(revisionId) => void activate(revisionId)}
+          />
+        </div>
       </div>
 
-      <aside aria-label="参数面板" className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-        <div className="rounded-2xl border border-white/8 bg-black/20 p-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
+      <aside aria-label="参数面板" className="editor-adjustment-panel min-w-0">
+        <div
+          className="editor-adjustment-scroll rounded-2xl border border-white/8 bg-black/20 p-4"
+          data-testid="adjustment-panel-scroll"
+        >
           <AdjustmentPanel
             adjustments={state.draft.adjustments}
             disabled={saving || cropMode || compareOpen}
@@ -586,6 +605,12 @@ function EditorStage({
           />
         </div>
       </aside>
+
+      <PreviewMonitor
+        preview={preview}
+        visible={monitorVisible}
+        onReturn={handleReturnToPreview}
+      />
 
       <ExportDialog
         open={exportOpen}
@@ -681,7 +706,7 @@ function EditorWorkspaceInner() {
 
   return (
     <section aria-labelledby="workspace-heading" className="relative">
-      <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0c0d0f]/90 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.9)] backdrop-blur-sm">
+      <div className="overflow-clip rounded-3xl border border-white/10 bg-[#0c0d0f]/90 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.9)] backdrop-blur-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3.5 sm:px-6">
           <div className="flex items-center gap-3">
             <span className="grid size-8 place-items-center rounded-lg border border-white/10 bg-white/[0.03] font-mono text-[10px] text-accent">
@@ -703,6 +728,8 @@ function EditorWorkspaceInner() {
           {error && (
             <ErrorAlert
               error={error}
+              stage="上传图片"
+              retryLabel="重试上传"
               onRetry={canRetry && pendingFile ? () => void handleFileSelected(pendingFile) : undefined}
               onDismiss={() => setError(null)}
             />
@@ -711,6 +738,9 @@ function EditorWorkspaceInner() {
           {!inEditor && state.error && (
             <ErrorAlert
               error={state.error}
+              stage={image ? "创建编辑会话" : undefined}
+              retryLabel="重试创建会话"
+              onRetry={image ? () => void startSession(image.imageId) : undefined}
               onDismiss={() => dispatch({ type: "error-cleared" })}
             />
           )}

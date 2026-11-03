@@ -10,4 +10,5 @@ export type ApiStatus = "checking" | "online" | "offline";
 export interface UploadError {
   code: string;
   message: string;
+  requestId?: string | null;
 }

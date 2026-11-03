@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,10 +31,14 @@ const SESSION_STATE = {
   },
 };
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
 }
 
@@ -44,7 +48,13 @@ interface UploadErrorOption {
   status: number;
 }
 
-function mockApi(options: { uploadError?: UploadErrorOption } = {}) {
+interface SessionErrorOption extends UploadErrorOption {
+  requestId?: string;
+}
+
+function mockApi(
+  options: { uploadError?: UploadErrorOption; sessionError?: SessionErrorOption } = {},
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.endsWith("/api/v1/health")) {
@@ -78,6 +88,21 @@ function mockApi(options: { uploadError?: UploadErrorOption } = {}) {
       return jsonResponse(UPLOADED_IMAGE, 201);
     }
     if (url.endsWith("/api/v1/sessions") && init?.method === "POST") {
+      if (options.sessionError) {
+        return jsonResponse(
+          {
+            error: {
+              code: options.sessionError.code,
+              message: options.sessionError.message,
+              details: {},
+            },
+          },
+          options.sessionError.status,
+          options.sessionError.requestId
+            ? { "x-request-id": options.sessionError.requestId }
+            : {},
+        );
+      }
       return jsonResponse(SESSION_STATE, 201);
     }
     if (url.includes(`/api/v1/sessions/${SESSION_STATE.sessionId}/revisions`)) {
@@ -218,6 +243,48 @@ describe("EditorWorkspace", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("原图保存失败，请稍后重试。");
     expect(screen.getByRole("button", { name: "重试上传" })).toBeInTheDocument();
+  });
+
+  it("labels session failures and retries without uploading the photo again", async () => {
+    const requestId = "27cd3e6046ba4d9b9a8b5f0eec41fa08";
+    const fetchMock = mockApi({
+      sessionError: {
+        code: "internal_error",
+        message: "Unexpected failure",
+        status: 500,
+        requestId,
+      },
+    });
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("服务出现未预期错误，请稍后重试。");
+    expect(alert).toHaveTextContent("创建编辑会话");
+    expect(alert).toHaveTextContent("internal_error");
+    expect(alert).toHaveTextContent(requestId);
+    expect(screen.getByText("street.png")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "重试创建会话" }));
+
+    await waitFor(() => {
+      const sessionCalls = fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          typeof input === "string" &&
+          input.endsWith("/api/v1/sessions") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(sessionCalls).toHaveLength(2);
+    });
+    const uploadCalls = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        typeof input === "string" &&
+        input.endsWith("/api/v1/images") &&
+        (init as RequestInit | undefined)?.method === "POST",
+    );
+    expect(uploadCalls).toHaveLength(1);
   });
 
   it("cancels an in-flight upload and returns to the empty state", async () => {

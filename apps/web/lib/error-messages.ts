@@ -4,6 +4,7 @@ export interface EditorError {
   code: string;
   message: string;
   details: Record<string, unknown>;
+  requestId?: string | null;
 }
 
 const EDITOR_MESSAGES: Record<string, string> = {
@@ -14,6 +15,7 @@ const EDITOR_MESSAGES: Record<string, string> = {
   session_not_found: "找不到这张图片或会话，可能已被清理。请重新上传。",
   image_not_found: "找不到这张图片或会话，可能已被清理。请重新上传。",
   revision_not_found: "找不到这个编辑版本，已为你刷新。",
+  not_found: "服务接口不存在，可能是后端版本过旧。请重启 API 后重试。",
   server_busy: "正在处理另一张高清导出，请稍后几秒再试。",
   preview_expired: "",
   request_timeout: "请求超时，请稍后重试。",
@@ -37,9 +39,14 @@ function validationField(details: Record<string, unknown>): string | null {
   return null;
 }
 
+function shortRequestId(requestId: string): string {
+  return requestId.length > 8 ? requestId.slice(0, 8) : requestId;
+}
+
 export function editorErrorMessage(
   code: string,
   details: Record<string, unknown> = {},
+  requestId: string | null = null,
 ): string {
   const base = EDITOR_MESSAGES[code];
   if (code === "validation_error") {
@@ -49,7 +56,12 @@ export function editorErrorMessage(
     }
     return base ?? "有参数超出范围，已恢复到上次有效值。";
   }
-  return base ?? "发生未知错误，请稍后重试。";
+  if (base !== undefined) {
+    return base;
+  }
+  const codeSuffix = code && code !== "unknown_error" ? `（错误码：${code}）` : "";
+  const requestSuffix = requestId ? `（请求 ID：${shortRequestId(requestId)}）` : "";
+  return `发生未知错误，请稍后重试。${codeSuffix}${requestSuffix}`;
 }
 
 export function isSilentEditorError(code: string): boolean {
@@ -58,11 +70,15 @@ export function isSilentEditorError(code: string): boolean {
 
 export function describeEditorError(error: unknown): EditorError {
   if (error instanceof ApiClientError) {
-    return {
+    const described: EditorError = {
       code: error.code,
-      message: editorErrorMessage(error.code, error.details),
+      message: editorErrorMessage(error.code, error.details, error.requestId),
       details: error.details,
     };
+    if (error.requestId) {
+      described.requestId = error.requestId;
+    }
+    return described;
   }
   if (error instanceof Error) {
     return { code: "unknown_error", message: error.message, details: {} };

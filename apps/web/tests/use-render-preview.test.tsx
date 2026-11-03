@@ -2,7 +2,11 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useRenderPreview } from "@/features/editor/hooks/use-render-preview";
+import {
+  PREVIEW_DEBOUNCE_MS,
+  PREVIEW_MAX_WAIT_MS,
+  useRenderPreview,
+} from "@/features/editor/hooks/use-render-preview";
 import {
   EditorProvider,
   useEditorStore,
@@ -84,6 +88,13 @@ function dispatch(
   });
 }
 
+function contrastOf(request: PendingRequest | undefined): number | undefined {
+  const recipe = request?.body.recipe as
+    | { adjustments?: { contrast?: number } }
+    | undefined;
+  return recipe?.adjustments?.contrast;
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -108,14 +119,14 @@ describe("useRenderPreview", () => {
     expect(result.current.store.state.preview.width).toBe(1600);
   });
 
-  it("debounces draft renders with a trailing 120ms timer", async () => {
+  it("debounces draft renders with a trailing 250ms timer", async () => {
     const { fetchMock, pending } = installRenderMock();
     const { result } = hookFor(readyEditorState());
     await resolveRequest(pending, 0, renderResponse("/previews/first", "final"));
 
     dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 10 });
     await act(async () => {
-      vi.advanceTimersByTime(119);
+      vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS - 1);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -127,6 +138,30 @@ describe("useRenderPreview", () => {
     expect(pending[1]?.body.quality).toBe("draft");
   });
 
+  it("fires a draft at max wait even while the drag keeps resetting the debounce", async () => {
+    const { fetchMock, pending } = installRenderMock();
+    const { result } = hookFor(readyEditorState());
+    await resolveRequest(pending, 0, renderResponse("/previews/first", "final"));
+
+    dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 10 });
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 20 });
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 30 });
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(PREVIEW_MAX_WAIT_MS).toBe(600);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(pending[1]?.body.quality).toBe("draft");
+    expect(contrastOf(pending[1])).toBe(30);
+  });
+
   it("aborts the previous request and keeps the newest preview", async () => {
     const { pending } = installRenderMock();
     const { result } = hookFor(readyEditorState());
@@ -134,13 +169,13 @@ describe("useRenderPreview", () => {
 
     dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 10 });
     await act(async () => {
-      vi.advanceTimersByTime(120);
+      vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS);
       await flushMicrotasks();
     });
 
     dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 25 });
     await act(async () => {
-      vi.advanceTimersByTime(120);
+      vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS);
       await flushMicrotasks();
     });
 
@@ -177,6 +212,39 @@ describe("useRenderPreview", () => {
       await flushMicrotasks();
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not repeat a final render when the recipe is already finalised", async () => {
+    const { fetchMock, pending } = installRenderMock();
+    const { result } = hookFor(readyEditorState());
+    await resolveRequest(pending, 0, renderResponse("/previews/first", "final"));
+
+    await act(async () => {
+      await result.current.renderer.requestFinal();
+    });
+    await act(async () => {
+      await result.current.renderer.requestFinal();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces concurrent final requests for the same recipe", async () => {
+    const { fetchMock, pending } = installRenderMock();
+    const { result } = hookFor(readyEditorState());
+    await resolveRequest(pending, 0, renderResponse("/previews/first", "final"));
+
+    dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 10 });
+    act(() => {
+      void result.current.renderer.requestFinal();
+      void result.current.renderer.requestFinal();
+    });
+    await act(async () => {
+      await flushMicrotasks();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(pending[1]?.body.quality).toBe("final");
   });
 
   it("surfaces render failures through the preview error state", async () => {

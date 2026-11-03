@@ -80,6 +80,20 @@ describe("SliderField", () => {
     expect(slider).toHaveAttribute("aria-valuetext", "+25");
   });
 
+  it("commits on adjustment keys but ignores unrelated key releases", () => {
+    const { onCommit } = renderField();
+    const slider = screen.getByRole("slider", { name: "曝光" });
+
+    fireEvent.keyUp(slider, { key: "Tab" });
+    expect(onCommit).not.toHaveBeenCalled();
+
+    fireEvent.keyUp(slider, { key: "ArrowRight" });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyUp(slider, { key: "Home" });
+    expect(onCommit).toHaveBeenCalledTimes(2);
+  });
+
   it("disables both controls when requested", () => {
     renderField({ disabled: true });
 

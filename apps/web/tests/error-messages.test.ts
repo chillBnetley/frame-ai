@@ -40,6 +40,7 @@ describe("describeEditorError", () => {
     ["session_not_found", "找不到这张图片或会话，可能已被清理。请重新上传。"],
     ["server_busy", "正在处理另一张高清导出，请稍后几秒再试。"],
     ["network_error", "无法连接后端服务。请确认已启动 API。"],
+    ["not_found", "服务接口不存在，可能是后端版本过旧。请重启 API 后重试。"],
   ])("maps %s to Chinese copy", (code, expected) => {
     const result = describeEditorError(new ApiClientError(code, "raw server message"));
 
@@ -66,5 +67,25 @@ describe("describeEditorError", () => {
       message: "boom",
       details: {},
     });
+  });
+
+  it("keeps the request ID for log correlation", () => {
+    const requestId = "27cd3e6046ba4d9b9a8b5f0eec41fa08";
+    const result = describeEditorError(
+      new ApiClientError("not_found", "Not Found", 404, {}, requestId),
+    );
+
+    expect(result.requestId).toBe(requestId);
+    expect(result.message).toBe("服务接口不存在，可能是后端版本过旧。请重启 API 后重试。");
+  });
+
+  it("shows a safe code and short request ID for unmapped codes", () => {
+    const result = describeEditorError(
+      new ApiClientError("unexpected_route", "raw", 500, {}, "abcdef1234567890"),
+    );
+
+    expect(result.message).toBe(
+      "发生未知错误，请稍后重试。（错误码：unexpected_route）（请求 ID：abcdef12）",
+    );
   });
 });

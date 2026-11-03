@@ -17,6 +17,17 @@ export interface SliderFieldProps {
   onCommit: () => void;
 }
 
+const COMMIT_KEYS = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+]);
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -72,7 +83,7 @@ export function SliderField({
   };
 
   return (
-    <div className="grid gap-2">
+    <div className="slider-field grid gap-2">
       <div className="flex items-baseline justify-between gap-3">
         <label id={labelId} htmlFor={rangeId} className="text-xs text-white/65">
           {label}
@@ -103,7 +114,7 @@ export function SliderField({
                 commitNumber();
               }
             }}
-            className="w-20 rounded-md border border-white/12 bg-black/35 px-2 py-1.5 text-right font-mono text-[11px] text-white/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+            className="min-h-11 w-20 rounded-md border border-white/12 bg-black/35 px-2 py-1.5 text-right font-mono text-[11px] text-white/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
           />
           {unit && (
             <span aria-hidden="true" className="w-5 font-mono text-[10px] text-white/35">
@@ -125,14 +136,18 @@ export function SliderField({
         aria-valuetext={adjustmentValueText(value, step, unit)}
         onChange={(event) => apply(Number(event.target.value))}
         onPointerUp={onCommit}
-        onKeyUp={onCommit}
+        onKeyUp={(event) => {
+          if (COMMIT_KEYS.has(event.key)) {
+            onCommit();
+          }
+        }}
         onBlur={onCommit}
         onDoubleClick={() => {
           apply(defaultValue);
           onCommit();
         }}
         title="双击恢复默认值"
-        className="h-6 w-full cursor-pointer accent-[#d8ff5f] disabled:cursor-not-allowed disabled:opacity-40"
+        className="h-11 w-full cursor-pointer accent-[#d8ff5f] disabled:cursor-not-allowed disabled:opacity-40"
       />
 
       <div className="flex items-center justify-between font-mono text-[9px] text-white/25">

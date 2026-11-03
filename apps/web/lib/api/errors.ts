@@ -36,7 +36,9 @@ export function describeUploadError(error: unknown): UploadError {
     if (error.code === "file_too_large" && typeof error.details.maxBytes === "number") {
       message = `文件超过 ${formatBytes(error.details.maxBytes)} 的上传上限。`;
     }
-    return { code: error.code, message };
+    return error.requestId
+      ? { code: error.code, message, requestId: error.requestId }
+      : { code: error.code, message };
   }
   if (error instanceof Error) {
     return { code: "unknown_error", message: error.message };

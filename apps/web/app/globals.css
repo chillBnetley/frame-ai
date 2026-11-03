@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #d8ff5f;
+  --color-accent: #277a68;
   --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI",
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono",
@@ -9,71 +9,85 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+  --app-header-height: 3.75rem;
+  --preview-monitor-height: clamp(140px, 28dvh, 240px);
+  --preview-monitor-top: calc(
+    var(--app-header-height) + env(safe-area-inset-top, 0px) + 0.75rem
+  );
+  --frame-ink: #202522;
+  --frame-muted: #69716c;
+  --frame-line: #e4e8e5;
+  --frame-paper: #ffffff;
+  --frame-canvas: #f6f7f6;
+  --frame-accent: #277a68;
 }
 
-html {
-  min-width: 320px;
-  background-color: #08090a;
-}
-
+html { min-width: 320px; background: var(--frame-canvas); }
 body {
   min-height: 100dvh;
-  color: #f4f4f1;
+  color: var(--frame-ink);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(1100px 700px at 78% -12%, rgba(216, 255, 95, 0.075), transparent 62%),
-    radial-gradient(900px 640px at 6% 4%, rgba(122, 145, 255, 0.075), transparent 58%),
-    #08090a;
+  background: var(--frame-canvas);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 10%, transparent 75%);
-}
+::selection { color: #fff; background: #277a68; }
 
-::selection {
-  color: #101208;
-  background: #d8ff5f;
+/* Translate the existing utility palette into the quiet, light workstation theme. */
+[class~="text-white"] { color: var(--frame-ink) !important; }
+[class*="text-white/"] { color: var(--frame-muted) !important; }
+[class*="text-accent"] { color: var(--frame-accent) !important; }
+[class*="border-white/"] { border-color: var(--frame-line) !important; }
+[class*="divide-white/"] { --tw-divide-opacity: 1; }
+[class*="divide-white/"] > :not(:last-child) { border-color: var(--frame-line) !important; }
+[class*="bg-white/"] { background-color: #fff !important; }
+[class*="bg-black/"] { background-color: #f1f3f2 !important; }
+[class*="bg-[#08090a]"] { background-color: rgba(255,255,255,.94) !important; }
+[class*="bg-[#0c0d0f]"] { background-color: #fff !important; }
+[class*="bg-[#101113]"] { background-color: #fff !important; }
+[class*="bg-[#d8ff5f]"] { background-color: var(--frame-accent) !important; }
+[class*="text-[#101208]"] { color: #fff !important; }
+[class*="shadow-[0_30px"] { box-shadow: 0 10px 36px -24px rgba(25,38,31,.18) !important; }
+[class*="ring-white/"] { --tw-ring-color: #e4e8e5 !important; }
+[class*="accent-[#d8ff5f]"] { accent-color: var(--frame-accent) !important; }
+
+button, input, select { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline-color: #277a68 !important;
 }
 
 .preview-canvas {
-  background-color: rgba(255, 255, 255, 0.012);
-  background-image:
-    linear-gradient(45deg, rgba(255, 255, 255, 0.025) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(255, 255, 255, 0.025) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.025) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.025) 75%);
-  background-position:
-    0 0,
-    0 10px,
-    10px -10px,
-    -10px 0;
+  background-color: #eef1ef;
+  background-image: linear-gradient(45deg,#e5e9e6 25%,transparent 25%),linear-gradient(-45deg,#e5e9e6 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e5e9e6 75%),linear-gradient(-45deg,transparent 75%,#e5e9e6 75%);
+  background-position: 0 0,0 10px,10px -10px,-10px 0;
   background-size: 20px 20px;
 }
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+.editor-preview-image { max-height: min(520px,56dvh); }
+.preview-monitor { position:fixed;top:var(--preview-monitor-top);right:.75rem;left:.75rem;z-index:30;height:var(--preview-monitor-height); }
+.slider-field,.slider-field input { scroll-margin-top:calc(var(--app-header-height) + 1rem); }
+@media(max-width:1023.98px) {
+ .slider-field,.slider-field input { scroll-margin-top:calc(var(--preview-monitor-top) + var(--preview-monitor-height) + .75rem); }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+@media(min-width:1024px) {
+ .editor-preview-column { position:sticky;top:calc(var(--app-header-height) + 1rem);z-index:20;align-self:flex-start;display:flex;flex-direction:column;gap:1rem;height:calc(100dvh - var(--app-header-height) - 2rem); }
+ .editor-preview-card { display:flex;flex:1 1 0%;flex-direction:column;min-height:0;overflow:hidden; }
+ .editor-history { flex:0 0 auto; }
+ .editor-history ol { max-height:8rem; }
+ .editor-preview-canvas { flex:1 1 0%;min-height:0; }
+ .editor-preview-image { max-height:100%; }
+ .editor-adjustment-panel { position:sticky;top:calc(var(--app-header-height) + 1rem);z-index:20;align-self:flex-start; }
+ .editor-adjustment-scroll { max-height:calc(100dvh - var(--app-header-height) - 2rem);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable; }
+ .preview-monitor { display:none; }
+}
+@media(max-height:680px) {
+ .editor-preview-card { padding:.75rem; }
+ .editor-preview-meta,.editor-preview-quality,.editor-preview-hint { display:none; }
+}
+@media(max-height:680px) and (min-width:1024px) { .editor-history ol { display:none; } }
+* { scrollbar-width:thin;scrollbar-color:#cbd2cd transparent; }
+@media(prefers-reduced-motion:reduce) {
+ *,*::before,*::after { scroll-behavior:auto !important;animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important; }
 }

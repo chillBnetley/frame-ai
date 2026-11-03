@@ -10,18 +10,21 @@ export class ApiClientError extends Error {
   readonly code: string;
   readonly status: number;
   readonly details: Record<string, unknown>;
+  readonly requestId: string | null;
 
   constructor(
     code: string,
     message: string,
     status = 0,
     details: Record<string, unknown> = {},
+    requestId: string | null = null,
   ) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
     this.status = status;
     this.details = details;
+    this.requestId = requestId;
   }
 }
 
@@ -59,6 +62,7 @@ function createTimeoutSignal(externalSignal: AbortSignal | undefined, timeoutMs:
 }
 
 async function responseToError(response: Response): Promise<ApiClientError> {
+  const requestId = response.headers.get("x-request-id");
   try {
     const payload = (await response.json()) as {
       error?: { code?: unknown; message?: unknown; details?: unknown };
@@ -72,9 +76,15 @@ async function responseToError(response: Response): Promise<ApiClientError> {
       payload.error?.details && typeof payload.error.details === "object"
         ? (payload.error.details as Record<string, unknown>)
         : {};
-    return new ApiClientError(code, message, response.status, details);
+    return new ApiClientError(code, message, response.status, details, requestId);
   } catch {
-    return new ApiClientError("http_error", `请求失败（HTTP ${response.status}）`, response.status);
+    return new ApiClientError(
+      "http_error",
+      `请求失败（HTTP ${response.status}）`,
+      response.status,
+      {},
+      requestId,
+    );
   }
 }
 

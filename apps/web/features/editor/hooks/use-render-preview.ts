@@ -9,10 +9,12 @@ import { describeEditorError, isSilentEditorError } from "@/lib/error-messages";
 import { recipeFingerprint } from "@/lib/recipe";
 import type { EditRecipe } from "@/types/session";
 
-export const PREVIEW_DEBOUNCE_MS = 120;
+export const PREVIEW_DEBOUNCE_MS = 250;
+export const PREVIEW_MAX_WAIT_MS = 600;
 
 export interface UseRenderPreviewOptions {
   debounceMs?: number;
+  maxWaitMs?: number;
 }
 
 export interface UseRenderPreviewResult {
@@ -22,39 +24,80 @@ export interface UseRenderPreviewResult {
   cancel: () => void;
 }
 
+interface InflightRender {
+  fingerprint: string;
+  quality: "draft" | "final";
+}
+
 export function useRenderPreview(
   options: UseRenderPreviewOptions = {},
 ): UseRenderPreviewResult {
-  const { debounceMs = PREVIEW_DEBOUNCE_MS } = options;
+  const {
+    debounceMs = PREVIEW_DEBOUNCE_MS,
+    maxWaitMs = PREVIEW_MAX_WAIT_MS,
+  } = options;
   const state = useEditorState();
   const dispatch = useEditorDispatch();
   const { sessionId, draft, phase } = state;
   const ready = phase === "ready";
+  const fingerprint = recipeFingerprint(draft);
 
   const seqRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderedFingerprintRef = useRef<string | null>(null);
+  const completedFinalFingerprintRef = useRef<string | null>(null);
+  const inflightRef = useRef<InflightRender | null>(null);
   const renderedSessionRef = useRef<string | null>(null);
+  const draftRef = useRef(draft);
+  const fingerprintRef = useRef(fingerprint);
 
-  const clearTimer = useCallback(() => {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+  useEffect(() => {
+    draftRef.current = draft;
+    fingerprintRef.current = fingerprint;
+  }, [draft, fingerprint]);
+
+  const clearDraftTimers = useCallback(() => {
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (maxWaitTimerRef.current !== null) {
+      clearTimeout(maxWaitTimerRef.current);
+      maxWaitTimerRef.current = null;
     }
   }, []);
 
   const perform = useCallback(
-    async (quality: "draft" | "final", recipe: EditRecipe = draft): Promise<void> => {
+    async (
+      quality: "draft" | "final",
+      recipe: EditRecipe,
+    ): Promise<void> => {
       if (!ready || sessionId === null) {
+        return;
+      }
+
+      const requestFingerprint = recipeFingerprint(recipe);
+      const inflight = inflightRef.current;
+      if (
+        inflight !== null &&
+        inflight.fingerprint === requestFingerprint &&
+        inflight.quality === quality
+      ) {
         return;
       }
 
       const seq = seqRef.current + 1;
       seqRef.current = seq;
+      const request: InflightRender = {
+        fingerprint: requestFingerprint,
+        quality,
+      };
       controllerRef.current?.abort();
       const controller = new AbortController();
       controllerRef.current = controller;
+      inflightRef.current = request;
       dispatch({ type: "preview-loading", seq });
 
       try {
@@ -74,6 +117,9 @@ export function useRenderPreview(
           height: result.height,
           quality: result.quality,
         });
+        if (quality === "final") {
+          completedFinalFingerprintRef.current = requestFingerprint;
+        }
       } catch (error) {
         if (controller.signal.aborted || seq !== seqRef.current) {
           return;
@@ -86,19 +132,49 @@ export function useRenderPreview(
             ? { ...normalized, message: "" }
             : normalized,
         });
+      } finally {
+        if (inflightRef.current === request) {
+          inflightRef.current = null;
+        }
       }
     },
-    [dispatch, draft, ready, sessionId],
+    [dispatch, ready, sessionId],
   );
 
-  const fingerprint = recipeFingerprint(draft);
+  const fireDraft = useCallback(() => {
+    clearDraftTimers();
+    const nextFingerprint = fingerprintRef.current;
+    if (renderedFingerprintRef.current === nextFingerprint) {
+      return;
+    }
+    renderedFingerprintRef.current = nextFingerprint;
+    void perform("draft", draftRef.current);
+  }, [clearDraftTimers, perform]);
+
+  const scheduleDraft = useCallback(() => {
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      fireDraft();
+    }, debounceMs);
+    if (maxWaitTimerRef.current === null) {
+      maxWaitTimerRef.current = setTimeout(() => {
+        maxWaitTimerRef.current = null;
+        fireDraft();
+      }, maxWaitMs);
+    }
+  }, [debounceMs, fireDraft, maxWaitMs]);
 
   useEffect(() => {
     if (renderedSessionRef.current !== sessionId) {
       renderedSessionRef.current = sessionId;
       renderedFingerprintRef.current = null;
+      completedFinalFingerprintRef.current = null;
+      inflightRef.current = null;
       controllerRef.current?.abort();
-      clearTimer();
+      clearDraftTimers();
     }
     if (!sessionId || phase !== "ready") {
       return;
@@ -108,45 +184,53 @@ export function useRenderPreview(
     }
 
     const isFirstRender = renderedFingerprintRef.current === null;
-    renderedFingerprintRef.current = fingerprint;
-    clearTimer();
-
     if (isFirstRender) {
-      void perform("final");
+      renderedFingerprintRef.current = fingerprint;
+      void perform("final", draftRef.current);
       return;
     }
 
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      void perform("draft");
-    }, debounceMs);
-
-    return clearTimer;
-  }, [clearTimer, debounceMs, fingerprint, perform, phase, sessionId]);
+    scheduleDraft();
+  }, [
+    clearDraftTimers,
+    fingerprint,
+    perform,
+    phase,
+    scheduleDraft,
+    sessionId,
+  ]);
 
   useEffect(() => {
     return () => {
       controllerRef.current?.abort();
-      clearTimer();
+      clearDraftTimers();
       renderedFingerprintRef.current = null;
+      inflightRef.current = null;
     };
-  }, [clearTimer]);
+  }, [clearDraftTimers]);
 
   const requestFinal = useCallback(async (): Promise<void> => {
-    clearTimer();
-    renderedFingerprintRef.current = recipeFingerprint(draft);
-    await perform("final", draft);
-  }, [clearTimer, draft, perform]);
+    clearDraftTimers();
+    const nextFingerprint = fingerprintRef.current;
+    renderedFingerprintRef.current = nextFingerprint;
+    if (completedFinalFingerprintRef.current === nextFingerprint) {
+      return;
+    }
+    await perform("final", draftRef.current);
+  }, [clearDraftTimers, perform]);
 
   const retry = useCallback(async (): Promise<void> => {
-    clearTimer();
-    await perform("final", draft);
-  }, [clearTimer, draft, perform]);
+    clearDraftTimers();
+    renderedFingerprintRef.current = fingerprintRef.current;
+    completedFinalFingerprintRef.current = null;
+    await perform("final", draftRef.current);
+  }, [clearDraftTimers, perform]);
 
   const cancel = useCallback(() => {
-    clearTimer();
+    clearDraftTimers();
     controllerRef.current?.abort();
-  }, [clearTimer]);
+    inflightRef.current = null;
+  }, [clearDraftTimers]);
 
   return { preview: state.preview, requestFinal, retry, cancel };
 }
