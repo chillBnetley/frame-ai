@@ -89,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "X-Request-ID",
             "X-Export-Width",
             "X-Export-Height",
+            "X-Export-Warning",
             "Content-Disposition",
         ],
         max_age=600,

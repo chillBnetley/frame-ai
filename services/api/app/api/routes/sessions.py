@@ -30,6 +30,7 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     }.items()
 }
 _EXPORT_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    413: {"model": ErrorResponse, "description": "Export would exceed the memory budget"},
     503: {"model": ErrorResponse, "description": "Another export is in progress"},
 }
 
@@ -159,4 +160,6 @@ def export_revision(
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
     }
+    if result.warnings:
+        headers["X-Export-Warning"] = ",".join(result.warnings)
     return Response(content=result.data, media_type=result.media_type, headers=headers)

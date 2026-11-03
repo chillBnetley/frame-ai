@@ -48,12 +48,18 @@ def grain_seed(image_sha256: str) -> int:
     return int.from_bytes(digest[:8], "little")
 
 
-def apply_denoise(rgb: RgbArray, amount: float, *, quality: RenderQuality = "final") -> RgbArray:
+def apply_denoise(
+    rgb: RgbArray,
+    amount: float,
+    *,
+    quality: RenderQuality = "final",
+    simplified: bool = False,
+) -> RgbArray:
     if amount == 0:
         return rgb
 
     strength = DENOISE_H * amount / 100.0
-    if quality == "draft":
+    if simplified or quality == "draft":
         template, search = DENOISE_TEMPLATE_DRAFT, DENOISE_SEARCH_DRAFT
     else:
         template, search = DENOISE_TEMPLATE_FINAL, DENOISE_SEARCH_FINAL
@@ -115,7 +121,13 @@ def apply_detail(
     grain: float,
     image_sha256: str,
     quality: RenderQuality = "final",
+    denoise_simplified: bool = False,
 ) -> RgbArray:
-    result = apply_denoise(rgb, denoise, quality=quality)
+    result = apply_denoise(
+        rgb,
+        denoise,
+        quality=quality,
+        simplified=denoise_simplified,
+    )
     result = apply_sharpen(result, sharpen)
     return apply_grain(result, grain, image_sha256=image_sha256)

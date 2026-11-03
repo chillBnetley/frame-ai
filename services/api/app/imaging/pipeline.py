@@ -11,7 +11,11 @@ from app.imaging.geometry import crop_pixels, rotate_inscribed
 from app.imaging.loader import LoadedImage, resize_to_max_edge
 from app.imaging.local import apply_local
 from app.imaging.output import to_uint8
-from app.imaging.params_map import DRAFT_MAX_EDGE, FINAL_MAX_EDGE
+from app.imaging.params_map import (
+    DRAFT_MAX_EDGE,
+    EXPORT_DENOISE_SIMPLIFY_PIXELS,
+    FINAL_MAX_EDGE,
+)
 from app.imaging.tone import apply_contrast, apply_tone_linear, linear_to_srgb, srgb_to_linear
 from app.models.recipe import Adjustments, RenderQuality
 
@@ -22,6 +26,7 @@ class RenderedImage:
     canvas_width: int
     canvas_height: int
     quality: RenderQuality
+    warnings: tuple[str, ...] = ()
 
     @property
     def width(self) -> int:
@@ -55,11 +60,18 @@ def render(
     image_sha256: str,
     quality: RenderQuality = "final",
     max_edge: int | None = None,
+    denoise_simplify_pixels: int = EXPORT_DENOISE_SIMPLIFY_PIXELS,
 ) -> RenderedImage:
     source = image
     edge = _resolve_edge(quality, max_edge)
     if edge is not None:
         source = resize_to_max_edge(source, edge)
+
+    denoise_simplified = (
+        quality == "export"
+        and adjustments.denoise > 0
+        and source.width * source.height > denoise_simplify_pixels
+    )
 
     rotated = rotate_inscribed(source.rgb, adjustments.rotation_deg, quality=quality)
     canvas_height, canvas_width = rotated.shape[:2]
@@ -93,6 +105,7 @@ def render(
         grain=adjustments.grain,
         image_sha256=image_sha256,
         quality=quality,
+        denoise_simplified=denoise_simplified,
     )
 
     return RenderedImage(
@@ -100,4 +113,5 @@ def render(
         canvas_width=canvas_width,
         canvas_height=canvas_height,
         quality=quality,
+        warnings=("denoise_simplified",) if denoise_simplified else (),
     )

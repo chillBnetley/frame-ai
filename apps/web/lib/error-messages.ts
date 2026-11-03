@@ -48,6 +48,14 @@ export function editorErrorMessage(
   details: Record<string, unknown> = {},
   requestId: string | null = null,
 ): string {
+  if (code === "export_too_large") {
+    const estimated = details.estimatedPeakMb;
+    const limit = details.limitMb;
+    if (typeof estimated === "number" && typeof limit === "number") {
+      return `这张图在当前调整下导出需要约 ${estimated} MB 内存，超过上限 ${limit} MB。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。`;
+    }
+    return "这张图在当前调整下导出所需内存超过上限。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。";
+  }
   const base = EDITOR_MESSAGES[code];
   if (code === "validation_error") {
     const field = validationField(details);

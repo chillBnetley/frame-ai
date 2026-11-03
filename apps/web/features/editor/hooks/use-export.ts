@@ -16,6 +16,7 @@ export interface ExportState {
   width: number | null;
   height: number | null;
   bytes: number | null;
+  warnings: string[];
 }
 
 export interface UseExportResult {
@@ -35,6 +36,7 @@ const INITIAL_STATE: ExportState = {
   width: null,
   height: null,
   bytes: null,
+  warnings: [],
 };
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -78,6 +80,7 @@ export function useExport(): UseExportResult {
         width: null,
         height: null,
         bytes: null,
+        warnings: [],
       });
 
       try {
@@ -90,6 +93,7 @@ export function useExport(): UseExportResult {
           width: result.width,
           height: result.height,
           bytes: result.blob.size,
+          warnings: result.warnings,
         });
         return true;
       } catch (error) {
@@ -100,6 +104,7 @@ export function useExport(): UseExportResult {
           width: null,
           height: null,
           bytes: null,
+          warnings: [],
         });
         return false;
       } finally {

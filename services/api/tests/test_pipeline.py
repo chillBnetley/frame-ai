@@ -82,6 +82,44 @@ def test_render_tiers_and_explicit_edges():
     assert (resized.width, resized.height) == (400, 200)
 
 
+def test_large_export_denoise_reports_a_warning():
+    loaded = _load_pixels(_synthetic_photo(64, 48))
+
+    simplified = render(
+        loaded,
+        Adjustments(denoise=50),
+        image_sha256=SHA_A,
+        quality="export",
+        denoise_simplify_pixels=1,
+    )
+    below_threshold = render(
+        loaded,
+        Adjustments(denoise=50),
+        image_sha256=SHA_A,
+        quality="export",
+        denoise_simplify_pixels=64 * 48,
+    )
+    preview = render(
+        loaded,
+        Adjustments(denoise=50),
+        image_sha256=SHA_A,
+        quality="final",
+        denoise_simplify_pixels=1,
+    )
+    without_denoise = render(
+        loaded,
+        Adjustments(),
+        image_sha256=SHA_A,
+        quality="export",
+        denoise_simplify_pixels=1,
+    )
+
+    assert simplified.warnings == ("denoise_simplified",)
+    assert below_threshold.warnings == ()
+    assert preview.warnings == ()
+    assert without_denoise.warnings == ()
+
+
 def test_rotation_and_crop_report_the_rotated_canvas():
     loaded = _load_pixels(_synthetic_photo(200, 120))
 

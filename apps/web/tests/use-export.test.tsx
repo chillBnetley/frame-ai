@@ -56,6 +56,7 @@ describe("useExport", () => {
               "content-disposition": 'attachment; filename="frame-abcd1234.jpg"',
               "x-export-width": "240",
               "x-export-height": "320",
+              "x-export-warning": "denoise_simplified",
             },
           });
         }
@@ -79,10 +80,46 @@ describe("useExport", () => {
     expect(result.current.exporter.state.filename).toBe("frame-abcd1234.jpg");
     expect(result.current.exporter.state.width).toBe(240);
     expect(result.current.exporter.state.height).toBe(320);
+    expect(result.current.exporter.state.warnings).toEqual(["denoise_simplified"]);
     expect(click).toHaveBeenCalledTimes(1);
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(result.current.store.state.phase).toBe("ready");
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:frame-export"));
+  });
+
+  it("reports the estimated memory for export_too_large", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:unused");
+    URL.revokeObjectURL = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "export_too_large",
+              message: "too large",
+              details: { estimatedPeakMb: 4700, limitMb: 3072, pixels: 39_900_000 },
+            },
+          }),
+          { status: 413, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    const { result } = exportHook(readyEditorState());
+
+    await act(async () => {
+      expect(
+        await result.current.exporter.exportImage({
+          revisionId: REVISION_ID,
+          format: "jpeg",
+        }),
+      ).toBe(false);
+    });
+
+    expect(result.current.exporter.state.error?.message).toBe(
+      "这张图在当前调整下导出需要约 4700 MB 内存，超过上限 3072 MB。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。",
+    );
   });
 
   it("maps server_busy to a readable export error", async () => {

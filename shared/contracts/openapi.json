@@ -1153,6 +1153,16 @@
               }
             }
           },
+          "413": {
+            "description": "Export would exceed the memory budget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Another export is in progress",
             "content": {

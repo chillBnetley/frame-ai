@@ -10,7 +10,10 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.core.config import Settings
+from app.main import create_app
+from app.models.recipe import Adjustments
 from app.repositories.db import connect
+from app.services.export_service import estimate_export_peak_mb
 from tests.conftest import image_row, make_image, upload
 
 
@@ -112,6 +115,7 @@ def test_export_jpeg_strips_metadata_and_bakes_orientation(
     assert response.headers["x-export-width"] == "240"
     assert response.headers["x-export-height"] == "320"
     assert response.headers["x-content-type-options"] == "nosniff"
+    assert "x-export-warning" not in response.headers
     expected_name = f"frame-{revision_id.replace('-', '')[:8]}.jpg"
     assert response.headers["content-disposition"] == f'attachment; filename="{expected_name}"'
 
@@ -214,6 +218,63 @@ def test_second_concurrent_export_returns_server_busy(client: TestClient):
 
     retry = _export(client, session, session["activeRevisionId"])
     assert retry.status_code == 200
+
+
+def _settings(tmp_path, **overrides) -> Settings:
+    values: dict[str, object] = {
+        "data_dir": tmp_path / "data",
+        "max_upload_bytes": 1024 * 1024,
+        "max_image_pixels": 1_000_000,
+        "allowed_origins": "http://testserver",
+        "log_level": "WARNING",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_export_estimate_separates_neutral_and_full_recipes():
+    neutral = estimate_export_peak_mb(40_000_000, Adjustments())
+    full = estimate_export_peak_mb(40_000_000, Adjustments(exposure_ev=0.5))
+    borderline = estimate_export_peak_mb(24_000_000, Adjustments(exposure_ev=0.5))
+
+    assert neutral < 3072
+    assert full > 3072
+    assert borderline < 3072
+
+
+def test_export_beyond_the_memory_budget_returns_413(tmp_path):
+    settings = _settings(tmp_path, export_max_rss_mb=160)
+    with TestClient(create_app(settings)) as client:
+        session = _session(client)
+        response = _export(client, session, session["activeRevisionId"])
+
+    assert response.status_code == 413
+    error = response.json()["error"]
+    assert error["code"] == "export_too_large"
+    assert error["details"]["pixels"] == 640 * 480
+    assert error["details"]["limitMb"] == 160
+    assert error["details"]["estimatedPeakMb"] > 160
+    assert "x-export-warning" not in response.headers
+
+
+def test_large_export_denoise_reports_the_simplified_warning(tmp_path):
+    settings = _settings(tmp_path, export_denoise_simplify_pixels=1)
+    with TestClient(create_app(settings)) as client:
+        session = _session(client)
+        revision = client.post(
+            f"/api/v1/sessions/{session['sessionId']}/revisions",
+            json={
+                "recipe": {"adjustments": {"denoise": 50}},
+                "parentRevisionId": session["activeRevisionId"],
+            },
+        )
+        assert revision.status_code == 201, revision.text
+        active_revision = revision.json()["activeRevisionId"]
+
+        response = _export(client, session, active_revision)
+
+        assert response.status_code == 200, response.text
+        assert response.headers["x-export-warning"] == "denoise_simplified"
 
 
 def test_compare_returns_aligned_original_and_revision_previews(

@@ -189,6 +189,17 @@ export interface ExportResult {
   filename: string;
   width: number | null;
   height: number | null;
+  warnings: string[];
+}
+
+function parseWarnings(value: string | null): string[] {
+  if (!value) {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((warning) => warning.trim())
+    .filter((warning) => warning.length > 0);
 }
 
 function parseFilename(disposition: string | null, format: ExportFormat): string {
@@ -232,6 +243,7 @@ export async function exportSession(
     filename: parseFilename(response.headers.get("content-disposition"), request.format),
     width: parseDimension(response.headers.get("x-export-width")),
     height: parseDimension(response.headers.get("x-export-height")),
+    warnings: parseWarnings(response.headers.get("x-export-warning")),
   };
 }
 

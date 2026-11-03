@@ -47,6 +47,17 @@ describe("describeEditorError", () => {
     expect(result).toEqual({ code, message: expected, details: {} });
   });
 
+  it("explains export memory estimates with the configured limit", () => {
+    expect(
+      editorErrorMessage("export_too_large", { estimatedPeakMb: 4700, limitMb: 3072 }),
+    ).toBe(
+      "这张图在当前调整下导出需要约 4700 MB 内存，超过上限 3072 MB。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。",
+    );
+    expect(editorErrorMessage("export_too_large")).toBe(
+      "这张图在当前调整下导出所需内存超过上限。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。",
+    );
+  });
+
   it("names the offending field for validation errors", () => {
     expect(editorErrorMessage("validation_error", { field: "adjustments.crop" })).toBe(
       "有参数超出范围，已恢复到上次有效值（adjustments.crop）。",

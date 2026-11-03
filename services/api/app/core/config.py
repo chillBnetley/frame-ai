@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     render_max_edge_default: int = Field(default=1600, gt=0)
     render_max_edge_limit: int = Field(default=2560, gt=0)
     export_max_rss_mb: int = Field(default=3072, gt=0)
+    export_denoise_simplify_pixels: int = Field(default=12_000_000, ge=1)
 
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     max_image_pixels: int = Field(default=40_000_000, gt=0)

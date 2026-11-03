@@ -12,6 +12,7 @@ const IDLE: ExportState = {
   width: null,
   height: null,
   bytes: null,
+  warnings: [],
 };
 
 function renderDialog(overrides: Partial<Parameters<typeof ExportDialog>[0]> = {}) {
@@ -73,6 +74,7 @@ describe("ExportDialog", () => {
         width: null,
         height: null,
         bytes: null,
+        warnings: [],
       },
     });
     expect(screen.getByRole("status")).toHaveTextContent("正在导出");
@@ -87,12 +89,29 @@ describe("ExportDialog", () => {
         width: 240,
         height: 320,
         bytes: 2048,
+        warnings: [],
       },
     });
     expect(screen.getByRole("status")).toHaveTextContent(
       "导出完成：frame-abcd1234.jpg（240 × 320，2.0 KB）。",
     );
     expect(screen.getByText("frame-abcd1234.jpg")).toBeInTheDocument();
+  });
+
+  it("shows the simplified denoise warning after export", () => {
+    renderDialog({
+      state: {
+        status: "success",
+        error: null,
+        filename: "frame-abcd1234.jpg",
+        width: 6000,
+        height: 4000,
+        bytes: 2048,
+        warnings: ["denoise_simplified"],
+      },
+    });
+
+    expect(screen.getByText("大图降噪使用了简化算法。")).toBeInTheDocument();
   });
 
   it("announces export failures", () => {
@@ -104,6 +123,7 @@ describe("ExportDialog", () => {
         width: null,
         height: null,
         bytes: null,
+        warnings: [],
       },
     });
 

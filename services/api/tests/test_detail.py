@@ -11,6 +11,7 @@ from app.imaging.detail import (
     apply_sharpen,
     grain_seed,
 )
+from app.imaging.params_map import DENOISE_SEARCH_DRAFT, DENOISE_TEMPLATE_DRAFT
 from app.imaging.tone import luminance_srgb
 
 SHA_A = "a" * 64
@@ -76,6 +77,27 @@ def test_draft_and_final_denoise_use_different_search_windows():
 
     assert not np.array_equal(draft, final)
     assert _high_frequency_energy(final) <= _high_frequency_energy(draft)
+
+
+def test_simplified_denoise_uses_the_draft_search_window(monkeypatch):
+    calls: list[tuple[int, int]] = []
+
+    def fake_denoise(
+        source: np.ndarray,
+        destination: object,
+        strength: float,
+        colour_strength: float,
+        template: int,
+        search: int,
+    ) -> np.ndarray:
+        calls.append((template, search))
+        return source
+
+    monkeypatch.setattr(cv2, "fastNlMeansDenoisingColored", fake_denoise)
+
+    apply_denoise(_noisy_gradient(), 50, quality="export", simplified=True)
+
+    assert calls == [(DENOISE_TEMPLATE_DRAFT, DENOISE_SEARCH_DRAFT)]
 
 
 def test_sharpen_increases_high_frequency_energy():

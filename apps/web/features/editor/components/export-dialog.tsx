@@ -214,6 +214,12 @@ export function ExportDialog({
           </div>
         )}
 
+        {state.status === "success" && state.warnings.includes("denoise_simplified") && (
+          <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+            大图降噪使用了简化算法。
+          </p>
+        )}
+
         <div className="mt-4 flex items-center justify-end gap-2">
           <button
             type="button"
