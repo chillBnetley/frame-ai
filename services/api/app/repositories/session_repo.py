@@ -23,6 +23,12 @@ class RevisionConflictError(RuntimeError):
         self.active_revision_id = active_revision_id
 
 
+class IdempotencyKeyReuseError(RuntimeError):
+    def __init__(self, revision_id: str) -> None:
+        super().__init__(f"idempotency key already used by revision {revision_id}")
+        self.revision_id = revision_id
+
+
 @dataclass(frozen=True)
 class SessionRecord:
     id: str
@@ -199,6 +205,11 @@ class SqliteSessionRepository:
                         (normalized_session, idempotency_key),
                     ).fetchone()
                     if existing is not None:
+                        if (
+                            str(existing["recipe_hash"]) != recipe_hash
+                            or str(existing["parent_id"] or "").lower() != parent_id.lower()
+                        ):
+                            raise IdempotencyKeyReuseError(str(existing["id"]))
                         connection.rollback()
                         return _to_revision(existing), True
 

@@ -35,6 +35,7 @@ describe("describeUploadError", () => {
 describe("describeEditorError", () => {
   it.each([
     ["revision_conflict", "编辑状态已更新，已为你刷新。"],
+    ["idempotency_key_reuse", "保存请求与已有版本冲突，请重试。"],
     ["nothing_to_undo", "没有可撤销的步骤。"],
     ["nothing_to_redo", "没有可重做的步骤。"],
     ["session_not_found", "找不到这张图片或会话，可能已被清理。请重新上传。"],

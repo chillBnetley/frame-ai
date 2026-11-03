@@ -17,6 +17,7 @@ from app.models.sessions import (
     SessionState,
 )
 from app.repositories.session_repo import (
+    IdempotencyKeyReuseError,
     RevisionConflictError,
     RevisionNotFoundError,
     RevisionRecord,
@@ -49,6 +50,13 @@ def _mapped() -> Iterator[None]:
             "revision_conflict",
             "The edit state has changed; reload the session before committing.",
             {"activeRevisionId": exc.active_revision_id},
+        ) from exc
+    except IdempotencyKeyReuseError as exc:
+        raise AppError(
+            409,
+            "idempotency_key_reuse",
+            "The Idempotency-Key was already used with a different recipe or parent revision.",
+            {"revisionId": exc.revision_id},
         ) from exc
 
 

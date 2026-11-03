@@ -23,6 +23,7 @@ const NON_RETRYABLE_SAVE_CODES = new Set([
   "validation_error",
   "session_not_found",
   "revision_not_found",
+  "idempotency_key_reuse",
 ]);
 
 const SESSION_QUERY_KEY = "session";

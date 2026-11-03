@@ -150,7 +150,7 @@ API 只绑定 `127.0.0.1`，无鉴权、无限流（D-13）。启动命令必须
 | `GET /api/v1/sessions/{sessionId}` | — | 会话状态 | 404 `session_not_found` |
 | `GET /api/v1/sessions/{sessionId}/revisions` ⊕ | `?limit=20&cursor=3` | `{items:[{id, revisionNo, parentId, source, recipeHash, createdAt}], nextCursor}`；按 `revisionNo` 降序 | 404 `session_not_found`；422 |
 | `POST /api/v1/sessions/{sessionId}/render` | `{recipe, maxEdge?, quality?}` | 200 `{previewUrl, width, height, quality, cacheHit}`；无状态，不写数据库 | 404 `session_not_found`/`image_not_found`；422 `validation_error` |
-| `POST /api/v1/sessions/{sessionId}/revisions` | `{recipe, parentRevisionId, source?}` + 头 `Idempotency-Key` | 201 新 revision 并设为活动；同 key 重放 200 原 revision | 409 ⊕ `revision_conflict`；404；422 |
+| `POST /api/v1/sessions/{sessionId}/revisions` | `{recipe, parentRevisionId, source?}` + 头 `Idempotency-Key` | 201 新 revision 并设为活动；同 key 同内容重放 200 原 revision | 409 `revision_conflict` / `idempotency_key_reuse`；404；422 |
 | `POST /api/v1/sessions/{sessionId}/undo` | 可选 `{revisionId}` | 会话状态；仅移动 `active` | 409 `nothing_to_undo`；409 `revision_conflict`（客户端期望版本不符） |
 | `POST /api/v1/sessions/{sessionId}/redo` ⊕ | — | 会话状态；沿通往 `head` 的路径前进一步 | 409 `nothing_to_redo` |
 | `POST /api/v1/sessions/{sessionId}/activate` ⊕ | `{revisionId}` | 会话状态；切到会话内任意 revision，不改 `head` | 404 `revision_not_found` |
@@ -175,6 +175,7 @@ Content-Type: application/json
 
 - `parentRevisionId` 必须等于当前 `activeRevisionId`，否则 409 `revision_conflict`，`details.activeRevisionId` 给出服务端当前值。
 - 同一会话内 `Idempotency-Key` 唯一；网络重试必须复用同一个 key。重放返回原 revision 与会话状态，HTTP 200。key 最多 200 字符，空串按未提供处理。
+- 同 key 但 `recipe` 哈希或 `parentRevisionId` 与首次请求不一致时返回 409 `idempotency_key_reuse`，`details.revisionId` 给出已占用该 key 的 revision；不会静默返回旧 revision。
 - 不要在 key 下提交不同意图的配方；服务端把同 key 视为同一动作。
 - 新建 revision 在 `BEGIN IMMEDIATE` 事务中完成校验、取号、插入与活动/head 更新；单进程串行，不产生重复 `revisionNo`。
 - 在历史中间提交会从该 revision 分支，并把 `head` 移到新节点；旧分支仍可 activate。
@@ -304,6 +305,7 @@ POST /api/v1/sessions/{sessionId}/export
 | `revision_not_found` | 404 | revision 不属于该会话或不存在 |
 | `preview_expired` | 404 | 预览不存在或已被 TTL 清理 |
 | `revision_conflict` | 409 | 父 revision/期望 revision 与服务端活动版本不符 |
+| `idempotency_key_reuse` | 409 | 同一 Idempotency-Key 被用于不同配方或不同父 revision |
 | `nothing_to_undo` | 409 | 已到历史根节点 |
 | `nothing_to_redo` | 409 | 当前路径上没有下一步 |
 | `payload_too_large` | 413 | 请求体超过中间件上限 |

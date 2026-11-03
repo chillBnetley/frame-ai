@@ -117,18 +117,38 @@ def test_idempotent_replay_returns_the_original_revision(client: TestClient):
 
     first = _commit(client, session, exposure=0.4, key=key)
     replay = _commit(client, session, exposure=0.4, key=key)
-    changed = _commit(client, session, exposure=-1.5, key=key)
 
     assert first.status_code == 201
     assert replay.status_code == 200
-    assert changed.status_code == 200
     original = first.json()
     assert replay.json() == original
-    assert changed.json() == original
 
     listing = client.get(f"/api/v1/sessions/{session['sessionId']}/revisions").json()
     assert [item["revisionNo"] for item in listing["items"]] == [2, 1]
     assert listing["items"][0]["source"] == "user"
+
+
+def test_idempotency_key_reuse_with_different_content_conflicts(
+    client: TestClient,
+):
+    session = _new_session(client)
+    key = str(uuid4())
+
+    first = _commit(client, session, exposure=0.4, key=key)
+    assert first.status_code == 201
+    committed = first.json()
+
+    changed_recipe = _commit(client, session, exposure=-1.5, key=key)
+    assert changed_recipe.status_code == 409
+    assert changed_recipe.json()["error"]["code"] == "idempotency_key_reuse"
+
+    changed_parent = _commit(client, committed, exposure=0.4, key=key)
+    assert changed_parent.status_code == 409
+    assert changed_parent.json()["error"]["code"] == "idempotency_key_reuse"
+
+    assert _get(client, session["sessionId"]) == committed
+    listing = client.get(f"/api/v1/sessions/{session['sessionId']}/revisions").json()
+    assert [item["revisionNo"] for item in listing["items"]] == [2, 1]
 
 
 def test_undo_redo_and_their_boundaries(client: TestClient):
