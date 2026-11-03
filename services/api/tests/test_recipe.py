@@ -127,6 +127,27 @@ def test_non_finite_json_is_rejected_with_422(tmp_path, value: str):
     assert "input" not in field
 
 
+@pytest.mark.parametrize("value", [10**400, -(10**400)])
+def test_overflowing_json_integers_are_rejected(value: int):
+    with pytest.raises(ValidationError):
+        Adjustments.model_validate({"exposureEv": value})
+
+
+@pytest.mark.parametrize("literal", ["1" * 400, "-" + "1" * 400])
+def test_overflowing_json_integers_return_422(tmp_path, literal: str):
+    with _recipe_client(tmp_path) as client:
+        response = client.post(
+            "/test/recipe",
+            content=f'{{"adjustments":{{"exposureEv":{literal}}}}}',
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 422
+    field = response.json()["error"]["details"]["fields"][0]
+    assert field["field"] == "adjustments.exposureEv"
+    assert "input" not in field
+
+
 @pytest.mark.parametrize("style_id", STYLE_IDS)
 def test_supported_styles_are_accepted(style_id: str):
     assert EditRecipe.model_validate({"styleId": style_id}).style_id == style_id

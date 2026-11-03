@@ -39,7 +39,10 @@ RenderQuality = Literal["draft", "final", "export"]
 def _json_number(value: object) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("must be a JSON number")
-    return float(value)
+    try:
+        return float(value)
+    except OverflowError as exc:
+        raise ValueError("number is out of range") from exc
 
 
 def _max_two_decimals(value: float) -> float:
