@@ -9,7 +9,7 @@ from uuid import UUID
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.imaging.loader import load_proxy
+from app.imaging.loader import load_proxy, proxy_cache_directory
 from app.imaging.output import JPEG_QUALITY, encode_image
 from app.imaging.params_map import DRAFT_MAX_EDGE, ENGINE_VERSION
 from app.imaging.pipeline import render as render_image
@@ -126,7 +126,7 @@ class RenderService:
                 path,
                 original_sha256=record.sha256,
                 max_edge=edge,
-                cache_dir=self.previews.directory,
+                cache_dir=proxy_cache_directory(self.previews.directory),
                 max_pixels=self.settings.max_image_pixels,
             )
             rendered = render_image(

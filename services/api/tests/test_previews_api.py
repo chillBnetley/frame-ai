@@ -129,6 +129,19 @@ def test_draft_and_explicit_edges_resize_the_preview(client: TestClient):
     assert (small_draft["width"], small_draft["height"]) == (700, 262)
 
 
+def test_proxies_live_in_a_separate_cache_directory(
+    client: TestClient,
+    settings: Settings,
+):
+    session = _session(client)
+
+    _render(client, session, quality="draft", exposure=0.1)
+
+    proxy_files = list((settings.preview_dir / "proxies").glob("*.png"))
+    assert len(proxy_files) == 1
+    assert list(settings.preview_dir.glob("*.png")) == []
+
+
 def test_crop_coordinates_apply_to_the_rendered_canvas(client: TestClient):
     session = _session(client)
 
@@ -213,12 +226,17 @@ def test_startup_cleanup_only_touches_expired_preview_files(
     old = settings.preview_dir / "old-preview.jpg"
     fresh = settings.preview_dir / "fresh-preview.jpg"
     outside = settings.data_dir / "keep.txt"
+    proxy_dir = settings.preview_dir / "proxies"
+    proxy_dir.mkdir()
+    old_proxy = proxy_dir / "old-proxy.png"
     old.write_bytes(b"old")
     fresh.write_bytes(b"fresh")
     outside.write_bytes(b"keep")
+    old_proxy.write_bytes(b"proxy")
     os.utime(old, (now - 7200, now - 7200))
     os.utime(fresh, (now - 5, now - 5))
     os.utime(outside, (now - 7200, now - 7200))
+    os.utime(old_proxy, (now - 7200, now - 7200))
 
     with TestClient(create_app(settings)):
         pass
@@ -226,6 +244,7 @@ def test_startup_cleanup_only_touches_expired_preview_files(
     assert not old.exists()
     assert fresh.is_file()
     assert outside.is_file()
+    assert old_proxy.is_file()
     assert tmp_path in settings.data_dir.parents
 
 

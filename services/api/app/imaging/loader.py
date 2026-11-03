@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import warnings
 from dataclasses import dataclass
@@ -15,7 +16,11 @@ from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 
 from app.core.errors import AppError
 
+logger = logging.getLogger("frame_ai.loader")
+
 PROXY_VERSION = "loader/2"
+PROXY_SUBDIR = "proxies"
+PROXY_EDGE_STEP = 64
 _UINT16_MODES = {"I;16", "I;16B", "I;16L", "I;16N"}
 _SRGB_PROFILE = ImageCms.createProfile("sRGB")
 
@@ -169,6 +174,16 @@ def resize_to_max_edge(image: LoadedImage, max_edge: int) -> LoadedImage:
     return LoadedImage(rgb=np.ascontiguousarray(np.clip(resized, 0.0, 1.0)))
 
 
+def proxy_cache_directory(preview_dir: Path) -> Path:
+    return preview_dir / PROXY_SUBDIR
+
+
+def _aligned_proxy_edge(max_edge: int) -> int:
+    if max_edge <= 0:
+        raise ValueError("max_edge must be positive")
+    return ((max_edge + PROXY_EDGE_STEP - 1) // PROXY_EDGE_STEP) * PROXY_EDGE_STEP
+
+
 def proxy_cache_path(cache_dir: Path, original_sha256: str, max_edge: int) -> Path:
     try:
         digest = bytes.fromhex(original_sha256)
@@ -176,10 +191,9 @@ def proxy_cache_path(cache_dir: Path, original_sha256: str, max_edge: int) -> Pa
         raise ValueError("original_sha256 must be hexadecimal") from exc
     if len(digest) != 32:
         raise ValueError("original_sha256 must be a 64-character sha256 digest")
-    if max_edge <= 0:
-        raise ValueError("max_edge must be positive")
+    aligned_edge = _aligned_proxy_edge(max_edge)
     key = hashlib.sha256(
-        f"{original_sha256.lower()}|{PROXY_VERSION}|{max_edge}".encode()
+        f"{original_sha256.lower()}|{PROXY_VERSION}|{aligned_edge}".encode()
     ).hexdigest()
     return cache_dir / f"{key}.png"
 
@@ -190,12 +204,14 @@ def _quantize(image: LoadedImage) -> LoadedImage:
 
 
 def _write_proxy(image: LoadedImage, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
     data = np.clip(np.rint(image.rgb * 255.0), 0.0, 255.0).astype(np.uint8)
     temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
     try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(data, "RGB").save(temporary, format="PNG")
         os.replace(temporary, destination)
+    except OSError:
+        logger.warning("proxy_cache_write_failed path=%s", destination)
     finally:
         try:
             temporary.unlink()
@@ -211,17 +227,27 @@ def load_proxy(
     cache_dir: Path,
     max_pixels: int | None = None,
 ) -> LoadedImage:
-    path = proxy_cache_path(cache_dir, original_sha256, max_edge)
+    aligned_edge = _aligned_proxy_edge(max_edge)
+    path = proxy_cache_path(cache_dir, original_sha256, aligned_edge)
     if path.is_file():
         try:
-            return load_image(path)
+            cached = load_image(path)
         except AppError:
-            path.unlink(missing_ok=True)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        else:
+            try:
+                os.utime(path, None)
+            except OSError:
+                pass
+            return resize_to_max_edge(cached, max_edge)
 
     loaded = load_image(source, max_pixels=max_pixels)
-    if max(loaded.width, loaded.height) <= max_edge:
-        return loaded
+    if max(loaded.width, loaded.height) <= aligned_edge:
+        return resize_to_max_edge(loaded, max_edge)
 
-    proxy = _quantize(resize_to_max_edge(loaded, max_edge))
+    proxy = _quantize(resize_to_max_edge(loaded, aligned_edge))
     _write_proxy(proxy, path)
-    return proxy
+    return resize_to_max_edge(proxy, max_edge)

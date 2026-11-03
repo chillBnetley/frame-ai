@@ -7,7 +7,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from app.core.config import Settings
 from app.imaging.analyzer import ANALYZER_MAX_EDGE, ANALYZER_VERSION, analyze
-from app.imaging.loader import load_proxy
+from app.imaging.loader import load_proxy, proxy_cache_directory
 from app.models.analysis import AnalysisFeatures
 from app.services.image_service import ImageService
 
@@ -48,7 +48,7 @@ class AnalysisService:
             path,
             original_sha256=record.sha256,
             max_edge=ANALYZER_MAX_EDGE,
-            cache_dir=self.settings.preview_dir,
+            cache_dir=proxy_cache_directory(self.settings.preview_dir),
             max_pixels=self.settings.max_image_pixels,
         )
         features = analyze(

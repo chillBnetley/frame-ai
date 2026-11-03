@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.core.config import Settings
+from app.imaging.decoder import display_dimensions
 from app.repositories.db import connect, initialize_database, utc_now
 from app.repositories.image_registry import ImageAssetRecord, ImageRegistry
 
@@ -95,13 +96,14 @@ def import_registry(
                 skipped.append(SkippedRecord(image_id, "image header unreadable"))
                 continue
 
+            width, height = display_dimensions(record.width, record.height, orientation)
             migrated = ImageAssetRecord(
                 id=record.id,
                 original_name=record.original_name,
                 storage_key=record.storage_key,
                 mime_type=record.mime_type,
-                width=record.width,
-                height=record.height,
+                width=width,
+                height=height,
                 exif_orientation=orientation,
                 bytes=len(data),
                 sha256=record.sha256,

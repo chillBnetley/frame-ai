@@ -7,13 +7,16 @@ from pathlib import Path
 from threading import Barrier
 from uuid import uuid4
 
+import pytest
 from fastapi import UploadFile
 from starlette.datastructures import Headers
 
 from app.core.config import Settings
+from app.core.errors import AppError
 from app.repositories.db import initialize_database
 from app.repositories.image_registry import ImageAssetRecord
 from app.repositories.image_repo import SqliteImageRepository
+from app.repositories.original_store import OriginalImageStore
 from app.services.image_service import ConsistencyReport, ImageService
 from tests.conftest import make_image
 
@@ -95,6 +98,22 @@ def test_image_service_depends_on_repository_protocol(tmp_path: Path):
     assert repository.records == {record.id: record}
     assert (settings.data_dir / "originals" / f"{record.id}.png").read_bytes() == payload
     assert service.scan_consistency() == ConsistencyReport((), ())
+
+
+def test_original_store_removes_partial_file_when_writing_fails(tmp_path: Path, monkeypatch):
+    store = OriginalImageStore(tmp_path / "data", "originals")
+    image_id = str(uuid4())
+
+    def fail_fsync(_descriptor: int) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr("app.repositories.original_store.os.fsync", fail_fsync)
+
+    with pytest.raises(AppError) as failure:
+        store.save(image_id, ".png", b"image-bytes")
+
+    assert failure.value.code == "storage_error"
+    assert list(store.originals_dir.iterdir()) == []
 
 
 def test_consistency_scan_reports_orphans_and_dangling_records_without_deleting(

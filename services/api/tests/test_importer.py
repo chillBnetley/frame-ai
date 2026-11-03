@@ -36,14 +36,16 @@ def _record(
     sha256: str | None = None,
     mime_type: str = "image/png",
     exif_orientation: int = 1,
+    width: int = 64,
+    height: int = 48,
 ) -> ImageAssetRecord:
     return ImageAssetRecord(
         id=str(uuid4()),
         original_name="photo.png",
         storage_key=storage_key,
         mime_type=mime_type,
-        width=64,
-        height=48,
+        width=width,
+        height=height,
         exif_orientation=exif_orientation,
         bytes=len(payload) if payload is not None else 100,
         sha256=sha256 or (hashlib.sha256(payload).hexdigest() if payload is not None else "0" * 64),
@@ -122,6 +124,28 @@ def test_importer_recomputes_exif_orientation_from_original(tmp_path: Path):
     import_registry(settings)
 
     assert image_row(settings, record.id)["exif_orientation"] == 6
+
+
+def test_importer_stores_dimensions_in_display_orientation(tmp_path: Path):
+    settings = _settings(tmp_path)
+    settings.data_dir.mkdir(parents=True)
+    payload = make_image("JPEG", size=(320, 200), exif_orientation=6)
+    storage_key = _store(settings, payload, extension="jpg")
+    record = _record(
+        storage_key=storage_key,
+        payload=payload,
+        mime_type="image/jpeg",
+        exif_orientation=6,
+        width=320,
+        height=200,
+    )
+    ImageRegistry(settings.registry_path).add(record)
+
+    import_registry(settings)
+
+    row = image_row(settings, record.id)
+    assert (row["width"], row["height"]) == (200, 320)
+    assert row["exif_orientation"] == 6
 
 
 def test_image_service_imports_legacy_registry_at_startup(tmp_path: Path):

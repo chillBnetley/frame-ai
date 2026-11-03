@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
+import time
 from pathlib import Path
 
 import numpy as np
@@ -248,6 +250,43 @@ def test_proxy_cache_key_validates_hash_and_edge(tmp_path: Path):
         proxy_cache_path(tmp_path, "a" * 64, 0)
 
     first = proxy_cache_path(tmp_path, "a" * 64, 40)
-    second = proxy_cache_path(tmp_path, "a" * 64, 41)
+    same_bucket = proxy_cache_path(tmp_path, "a" * 64, 41)
+    next_bucket = proxy_cache_path(tmp_path, "a" * 64, 65)
     third = proxy_cache_path(tmp_path, "b" * 64, 40)
-    assert len({first, second, third}) == 3
+    assert first == same_bucket
+    assert len({first, next_bucket, third}) == 3
+
+
+def test_proxy_cache_hit_refreshes_mtime(tmp_path: Path):
+    payload = _encode_orientation(1)
+    digest = hashlib.sha256(payload).hexdigest()
+    cache_dir = tmp_path / "cache"
+    load_proxy(payload, original_sha256=digest, max_edge=40, cache_dir=cache_dir)
+    cache_file = proxy_cache_path(cache_dir, digest, 40)
+    old = time.time() - 7200
+    os.utime(cache_file, (old, old))
+
+    load_proxy(payload, original_sha256=digest, max_edge=40, cache_dir=cache_dir)
+
+    assert cache_file.stat().st_mtime >= time.time() - 5
+
+
+def test_proxy_write_failure_does_not_fail_the_render(tmp_path: Path, monkeypatch):
+    payload = _encode_orientation(1)
+    digest = hashlib.sha256(payload).hexdigest()
+    cache_dir = tmp_path / "cache"
+
+    def fail_replace(_source: str | os.PathLike[str], _target: str | os.PathLike[str]) -> None:
+        raise PermissionError("cache file is locked")
+
+    monkeypatch.setattr("app.imaging.loader.os.replace", fail_replace)
+
+    loaded = load_proxy(
+        payload,
+        original_sha256=digest,
+        max_edge=40,
+        cache_dir=cache_dir,
+    )
+
+    assert (loaded.width, loaded.height) == (40, 25)
+    assert list(cache_dir.glob("*.png")) == []

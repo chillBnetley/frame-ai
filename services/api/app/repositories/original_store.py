@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
+from uuid import uuid4
 
 from app.core.errors import AppError
 
@@ -33,16 +35,23 @@ class OriginalImageStore:
     def save(self, image_id: str, extension: str, data: bytes) -> str:
         storage_key = f"{self._originals_dir.name}/{image_id}{extension}"
         path = self._resolve_key(storage_key)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
         try:
-            with open(path, "xb") as handle:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.exists():
+                raise FileExistsError(path)
+            with open(temporary, "xb") as handle:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
+            os.replace(temporary, path)
         except FileExistsError as exc:
             raise AppError(500, "storage_conflict", "The image could not be stored.") from exc
         except OSError as exc:
             raise AppError(500, "storage_error", "The image could not be stored.") from exc
+        finally:
+            with contextlib.suppress(OSError):
+                temporary.unlink()
         return storage_key
 
     def resolve(self, storage_key: str) -> Path:
