@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -52,9 +52,15 @@ interface SessionErrorOption extends UploadErrorOption {
   requestId?: string;
 }
 
-function mockApi(
-  options: { uploadError?: UploadErrorOption; sessionError?: SessionErrorOption } = {},
-) {
+interface MockApiOptions {
+  uploadError?: UploadErrorOption;
+  sessionError?: SessionErrorOption;
+  revisionGate?: Promise<void>;
+}
+
+function mockApi(options: MockApiOptions = {}) {
+  let revisionCount = 0;
+  let lastRevisionId = SESSION_STATE.activeRevisionId;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.endsWith("/api/v1/health")) {
@@ -104,6 +110,33 @@ function mockApi(
         );
       }
       return jsonResponse(SESSION_STATE, 201);
+    }
+    if (
+      url.endsWith(`/api/v1/sessions/${SESSION_STATE.sessionId}/revisions`) &&
+      init?.method === "POST"
+    ) {
+      revisionCount += 1;
+      const body = JSON.parse(String(init.body)) as { recipe: unknown };
+      if (options.revisionGate && revisionCount === 1) {
+        await options.revisionGate;
+      }
+      const revisionId = `7f2e5c31-9a4b-4d6e-8c10-${String(revisionCount).padStart(12, "0")}`;
+      const response = {
+        ...SESSION_STATE,
+        activeRevisionId: revisionId,
+        headRevisionId: revisionId,
+        canUndo: true,
+        revision: {
+          ...SESSION_STATE.revision,
+          id: revisionId,
+          revisionNo: revisionCount + 1,
+          parentId: lastRevisionId,
+          source: "user",
+          recipe: body.recipe,
+        },
+      };
+      lastRevisionId = revisionId;
+      return jsonResponse(response, 201);
     }
     if (url.includes(`/api/v1/sessions/${SESSION_STATE.sessionId}/revisions`)) {
       return jsonResponse({ items: [], nextCursor: null });
@@ -164,6 +197,28 @@ async function uploadFile() {
   const input = screen.getByTestId("file-input");
   const file = new File([new Uint8Array([1, 2, 3, 4])], "street.png", { type: "image/png" });
   await userEvent.upload(input, file);
+}
+
+type FetchMock = ReturnType<typeof mockApi>;
+
+function callCount(fetchMock: FetchMock, suffix: string, method?: string): number {
+  return fetchMock.mock.calls.filter(([input, init]) => {
+    if (typeof input !== "string" || !input.endsWith(suffix)) {
+      return false;
+    }
+    return method === undefined || (init as RequestInit | undefined)?.method === method;
+  }).length;
+}
+
+function revisionBodies(fetchMock: FetchMock): Array<{ recipe: { adjustments?: { exposureEv?: number } } }> {
+  return fetchMock.mock.calls
+    .filter(
+      ([input, init]) =>
+        typeof input === "string" &&
+        input.endsWith(`/api/v1/sessions/${SESSION_STATE.sessionId}/revisions`) &&
+        (init as RequestInit | undefined)?.method === "POST",
+    )
+    .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 }
 
 beforeEach(() => {
@@ -300,5 +355,66 @@ describe("EditorWorkspace", () => {
     expect(await screen.findByText("拖入一张照片")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "取消上传" })).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not save or re-render while tabbing through untouched sliders", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/render")).toBeGreaterThan(0);
+    });
+
+    const rendersBefore = callCount(fetchMock, "/render");
+    const revisionsBefore = callCount(fetchMock, "/revisions", "POST");
+
+    screen.getByRole("slider", { name: "曝光" }).focus();
+    for (let step = 0; step < 32; step += 1) {
+      await userEvent.tab();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(callCount(fetchMock, "/render")).toBe(rendersBefore);
+    expect(callCount(fetchMock, "/revisions", "POST")).toBe(revisionsBefore);
+  });
+
+  it("keeps adjusting while saving and merges the latest draft into a follow-up save", async () => {
+    let releaseFirstSave!: () => void;
+    const revisionGate = new Promise<void>((resolve) => {
+      releaseFirstSave = resolve;
+    });
+    const fetchMock = mockApi({ revisionGate });
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+
+    const slider = screen.getByRole("slider", { name: "曝光" });
+    fireEvent.change(slider, { target: { value: "1" } });
+    fireEvent.pointerUp(slider);
+
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(1);
+    });
+    expect(await screen.findByText("保存中…")).toBeInTheDocument();
+    expect(slider).toBeEnabled();
+    expect(screen.getByRole("slider", { name: "对比度" })).toBeEnabled();
+
+    fireEvent.change(slider, { target: { value: "2" } });
+    fireEvent.pointerUp(slider);
+    releaseFirstSave();
+
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(2);
+    });
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
+
+    const bodies = revisionBodies(fetchMock);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]?.recipe.adjustments?.exposureEv).toBe(2);
   });
 });

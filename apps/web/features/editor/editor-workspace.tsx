@@ -178,6 +178,8 @@ function EditorStage({
   const [exportOpen, setExportOpen] = useState(false);
   const [commitNonce, setCommitNonce] = useState(0);
   const commitNonceRef = useRef(0);
+  const commitInFlightRef = useRef(false);
+  const pendingCommitRef = useRef(false);
   const revisionRef = useRef(state.activeRevisionId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -187,9 +189,25 @@ function EditorStage({
   const canExport = selectCanExport(state);
 
   const handleCommit = useCallback(async () => {
-    await requestFinal();
-    await commit();
-  }, [commit, requestFinal]);
+    if (commitInFlightRef.current || state.save.status === "saving") {
+      pendingCommitRef.current = true;
+      return;
+    }
+    if (!selectIsDirty(state)) {
+      return;
+    }
+    commitInFlightRef.current = true;
+    try {
+      await requestFinal();
+      await commit();
+    } finally {
+      commitInFlightRef.current = false;
+      if (pendingCommitRef.current) {
+        pendingCommitRef.current = false;
+        setCommitNonce((value) => value + 1);
+      }
+    }
+  }, [commit, requestFinal, state]);
 
   useEffect(() => {
     if (commitNonce === commitNonceRef.current) {
@@ -594,7 +612,7 @@ function EditorStage({
         >
           <AdjustmentPanel
             adjustments={state.draft.adjustments}
-            disabled={saving || cropMode || compareOpen}
+            disabled={cropMode || compareOpen}
             onChange={(key, value) => dispatch({ type: "draft-adjustment", key, value })}
             onCommit={requestCommit}
             onOpenCrop={handleOpenCrop}

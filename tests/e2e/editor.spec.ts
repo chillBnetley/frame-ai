@@ -38,6 +38,30 @@ async function setAdjustment(page: Page, name: string, value: string): Promise<v
   await expect(page.getByText("已保存")).toBeVisible();
 }
 
+test("keyboard slider adjustments keep focus and merge into one revision", async ({
+  page,
+}) => {
+  await uploadFixture(page);
+
+  const slider = page.getByRole("slider", { name: "曝光", exact: true });
+  await slider.focus();
+  await expect(slider).toBeFocused();
+
+  for (let press = 0; press < 5; press += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+
+  await expect(slider).toBeFocused();
+  await expect(slider).toHaveAttribute("aria-valuetext", "+0.05 EV");
+  await expect(slider).toBeEnabled();
+
+  await expect(page.getByRole("button", { name: /#2 · 手动/ })).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(page.getByRole("button", { name: /#3 · 手动/ })).toHaveCount(0);
+  await expect(slider).toBeFocused();
+});
+
 test("upload, adjust, compare, undo/redo/reset, and export JPEG", async ({
   page,
 }, testInfo) => {

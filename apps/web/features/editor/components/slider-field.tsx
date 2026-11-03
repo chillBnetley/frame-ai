@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { roundTo2 } from "@/lib/recipe";
 
@@ -17,7 +17,7 @@ export interface SliderFieldProps {
   onCommit: () => void;
 }
 
-const COMMIT_KEYS = new Set([
+const ADJUST_KEYS = new Set([
   "ArrowLeft",
   "ArrowRight",
   "ArrowUp",
@@ -27,6 +27,8 @@ const COMMIT_KEYS = new Set([
   "PageUp",
   "PageDown",
 ]);
+
+export const KEYBOARD_COMMIT_DEBOUNCE_MS = 400;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -63,6 +65,23 @@ export function SliderField({
   const rangeId = `${baseId}-range`;
   const numberId = `${baseId}-number`;
   const [text, setText] = useState<string | null>(null);
+  const keyboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearKeyboardTimer = useCallback(() => {
+    if (keyboardTimerRef.current !== null) {
+      clearTimeout(keyboardTimerRef.current);
+      keyboardTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return clearKeyboardTimer;
+  }, [clearKeyboardTimer]);
+
+  const commitNow = useCallback(() => {
+    clearKeyboardTimer();
+    onCommit();
+  }, [clearKeyboardTimer, onCommit]);
 
   const apply = (raw: number) => {
     if (!Number.isFinite(raw)) {
@@ -135,14 +154,20 @@ export function SliderField({
         aria-labelledby={labelId}
         aria-valuetext={adjustmentValueText(value, step, unit)}
         onChange={(event) => apply(Number(event.target.value))}
-        onPointerUp={onCommit}
+        onPointerUp={commitNow}
         onKeyUp={(event) => {
-          if (COMMIT_KEYS.has(event.key)) {
-            onCommit();
+          if (!ADJUST_KEYS.has(event.key)) {
+            return;
           }
+          clearKeyboardTimer();
+          keyboardTimerRef.current = setTimeout(() => {
+            keyboardTimerRef.current = null;
+            onCommit();
+          }, KEYBOARD_COMMIT_DEBOUNCE_MS);
         }}
-        onBlur={onCommit}
+        onBlur={commitNow}
         onDoubleClick={() => {
+          clearKeyboardTimer();
           apply(defaultValue);
           onCommit();
         }}

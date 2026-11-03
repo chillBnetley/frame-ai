@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SliderField } from "@/features/editor/components/slider-field";
+import {
+  KEYBOARD_COMMIT_DEBOUNCE_MS,
+  SliderField,
+} from "@/features/editor/components/slider-field";
 
 function renderField(overrides: Partial<Parameters<typeof SliderField>[0]> = {}) {
   const onChange = vi.fn();
@@ -24,6 +27,9 @@ function renderField(overrides: Partial<Parameters<typeof SliderField>[0]> = {})
 }
 
 describe("SliderField", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("exposes range, step, and a unit-aware aria-valuetext", () => {
     renderField({ value: 0.5 });
 
@@ -81,17 +87,61 @@ describe("SliderField", () => {
   });
 
   it("commits on adjustment keys but ignores unrelated key releases", () => {
-    const { onCommit } = renderField();
-    const slider = screen.getByRole("slider", { name: "曝光" });
+    vi.useFakeTimers();
+    try {
+      const { onCommit } = renderField();
+      const slider = screen.getByRole("slider", { name: "曝光" });
 
-    fireEvent.keyUp(slider, { key: "Tab" });
-    expect(onCommit).not.toHaveBeenCalled();
+      fireEvent.keyUp(slider, { key: "Tab" });
+      fireEvent.keyUp(slider, { key: "Shift" });
+      expect(onCommit).not.toHaveBeenCalled();
 
-    fireEvent.keyUp(slider, { key: "ArrowRight" });
-    expect(onCommit).toHaveBeenCalledTimes(1);
+      fireEvent.keyUp(slider, { key: "ArrowRight" });
+      expect(onCommit).not.toHaveBeenCalled();
 
-    fireEvent.keyUp(slider, { key: "Home" });
-    expect(onCommit).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(KEYBOARD_COMMIT_DEBOUNCE_MS);
+      expect(onCommit).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("merges repeated adjustment keys into a single commit", () => {
+    vi.useFakeTimers();
+    try {
+      const { onCommit } = renderField();
+      const slider = screen.getByRole("slider", { name: "曝光" });
+
+      for (let press = 0; press < 5; press += 1) {
+        fireEvent.keyUp(slider, { key: "ArrowRight" });
+      }
+      expect(onCommit).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(KEYBOARD_COMMIT_DEBOUNCE_MS - 1);
+      expect(onCommit).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(onCommit).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("flushes a pending keyboard commit when the slider loses focus", () => {
+    vi.useFakeTimers();
+    try {
+      const { onCommit } = renderField();
+      const slider = screen.getByRole("slider", { name: "曝光" });
+
+      fireEvent.keyUp(slider, { key: "ArrowUp" });
+      fireEvent.blur(slider);
+      expect(onCommit).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(KEYBOARD_COMMIT_DEBOUNCE_MS);
+      expect(onCommit).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("disables both controls when requested", () => {
