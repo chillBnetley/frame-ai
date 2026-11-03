@@ -111,6 +111,21 @@ describe("CompareView", () => {
     expect(screen.getByText(/对比基于已保存版本/)).toBeInTheDocument();
   });
 
+  it("falls back to contain when the two sides have different aspect ratios", async () => {
+    mockCompare(
+      jsonResponse({
+        original: { previewUrl: "/api/v1/previews/original", width: 800, height: 600 },
+        revision: { previewUrl: "/api/v1/previews/edited", width: 400, height: 800 },
+      }),
+    );
+    renderView();
+
+    const original = await screen.findByAltText("原图");
+    expect(original).toHaveClass("object-contain");
+    expect(screen.getByAltText("编辑后的版本")).toHaveClass("object-contain");
+    expect(screen.getByText(/比例不同/)).toBeInTheDocument();
+  });
+
   it("shows a readable error and retries", async () => {
     const fetchMock = mockCompare(
       jsonResponse({ error: { code: "internal_error", message: "boom", details: {} } }, 500),

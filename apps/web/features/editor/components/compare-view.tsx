@@ -64,6 +64,17 @@ export function CompareView({
   const data = dataState?.key === key ? dataState.data : null;
   const error = errorState?.key === key ? errorState.message : null;
   const loading = data === null && error === null;
+  const aspectMismatch =
+    data !== null &&
+    data.revision.height > 0 &&
+    data.original.height > 0 &&
+    Math.abs(
+      data.original.width / data.original.height -
+        data.revision.width / data.revision.height,
+    ) /
+      (data.revision.width / data.revision.height) >
+      0.01;
+  const imageFitClass = aspectMismatch ? "object-contain" : "object-fill";
 
   return (
     <section aria-labelledby="compare-heading" className="grid gap-3">
@@ -73,7 +84,7 @@ export function CompareView({
             前后对比
           </h4>
           <p className="mt-0.5 text-[10px] text-white/35">
-            左侧原图，右侧编辑版本（同一画布尺寸）。
+            左侧：原图（仅应用旋转/裁切），右侧：编辑版本。
             {dirty ? " 当前有未保存的调整，对比基于已保存版本。" : ""}
           </p>
         </div>
@@ -146,7 +157,7 @@ export function CompareView({
               <img
                 src={data.revision.previewUrl}
                 alt="编辑后的版本"
-                className="absolute inset-0 h-full w-full object-fill"
+                className={`absolute inset-0 h-full w-full ${imageFitClass}`}
                 draggable={false}
               />
             )}
@@ -154,7 +165,7 @@ export function CompareView({
             <img
               src={data.original.previewUrl}
               alt="原图"
-              className="absolute inset-0 h-full w-full object-fill"
+              className={`absolute inset-0 h-full w-full ${imageFitClass}`}
               style={holding ? undefined : { clipPath: `inset(0 ${100 - split}% 0 0)` }}
               draggable={false}
             />
@@ -190,6 +201,11 @@ export function CompareView({
           <p className="text-[10px] text-white/30">
             {data.revision.width} × {data.revision.height}
           </p>
+          {aspectMismatch && (
+            <p className="text-[10px] text-amber-200/70">
+              原图与编辑版本比例不同，已按完整画布显示以避免拉伸。
+            </p>
+          )}
         </div>
       )}
     </section>

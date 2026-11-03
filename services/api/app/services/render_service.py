@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-import hashlib
 import threading
 from collections import OrderedDict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
 from uuid import UUID
 
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.imaging.loader import load_proxy
-from app.imaging.output import JPEG_QUALITY, encode_image, to_uint8
+from app.imaging.output import JPEG_QUALITY, encode_image
 from app.imaging.params_map import DRAFT_MAX_EDGE, ENGINE_VERSION
 from app.imaging.pipeline import render as render_image
-from app.models.recipe import render_key
+from app.models.recipe import Adjustments, EditRecipe, render_key
 from app.models.render import CompareResponse, CompareSide, RenderRequest, RenderTier
 from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
@@ -162,14 +160,19 @@ class RenderService:
             if revision_id is None
             else self.sessions.get_revision(session_id, revision_id)
         )
-        record, path = self.images.get_original(str(state.image_id))
+        record, _ = self.images.get_original(str(state.image_id))
         edge = max(1, min(max_edge, self.settings.render_max_edge_limit))
         edge = min(edge, max(record.width, record.height))
 
-        original_id, original_width, original_height = self._original_preview(
-            record.sha256,
-            path,
-            edge,
+        adjustments = revision.recipe.adjustments
+        geometry_only = Adjustments(rotation_deg=adjustments.rotation_deg, crop=adjustments.crop)
+        original = self.render(
+            session_id,
+            RenderRequest(
+                recipe=EditRecipe(adjustments=geometry_only),
+                max_edge=edge,
+                quality="final",
+            ),
         )
         rendered = self.render(
             session_id,
@@ -177,9 +180,9 @@ class RenderService:
         )
         return CompareResponse(
             original=CompareSide(
-                preview_url=f"{PREVIEW_URL_PREFIX}/{original_id}",
-                width=original_width,
-                height=original_height,
+                preview_url=original.preview_url,
+                width=original.width,
+                height=original.height,
             ),
             revision=CompareSide(
                 preview_url=rendered.preview_url,
@@ -187,34 +190,6 @@ class RenderService:
                 height=rendered.height,
             ),
         )
-
-    def _original_preview(
-        self,
-        image_sha256: str,
-        path: Path,
-        edge: int,
-    ) -> tuple[str, int, int]:
-        preview_id = hashlib.sha256(
-            f"{image_sha256.lower()}|{ENGINE_VERSION}|original-preview|{edge}".encode()
-        ).hexdigest()
-        cached = self.previews.dimensions(preview_id)
-        if cached is not None:
-            return preview_id, cached[0], cached[1]
-
-        with self._render_slot():
-            cached = self.previews.dimensions(preview_id)
-            if cached is not None:
-                return preview_id, cached[0], cached[1]
-            proxy = load_proxy(
-                path,
-                original_sha256=image_sha256,
-                max_edge=edge,
-                cache_dir=self.previews.directory,
-                max_pixels=self.settings.max_image_pixels,
-            )
-            data = encode_image(to_uint8(proxy.rgb), image_format="jpeg", quality=JPEG_QUALITY)
-            self.previews.write(preview_id, data)
-        return preview_id, proxy.width, proxy.height
 
     def _resolve_edge(self, quality: RenderTier, max_edge: int | None) -> int:
         if max_edge is not None:

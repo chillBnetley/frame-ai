@@ -246,7 +246,7 @@ GET /api/v1/sessions/{sessionId}/compare?revisionId=<uuid>&maxEdge=1600
 
 - `revisionId` 省略时使用当前活动 revision；必须属于该会话。
 - `maxEdge` 默认 1600，范围 1…2560。
-- “原图”是 EXIF 方向归一后、按同一 `maxEdge` 缩放的代理图，**不含任何编辑**；两张图尺寸一致，便于像素对齐对比。
+- “原图”会应用该 revision 的旋转与裁切，但不做任何色调、色彩、细节调整；两张图尺寸一致，便于像素对齐对比。这是对任务书 §7.5“原图不含任何编辑”的有意偏离，原因见 [ADR-0003](decisions/ADR-0003-compare-geometry-alignment.md)。
 
 ### 4.5 export
 

@@ -51,11 +51,14 @@ def _commit(
     session: dict[str, object],
     *,
     exposure: float = 1.0,
+    adjustments: dict[str, object] | None = None,
 ) -> dict[str, object]:
     response = client.post(
         f"/api/v1/sessions/{session['sessionId']}/revisions",
         json={
-            "recipe": {"adjustments": {"exposureEv": exposure}},
+            "recipe": {
+                "adjustments": adjustments if adjustments is not None else {"exposureEv": exposure}
+            },
             "parentRevisionId": session["activeRevisionId"],
         },
     )
@@ -334,6 +337,43 @@ def test_compare_returns_aligned_original_and_revision_previews(
             ).status_code
             == 422
         )
+
+
+def test_compare_original_side_applies_geometry_without_tone_adjustments(
+    client: TestClient,
+):
+    session = _session(client, make_image(size=(1200, 700), color=(90, 110, 130)))
+    session = _commit(
+        client,
+        session,
+        adjustments={
+            "exposureEv": 0.8,
+            "rotationDeg": 9.0,
+            "crop": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.5},
+        },
+    )
+
+    response = client.get(
+        f"/api/v1/sessions/{session['sessionId']}/compare",
+        params={"maxEdge": 800},
+    )
+
+    assert response.status_code == 200, response.text
+    compare = response.json()
+    assert (compare["original"]["width"], compare["original"]["height"]) == (
+        compare["revision"]["width"],
+        compare["revision"]["height"],
+    )
+    assert compare["original"]["previewUrl"] != compare["revision"]["previewUrl"]
+
+    original = client.get(compare["original"]["previewUrl"])
+    edited = client.get(compare["revision"]["previewUrl"])
+    assert original.status_code == 200
+    assert edited.status_code == 200
+    original_pixels = np.asarray(Image.open(io.BytesIO(original.content)), dtype=np.float32)
+    edited_pixels = np.asarray(Image.open(io.BytesIO(edited.content)), dtype=np.float32)
+    assert edited_pixels.shape == original_pixels.shape
+    assert edited_pixels.mean() > original_pixels.mean() + 10
 
 
 @pytest.mark.parametrize("image_format", ["jpeg", "png"])
