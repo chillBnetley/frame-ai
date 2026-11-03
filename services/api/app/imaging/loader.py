@@ -15,8 +15,9 @@ from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 
 from app.core.errors import AppError
 
-PROXY_VERSION = "loader/1"
+PROXY_VERSION = "loader/2"
 _UINT16_MODES = {"I;16", "I;16B", "I;16L", "I;16N"}
+_SRGB_PROFILE = ImageCms.createProfile("sRGB")
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,33 @@ def _cmyk_to_rgb(image: Image.Image) -> Image.Image:
         except (ImageCms.PyCMSError, OSError):
             pass
     return image.convert("RGB")
+
+
+def _apply_embedded_profile(image: Image.Image) -> Image.Image:
+    raw = image.info.get("icc_profile")
+    if not isinstance(raw, bytes) or not raw or image.mode not in {"RGB", "RGBA"}:
+        return image
+    try:
+        source = ImageCms.ImageCmsProfile(BytesIO(raw))
+        if str(source.profile.xcolor_space).strip() != "RGB":
+            return image
+        if "srgb" in (ImageCms.getProfileDescription(source) or "").lower():
+            return image
+        converted = ImageCms.profileToProfile(
+            image.convert("RGB"),
+            source,
+            _SRGB_PROFILE,
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode="RGB",
+            flags=ImageCms.Flags.BLACKPOINTCOMPENSATION,
+        )
+    except (ImageCms.PyCMSError, OSError, ValueError, TypeError):
+        return image
+    if converted is None:
+        return image
+    if image.mode == "RGBA":
+        converted.putalpha(image.getchannel("A"))
+    return converted
 
 
 def _to_float_rgb(image: Image.Image) -> NDArray[np.float32]:
@@ -106,7 +134,8 @@ def load_image(
                     )
                 image.load()
                 oriented = ImageOps.exif_transpose(image)
-                rgb = _to_float_rgb(oriented)
+                managed = _apply_embedded_profile(oriented)
+                rgb = _to_float_rgb(managed)
     except AppError:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
