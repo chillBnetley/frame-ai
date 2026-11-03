@@ -4,6 +4,7 @@ import hashlib
 import io
 from uuid import uuid4
 
+import cv2
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -397,3 +398,48 @@ def test_export_round_trip_from_history_revision(
     initial_export = _export(client, session, initial, image_format=image_format)
     assert initial_export.status_code == 200
     assert initial_export.content != response.content
+
+
+def test_export_applies_a_full_recipe(client: TestClient):
+    session = _session(client)
+    initial = session["activeRevisionId"]
+    session = _commit(
+        client,
+        session,
+        adjustments={
+            "exposureEv": 0.4,
+            "contrast": 12,
+            "highlights": -20,
+            "shadows": 15,
+            "temperature": 8,
+            "tint": -4,
+            "saturation": 10,
+            "vibrance": 12,
+            "clarity": 20,
+            "vignette": 10,
+            "denoise": 10,
+            "sharpen": 15,
+            "grain": 10,
+            "rotationDeg": 2.0,
+            "crop": {"x": 0.05, "y": 0.05, "w": 0.9, "h": 0.9},
+        },
+    )
+
+    edited = _export(client, session, session["activeRevisionId"])
+    neutral = _export(client, session, initial)
+
+    assert edited.status_code == 200, edited.text
+    assert neutral.status_code == 200, neutral.text
+    assert "x-export-warning" not in edited.headers
+    with Image.open(io.BytesIO(edited.content)) as image:
+        width, height = image.size
+        assert 0 < width < 640
+        assert 0 < height < 480
+        edited_pixels = np.asarray(image.convert("RGB"), dtype=np.float32)
+    with Image.open(io.BytesIO(neutral.content)) as image:
+        neutral_pixels = cv2.resize(
+            np.asarray(image.convert("RGB"), dtype=np.float32),
+            (edited_pixels.shape[1], edited_pixels.shape[0]),
+            interpolation=cv2.INTER_AREA,
+        )
+    assert np.abs(edited_pixels - neutral_pixels).mean() > 5

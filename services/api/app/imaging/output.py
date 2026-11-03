@@ -29,8 +29,11 @@ def to_uint8(rgb: NDArray[np.float32], *, inplace: bool = False) -> NDArray[np.u
 
 @lru_cache(maxsize=1)
 def srgb_icc_profile() -> bytes:
-    profile: bytes = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
-    return profile
+    profile = bytearray(ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes())
+    # lcms stamps the current time into the profile header, which would make
+    # encoded bytes differ between processes. Pin it (2020-01-01 00:00:00).
+    profile[24:36] = bytes.fromhex("07e400010001000000000000")
+    return bytes(profile)
 
 
 def encode_image(

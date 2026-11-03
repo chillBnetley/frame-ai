@@ -65,6 +65,14 @@ def test_encoding_is_byte_for_byte_deterministic():
     assert encode_image(pixels, image_format="png") == encode_image(pixels, image_format="png")
 
 
+def test_srgb_profile_creation_time_is_pinned():
+    # lcms writes the current time into the header; a pinned value keeps
+    # encoded output identical across processes.
+    profile = srgb_icc_profile()
+
+    assert profile[24:36] == bytes.fromhex("07e400010001000000000000")
+
+
 def test_embedded_profile_is_srgb():
     profile = ImageCms.ImageCmsProfile(BytesIO(srgb_icc_profile()))
 

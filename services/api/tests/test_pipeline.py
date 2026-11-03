@@ -164,7 +164,7 @@ def test_full_frame_crop_matches_no_crop():
 
 
 def test_render_is_byte_for_byte_deterministic():
-    loaded = _load_pixels(_synthetic_photo(320, 240))
+    pixels = _synthetic_photo(320, 240)
     adjustments = Adjustments(
         exposure_ev=0.25,
         contrast=10,
@@ -174,14 +174,15 @@ def test_render_is_byte_for_byte_deterministic():
         saturation=10,
         clarity=25,
         vignette=15,
+        denoise=20,
         sharpen=20,
         grain=30,
     )
 
-    first = render(loaded, adjustments, image_sha256=SHA_A, quality="final")
-    second = render(loaded, adjustments, image_sha256=SHA_A, quality="final")
+    first = render(_load_pixels(pixels), adjustments, image_sha256=SHA_A, quality="final")
+    second = render(_load_pixels(pixels), adjustments, image_sha256=SHA_A, quality="final")
 
-    assert np.array_equal(first.rgb, second.rgb)
+    assert first.rgb.tobytes() == second.rgb.tobytes()
 
 
 def test_grain_pattern_only_depends_on_the_original_digest():
