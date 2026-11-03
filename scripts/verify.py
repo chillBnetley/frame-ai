@@ -46,6 +46,7 @@ def _gates() -> list[Gate]:
         Gate("mypy app", [python, "-m", "mypy", "app"], API_DIR),
         Gate("pytest", [python, "-m", "pytest", "-q"], API_DIR),
         Gate("openapi sync", [python, "scripts/export_openapi.py", "--check"], API_DIR),
+        Gate("review repro rotation", [python, "scripts/review_repro_phase2.py", "rotation"], ROOT),
         Gate("npm lint", [*npm, "run", "lint"], WEB_DIR),
         Gate("npm typecheck", [*npm, "run", "typecheck"], WEB_DIR),
         Gate("npm test", [*npm, "run", "test"], WEB_DIR),

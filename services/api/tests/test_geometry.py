@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import cv2
 import numpy as np
 import pytest
 
@@ -13,6 +14,8 @@ from app.models.recipe import Crop
 
 SIZES = [(320, 200), (200, 320), (240, 240)]
 ANGLES = [0.0, 0.25, -0.25, 7.5, -7.5, 15.0, -15.0]
+OUTSIDE_SIZES = SIZES + [(2000, 500), (160, 100)]
+OUTSIDE_ANGLES = [0.25, 3.0, 7.5, 15.0, -15.0]
 
 
 @pytest.mark.parametrize("width,height", SIZES)
@@ -30,6 +33,37 @@ def test_rotation_uses_the_inscribed_dimensions(width: int, height: int, angle: 
     assert rotated.dtype == np.float32
     assert float(rotated.min()) > 1.0 - 1e-5
     assert float(rotated.max()) <= 1.0 + 1e-5
+
+
+@pytest.mark.parametrize("width,height", OUTSIDE_SIZES)
+@pytest.mark.parametrize("angle", OUTSIDE_ANGLES)
+@pytest.mark.parametrize("quality", ["draft", "final"])
+def test_rotation_never_samples_outside_the_source(
+    width: int,
+    height: int,
+    angle: float,
+    quality: str,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Mirror padding hides out-of-source sampling; constant padding exposes it.
+    monkeypatch.setattr(cv2, "BORDER_REFLECT_101", cv2.BORDER_CONSTANT)
+    rgb = np.ones((height, width, 3), dtype=np.float32)
+
+    out = rotate_inscribed(rgb, angle, quality=quality)  # type: ignore[arg-type]
+
+    assert float((out.min(axis=2) < 0.5).mean()) == 0.0
+    assert float(out.min()) > 0.75
+
+
+def test_rotation_keeps_content_scale():
+    height, width = 600, 900
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+    source = np.stack([xx / width, yy / height, np.zeros_like(xx)], axis=-1)
+
+    out = rotate_inscribed(source, 10.0, quality="final")
+
+    row = out[out.shape[0] // 2, :, :2]
+    assert float(np.hypot(*(row[-1] - row[0]))) <= 1.0
 
 
 def test_zero_rotation_is_a_noop():

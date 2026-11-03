@@ -73,6 +73,8 @@ FastAPI
 
 `adjustments` 是唯一渲染权威；`styleId/styleStrength` 只作为来源元数据（D-10）。任何像素算法或常数变化都必须提升 `ENGINE_VERSION` 并重新生成黄金图。
 
+引擎版本从 `frame-engine/2` 起，旋转只缩小画布到最大内接矩形，内容保持原比例（矩阵缩放固定为 1.0），因此画布不再包含源图之外的镜像像素；旧预览缓存键含引擎版本，会自动失效，已保存的 revision 是配方 JSON，不受影响。
+
 ## 目录
 
 ```text

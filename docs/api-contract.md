@@ -211,7 +211,7 @@ POST /api/v1/sessions/{sessionId}/render
 
 - `quality ∈ {draft, final}`，默认 `final`。
 - `maxEdge` 默认 1600，范围 1…2560；实际边长不会超过原图最长边。
-- 响应中的 `width/height` 是**旋转内接并裁切后的画布尺寸**，前端据此绘制裁切框与对比容器（D-04）。
+- 响应中的 `width/height` 是**旋转内接并裁切后的画布尺寸**，前端据此绘制裁切框与对比容器（D-04）。引擎版本 `frame-engine/2` 起，旋转只缩小画布，内容不再二次缩放，画布不包含源图之外的像素。
 - render 无状态：不改会话、不新增 revision，只可能写入预览缓存文件。
 - `cacheHit=true` 表示命中内容寻址缓存，未重新渲染。
 

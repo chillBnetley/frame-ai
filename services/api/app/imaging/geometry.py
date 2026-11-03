@@ -34,7 +34,9 @@ def rotate_inscribed(
     target_height = max(1, round(height * scale))
 
     center = ((width - 1) / 2.0, (height - 1) / 2.0)
-    matrix = cv2.getRotationMatrix2D(center, -rotation_deg, scale)
+    # The canvas is already the largest inscribed rectangle; scaling the content
+    # again would expose pixels beyond the source and mirror them at the border.
+    matrix = cv2.getRotationMatrix2D(center, -rotation_deg, 1.0)
     matrix[0, 2] += (target_width - 1) / 2.0 - center[0]
     matrix[1, 2] += (target_height - 1) / 2.0 - center[1]
 
