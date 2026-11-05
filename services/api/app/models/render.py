@@ -22,6 +22,7 @@ class RenderResponse(CamelModel):
     height: int
     quality: RenderTier
     cache_hit: bool
+    warnings: list[str] = Field(default_factory=list)
 
 
 class CompareSide(CamelModel):
@@ -33,3 +34,4 @@ class CompareSide(CamelModel):
 class CompareResponse(CamelModel):
     original: CompareSide
     revision: CompareSide
+    warnings: list[str] = Field(default_factory=list)

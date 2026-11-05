@@ -16,6 +16,7 @@ const PREVIEW: PreviewState = {
   seq: 1,
   version: 1,
   error: null,
+  warnings: [],
 };
 
 const observers: FakeIntersectionObserver[] = [];

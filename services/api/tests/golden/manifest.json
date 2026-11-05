@@ -1,5 +1,5 @@
 {
-  "engineVersion": "frame-engine/2",
+  "engineVersion": "frame-engine/10",
   "tolerance": 1,
   "sources": {
     "ramp": "9b15597deaa6671ee74391b1e2262615347e4513421ce69ed3cdca91ff9256e2",
@@ -33,6 +33,26 @@
       "file": "ramp__detail.png"
     },
     {
+      "image": "ramp",
+      "recipe": "curve",
+      "file": "ramp__curve.png"
+    },
+    {
+      "image": "ramp",
+      "recipe": "hsl",
+      "file": "ramp__hsl.png"
+    },
+    {
+      "image": "ramp",
+      "recipe": "grading",
+      "file": "ramp__grading.png"
+    },
+    {
+      "image": "ramp",
+      "recipe": "local",
+      "file": "ramp__local.png"
+    },
+    {
       "image": "detail",
       "recipe": "neutral",
       "file": "detail__neutral.png"
@@ -58,6 +78,26 @@
       "file": "detail__detail.png"
     },
     {
+      "image": "detail",
+      "recipe": "curve",
+      "file": "detail__curve.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "hsl",
+      "file": "detail__hsl.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "grading",
+      "file": "detail__grading.png"
+    },
+    {
+      "image": "detail",
+      "recipe": "local",
+      "file": "detail__local.png"
+    },
+    {
       "image": "mixed",
       "recipe": "neutral",
       "file": "mixed__neutral.png"
@@ -81,6 +121,26 @@
       "image": "mixed",
       "recipe": "detail",
       "file": "mixed__detail.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "curve",
+      "file": "mixed__curve.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "hsl",
+      "file": "mixed__hsl.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "grading",
+      "file": "mixed__grading.png"
+    },
+    {
+      "image": "mixed",
+      "recipe": "local",
+      "file": "mixed__local.png"
     }
   ]
 }

@@ -6,8 +6,11 @@ import pytest
 
 from app.imaging.geometry import (
     apply_geometry,
+    canvas_size,
     crop_pixels,
+    export_target_size,
     inscribed_scale,
+    resize_exact,
     rotate_inscribed,
 )
 from app.models.recipe import Crop
@@ -117,3 +120,99 @@ def test_geometry_applies_rotation_before_crop():
     rotated_height = round(80 * scale)
     assert abs(result.shape[1] - round(rotated_width * 0.5)) <= 1
     assert abs(result.shape[0] - round(rotated_height * 0.5)) <= 1
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+@pytest.mark.parametrize("angle", ANGLES)
+def test_canvas_size_matches_the_rendered_geometry(width: int, height: int, angle: float):
+    rgb = np.ones((height, width, 3), dtype=np.float32)
+
+    rotated = rotate_inscribed(rgb, angle)
+
+    assert canvas_size(width, height, angle, None) == (
+        rotated.shape[1],
+        rotated.shape[0],
+    )
+
+
+def test_canvas_size_applies_crop_after_rotation():
+    crop = Crop(x=0.25, y=0.25, w=0.5, h=0.5)
+    rgb = np.ones((80, 100, 3), dtype=np.float32)
+
+    cropped = apply_geometry(rgb, rotation_deg=15.0, crop=crop)
+
+    assert canvas_size(100, 80, 15.0, crop) == (cropped.shape[1], cropped.shape[0])
+
+
+def test_export_target_without_max_edge_keeps_the_full_canvas():
+    width, height, scale = export_target_size(1000, 600, 7.5, None, None)
+
+    assert (width, height) == canvas_size(1000, 600, 7.5, None)
+    assert scale == 1.0
+
+
+@pytest.mark.parametrize("max_edge", [1200, 1000])
+def test_export_target_never_upscales(max_edge: int):
+    canvas_width, canvas_height = canvas_size(1000, 600, 0.0, None)
+
+    width, height, scale = export_target_size(1000, 600, 0.0, None, max_edge)
+
+    assert (width, height) == (canvas_width, canvas_height)
+    assert scale == 1.0
+
+
+def test_export_target_just_below_the_canvas_downscales_by_one_pixel():
+    width, height, scale = export_target_size(1000, 600, 0.0, None, 999)
+
+    assert (width, height) == (999, 599)
+    assert scale == pytest.approx(999 / 1000)
+
+
+@pytest.mark.parametrize(
+    ("size", "angle", "crop", "max_edge"),
+    [
+        ((1000, 600), 0.0, None, 500),
+        ((1000, 600), 7.5, None, 500),
+        ((1000, 600), -7.5, Crop(x=0.1, y=0.2, w=0.7, h=0.6), 480),
+        ((600, 1000), 15.0, Crop(x=0.0, y=0.0, w=0.5, h=1.0), 240),
+        ((321, 997), 3.0, Crop(x=0.25, y=0.05, w=0.5, h=0.9), 64),
+    ],
+)
+def test_export_target_long_edge_is_exact(
+    size: tuple[int, int],
+    angle: float,
+    crop: Crop | None,
+    max_edge: int,
+):
+    width, height, scale = export_target_size(size[0], size[1], angle, crop, max_edge)
+
+    assert max(width, height) == max_edge
+    canvas_width, canvas_height = canvas_size(size[0], size[1], angle, crop)
+    assert scale == max_edge / max(canvas_width, canvas_height)
+    assert abs(width / height - canvas_width / canvas_height) < 0.02
+
+
+def test_resize_exact_preserves_dtype_and_is_a_noop_for_matching_size():
+    float_pixels = np.ones((40, 60, 3), dtype=np.float32)
+    byte_pixels = np.zeros((40, 60, 3), dtype=np.uint8)
+
+    assert resize_exact(float_pixels, 60, 40) is float_pixels
+    downscaled = resize_exact(float_pixels, 30, 20)
+    upscaled = resize_exact(byte_pixels, 90, 60)
+
+    assert downscaled.shape == (20, 30, 3)
+    assert downscaled.dtype == np.float32
+    assert upscaled.shape == (60, 90, 3)
+    assert upscaled.dtype == np.uint8
+
+
+def test_resize_exact_of_a_gradient_stays_in_range():
+    ramp = np.repeat((np.arange(64, dtype=np.float32) / 63.0)[None, :, None], 8, axis=0)
+    source = np.dstack([ramp, 1.0 - ramp, np.ones_like(ramp)])
+
+    resized = resize_exact(source, 32, 8)
+
+    assert resized.shape == (8, 32, 3)
+    assert float(resized.min()) >= -1e-6
+    assert float(resized.max()) <= 1.0 + 1e-6
+    assert float(resized[0, -1, 0]) > float(resized[0, 0, 0])

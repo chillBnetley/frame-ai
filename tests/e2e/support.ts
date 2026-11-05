@@ -5,6 +5,11 @@ export const ROOT = path.resolve(__dirname, "../..");
 export const ARTIFACTS = path.join(ROOT, "tests", "e2e", ".artifacts");
 export const FIXTURE_JSON = path.join(ARTIFACTS, "fixture.json");
 
+export function analysisFixtureJson(projectName: string): string {
+  const variant = projectName.includes("mobile") ? "mobile" : "desktop";
+  return path.join(ARTIFACTS, `analysis-fixture-${variant}.json`);
+}
+
 export const PYTHON =
   process.env.E2E_PYTHON ??
   (process.platform === "win32"

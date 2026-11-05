@@ -14,7 +14,7 @@ from app.imaging.params_map import (
 )
 from app.imaging.tone import (
     linear_to_srgb,
-    luminance_srgb,
+    luma_srgb,
     smoothstep,
     srgb_to_linear,
 )
@@ -54,7 +54,7 @@ def apply_clarity(rgb: RgbArray, clarity: float) -> RgbArray:
         width,
         height,
     )
-    luminance = luminance_srgb(rgb)
+    luminance = luma_srgb(rgb)
     detail = luminance - _blur(luminance, sigma)
     midtone = np.clip(np.float32(4.0) * luminance * (np.float32(1.0) - luminance), 0.0, 1.0)
     delta = detail * midtone * np.float32(CLARITY_STRENGTH * clarity / 100.0)

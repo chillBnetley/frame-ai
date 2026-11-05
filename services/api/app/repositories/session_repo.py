@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from app.models.recipe import EditRecipe, recipe_hash
 from app.repositories.db import connect, utc_now
 
 
@@ -74,6 +75,21 @@ SELECT id FROM ancestors WHERE parent_id = ? LIMIT 1
 
 def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value)
+
+
+def _current_recipe_hash(recipe_json: str, stored_hash: str) -> str:
+    """Hash a stored recipe with the current code.
+
+    Revisions written under an older schema (e.g. v1 before the v2 relabel)
+    carry a summary of their era's canonical form.  Comparing that stale value
+    to a freshly computed hash would report a semantic difference that does not
+    exist, so re-derive it whenever the payload still validates.  The column
+    stays a cache; it makes no cross-version constancy promise.
+    """
+    try:
+        return recipe_hash(EditRecipe.model_validate_json(recipe_json))
+    except ValueError:
+        return stored_hash
 
 
 def _to_session(row: sqlite3.Row) -> SessionRecord:
@@ -205,8 +221,12 @@ class SqliteSessionRepository:
                         (normalized_session, idempotency_key),
                     ).fetchone()
                     if existing is not None:
+                        existing_hash = _current_recipe_hash(
+                            str(existing["recipe_json"]),
+                            str(existing["recipe_hash"]),
+                        )
                         if (
-                            str(existing["recipe_hash"]) != recipe_hash
+                            existing_hash != recipe_hash
                             or str(existing["parent_id"] or "").lower() != parent_id.lower()
                         ):
                             raise IdempotencyKeyReuseError(str(existing["id"]))
@@ -353,7 +373,11 @@ class SqliteSessionRepository:
             try:
                 session = self._require_session(connection, normalized_session)
                 active = self._revision_row(connection, session.active_revision_id)
-                if str(active["recipe_hash"]) == default_recipe_hash:
+                active_hash = _current_recipe_hash(
+                    str(active["recipe_json"]),
+                    str(active["recipe_hash"]),
+                )
+                if active_hash == default_recipe_hash:
                     connection.rollback()
                     return False
                 now = utc_now()

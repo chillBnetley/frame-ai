@@ -6,6 +6,7 @@ import {
   describeEditorError,
   editorErrorMessage,
   isSilentEditorError,
+  validationFields,
 } from "@/lib/error-messages";
 
 describe("describeUploadError", () => {
@@ -39,7 +40,7 @@ describe("describeEditorError", () => {
     ["nothing_to_undo", "没有可撤销的步骤。"],
     ["nothing_to_redo", "没有可重做的步骤。"],
     ["session_not_found", "找不到这张图片或会话，可能已被清理。请重新上传。"],
-    ["server_busy", "正在处理另一张高清导出，请稍后几秒再试。"],
+    ["server_busy", "服务器内存不足或正在处理另一张高清导出，请稍后几秒再试。"],
     ["network_error", "无法连接后端服务。请确认已启动 API。"],
     ["not_found", "服务接口不存在，可能是后端版本过旧。请重启 API 后重试。"],
   ])("maps %s to Chinese copy", (code, expected) => {
@@ -50,12 +51,12 @@ describe("describeEditorError", () => {
 
   it("explains export memory estimates with the configured limit", () => {
     expect(
-      editorErrorMessage("export_too_large", { estimatedPeakMb: 4700, limitMb: 3072 }),
+      editorErrorMessage("export_too_large", { estimatedPeakMb: 5643, limitMb: 3072 }),
     ).toBe(
-      "这张图在当前调整下导出需要约 4700 MB 内存，超过上限 3072 MB。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。",
+      "这张图在当前调整下导出需要约 5643 MB 内存，超过上限 3072 MB。可以减少调整项、选择更小的导出长边，或调高 FRAME_EXPORT_MAX_RSS_MB。",
     );
     expect(editorErrorMessage("export_too_large")).toBe(
-      "这张图在当前调整下导出所需内存超过上限。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。",
+      "这张图在当前调整下导出所需内存超过上限。可以减少调整项、选择更小的导出长边，或调高 FRAME_EXPORT_MAX_RSS_MB。",
     );
   });
 
@@ -63,6 +64,28 @@ describe("describeEditorError", () => {
     expect(editorErrorMessage("validation_error", { field: "adjustments.crop" })).toBe(
       "有参数超出范围，已恢复到上次有效值（adjustments.crop）。",
     );
+  });
+
+  it("reads field names from the unified details.fields objects", () => {
+    expect(
+      editorErrorMessage("validation_error", {
+        fields: [
+          { field: "maxEge", rule: "extra_forbidden", limit: {}, message: "Extra inputs." },
+          { field: "adjustments.exposureEv", rule: "less_than", limit: { le: 5 }, message: "x" },
+        ],
+      }),
+    ).toBe("有参数超出范围，已恢复到上次有效值（maxEge）。");
+
+    expect(
+      validationFields({
+        fields: [
+          { field: "a", rule: "missing", limit: {}, message: "x" },
+          { field: "b", rule: "missing", limit: {}, message: "x" },
+        ],
+      }),
+    ).toEqual(["a", "b"]);
+    expect(validationFields({ fields: [] })).toEqual([]);
+    expect(validationFields({})).toEqual([]);
   });
 
   it("keeps preview_expired silent", () => {

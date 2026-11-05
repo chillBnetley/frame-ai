@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -9,8 +10,18 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.core.config import Settings
+from app.imaging.local_masks import configure_mask_cache
 from app.main import create_app
 from app.repositories.db import connect
+
+
+@pytest.fixture(autouse=True)
+def isolated_mask_cache() -> Iterator[None]:
+    # The weight cache is process-global and create_app() sizes it from
+    # settings; reset it so one test never inherits another's entries.
+    configure_mask_cache(0)
+    yield
+    configure_mask_cache(0)
 
 
 @pytest.fixture

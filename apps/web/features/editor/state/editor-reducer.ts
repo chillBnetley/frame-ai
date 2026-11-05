@@ -29,6 +29,7 @@ export interface PreviewState {
   seq: number;
   version: number;
   error: EditorError | null;
+  warnings: string[];
 }
 
 export interface EditorSaveState {
@@ -76,6 +77,7 @@ export type EditorAction =
       width: number;
       height: number;
       quality: PreviewQuality;
+      warnings: string[];
     }
   | { type: "preview-error"; seq: number; error: EditorError }
   | { type: "save-start"; idempotencyKey: string; fingerprint: string }
@@ -102,6 +104,7 @@ function initialPreview(): PreviewState {
     seq: 0,
     version: 0,
     error: null,
+    warnings: [],
   };
 }
 
@@ -116,11 +119,7 @@ function initialSave(): EditorSaveState {
 }
 
 export function createInitialEditorState(): EditorState {
-  const recipe = normalizeRecipe({
-    schemaVersion: "1.0",
-    styleId: "natural",
-    styleStrength: 0,
-  });
+  const recipe = normalizeRecipe({});
   return {
     phase: "empty",
     sessionId: null,
@@ -261,6 +260,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
           seq: action.seq,
           version: state.preview.version + 1,
           error: null,
+          warnings: action.warnings,
         },
       };
 

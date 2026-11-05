@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from app.imaging.local import apply_clarity, apply_local, apply_vignette, vignette_falloff
-from app.imaging.tone import luminance_srgb
+from app.imaging.tone import luma_srgb
 
 
 def _textured_midtones(size: tuple[int, int] = (72, 96)) -> np.ndarray:
@@ -24,13 +24,13 @@ def test_neutral_local_operations_are_identity():
 
 def test_positive_clarity_increases_midtone_local_contrast():
     rgb = _textured_midtones()
-    before = float(np.std(luminance_srgb(rgb)))
+    before = float(np.std(luma_srgb(rgb)))
 
     sharpened = apply_clarity(rgb, 60)
     softened = apply_clarity(rgb, -60)
 
-    assert float(np.std(luminance_srgb(sharpened))) > before
-    assert float(np.std(luminance_srgb(softened))) < before
+    assert float(np.std(luma_srgb(sharpened))) > before
+    assert float(np.std(luma_srgb(softened))) < before
     assert sharpened.dtype == np.float32
     assert 0.0 <= float(sharpened.min())
     assert float(sharpened.max()) <= 1.0
@@ -83,3 +83,12 @@ def test_apply_local_runs_clarity_before_vignette():
         apply_local(rgb, clarity=35, vignette=25),
         apply_vignette(apply_clarity(rgb, 35), 25),
     )
+
+
+def test_non_finite_input_does_not_raise():
+    rgb = np.array([[[np.nan, 0.5, np.inf], [-np.inf, 0.2, 0.8]]], dtype=np.float32)
+
+    result = apply_local(rgb, clarity=40, vignette=20)
+
+    assert result.shape == rgb.shape
+    assert result.dtype == np.float32

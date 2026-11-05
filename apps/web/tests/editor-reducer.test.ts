@@ -26,7 +26,7 @@ const NETWORK_ERROR: EditorError = {
   details: {},
 };
 
-function previewReady(seq: number, url: string) {
+function previewReady(seq: number, url: string, warnings: string[] = []) {
   return {
     type: "preview-ready" as const,
     seq,
@@ -34,6 +34,7 @@ function previewReady(seq: number, url: string) {
     width: 1600,
     height: 1200,
     quality: "final" as const,
+    warnings,
   };
 }
 
@@ -171,6 +172,17 @@ describe("editorReducer preview ordering", () => {
     state = editorReducer(stale, { type: "preview-error", seq: 3, error: NETWORK_ERROR });
     expect(state.preview.status).toBe("error");
     expect(state.preview.url).toBe("/second");
+  });
+
+  it("replaces render warnings with each successful preview", () => {
+    const warned = editorReducer(
+      readyEditorState(),
+      previewReady(1, "/first", ["local_mask_missing:mask_gone"]),
+    );
+    expect(warned.preview.warnings).toEqual(["local_mask_missing:mask_gone"]);
+
+    const clean = editorReducer(warned, previewReady(2, "/second"));
+    expect(clean.preview.warnings).toEqual([]);
   });
 });
 

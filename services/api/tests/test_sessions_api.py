@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
+from app.models.recipe import EditRecipe, recipe_hash
+from app.repositories.db import connect, utc_now
 from tests.conftest import make_image, upload
 
 
@@ -52,6 +56,41 @@ def _get(client: TestClient, session_id: object) -> dict[str, object]:
     return response.json()
 
 
+def _insert_legacy_revision(
+    settings: Settings,
+    session: dict[str, object],
+    *,
+    recipe_json: str,
+    idempotency_key: str | None = None,
+) -> str:
+    """Append a revision the way a pre-v2 build would have stored it."""
+    session_id = str(session["sessionId"])
+    parent_id = str(session["activeRevisionId"])
+    revision_id = str(uuid4())
+    stored_hash = hashlib.sha256(recipe_json.encode("utf-8")).hexdigest()
+    assert stored_hash != recipe_hash(EditRecipe.model_validate_json(recipe_json))
+    now = utc_now()
+    connection = connect(settings.database_path)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            "INSERT INTO edit_revision "
+            "(id, session_id, parent_id, revision_no, recipe_json, recipe_hash, "
+            " source, idempotency_key, created_at) "
+            "VALUES (?, ?, ?, 2, ?, ?, 'user', ?, ?)",
+            (revision_id, session_id, parent_id, recipe_json, stored_hash, idempotency_key, now),
+        )
+        connection.execute(
+            "UPDATE edit_session SET active_revision_id = ?, head_revision_id = ?, "
+            "updated_at = ? WHERE id = ?",
+            (revision_id, revision_id, now, session_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return revision_id
+
+
 def test_session_creation_starts_with_initial_revision(client: TestClient):
     image_id = _image_id(client)
 
@@ -90,6 +129,37 @@ def test_commit_creates_active_revision_and_updates_head(client: TestClient):
     assert state["headRevisionId"] == state["revision"]["id"]
     assert state["canUndo"] is True
     assert state["canRedo"] is False
+
+
+def test_commit_upgrades_a_legacy_recipe(client: TestClient):
+    session = _new_session(client)
+
+    response = _commit(
+        client,
+        session,
+        recipe={
+            "schemaVersion": "1.0",
+            "styleId": "film",
+            "styleStrength": 40,
+            "adjustments": {"exposureEv": 0.5, "contrast": 10},
+            "rationale": ["legacy decision"],
+            "warnings": [],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    recipe = response.json()["revision"]["recipe"]
+    assert recipe["schemaVersion"] == "2.0"
+    assert recipe["styleId"] == "film"
+    assert recipe["styleStrength"] == 40
+    assert recipe["adjustments"]["exposureEv"] == 0.5
+    assert recipe["adjustments"]["contrast"] == 10
+    assert recipe["adjustments"]["whites"] == 0
+    assert recipe["adjustments"]["blacks"] == 0
+    assert recipe["curve"] == {"master": [], "red": [], "green": [], "blue": []}
+    assert recipe["localAdjustments"] == []
+    assert recipe["output"] == {"format": "jpeg", "quality": 92, "colorSpace": "sRGB"}
+    assert recipe["rationale"] == ["legacy decision"]
 
 
 def test_commit_with_stale_parent_returns_revision_conflict(client: TestClient):
@@ -289,6 +359,50 @@ def test_reset_creates_a_default_revision_and_keeps_history(client: TestClient):
     assert again.json() == state
     listing = client.get(f"/api/v1/sessions/{session['sessionId']}/revisions").json()
     assert [item["revisionNo"] for item in listing["items"]] == [3, 2, 1]
+
+
+def test_reset_does_not_duplicate_a_legacy_default_revision(
+    client: TestClient,
+    settings: Settings,
+):
+    session = _new_session(client)
+    legacy_id = _insert_legacy_revision(
+        settings,
+        session,
+        recipe_json='{"schemaVersion":"1.0"}',
+    )
+
+    response = client.post(f"/api/v1/sessions/{session['sessionId']}/reset")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["activeRevisionId"] == legacy_id
+    listing = client.get(f"/api/v1/sessions/{session['sessionId']}/revisions").json()
+    assert [item["revisionNo"] for item in listing["items"]] == [2, 1]
+
+
+def test_idempotent_replay_matches_a_legacy_revision(
+    client: TestClient,
+    settings: Settings,
+):
+    session = _new_session(client)
+    key = str(uuid4())
+    legacy_id = _insert_legacy_revision(
+        settings,
+        session,
+        recipe_json='{"schemaVersion":"1.0","adjustments":{"exposureEv":0.4}}',
+        idempotency_key=key,
+    )
+
+    replay = _commit(client, session, exposure=0.4, key=key)
+
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["activeRevisionId"] == legacy_id
+    listing = client.get(f"/api/v1/sessions/{session['sessionId']}/revisions").json()
+    assert [item["revisionNo"] for item in listing["items"]] == [2, 1]
+
+    changed = _commit(client, session, exposure=-0.9, key=key)
+    assert changed.status_code == 409
+    assert changed.json()["error"]["code"] == "idempotency_key_reuse"
 
 
 def test_revision_list_paginates_in_descending_order(client: TestClient):

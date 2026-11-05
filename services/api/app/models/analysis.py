@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import UUID
-
 from pydantic import Field
 
 from app.models.schemas import CamelModel
@@ -74,13 +72,3 @@ class AnalysisFeatures(CamelModel):
     detail: DetailFeatures
     composition: CompositionFeatures
     scene_hints: SceneHints
-
-
-class AnalyzeRequest(CamelModel):
-    session_id: UUID | None = None
-
-
-class AnalyzeResponse(CamelModel):
-    analysis_id: UUID
-    features: AnalysisFeatures
-    analyzer_version: str

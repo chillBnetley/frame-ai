@@ -5,11 +5,15 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from app.imaging.color_grading import apply_color_grading
 from app.imaging.color_ops import apply_color
+from app.imaging.curves import apply_curves
 from app.imaging.detail import apply_detail
 from app.imaging.geometry import crop_pixels, rotate_inscribed
+from app.imaging.hsl import apply_hsl
 from app.imaging.loader import LoadedImage, resize_to_max_edge
 from app.imaging.local import apply_local
+from app.imaging.local_masks import apply_local_adjustments
 from app.imaging.output import to_uint8
 from app.imaging.params_map import (
     DRAFT_MAX_EDGE,
@@ -17,7 +21,15 @@ from app.imaging.params_map import (
     FINAL_MAX_EDGE,
 )
 from app.imaging.tone import apply_contrast, apply_tone_linear, linear_to_srgb, srgb_to_linear
-from app.models.recipe import Adjustments, RenderQuality
+from app.models.recipe import (
+    Adjustments,
+    ColorGrading,
+    CurveSet,
+    HslAdjustments,
+    LocalAdjustment,
+    RenderQuality,
+    UserMask,
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +70,11 @@ def render(
     adjustments: Adjustments,
     *,
     image_sha256: str,
+    curve: CurveSet | None = None,
+    hsl: HslAdjustments | None = None,
+    color_grading: ColorGrading | None = None,
+    masks: tuple[UserMask, ...] = (),
+    local_adjustments: tuple[LocalAdjustment, ...] = (),
     quality: RenderQuality = "final",
     max_edge: int | None = None,
     denoise_simplify_pixels: int = EXPORT_DENOISE_SIMPLIFY_PIXELS,
@@ -85,14 +102,34 @@ def render(
         tint=adjustments.tint,
         highlights=adjustments.highlights,
         shadows=adjustments.shadows,
+        whites=adjustments.whites,
+        blacks=adjustments.blacks,
     )
     perceptual = linear_to_srgb(linear, inplace=True)
     perceptual = apply_contrast(perceptual, adjustments.contrast)
+    if curve is not None:
+        perceptual = apply_curves(perceptual, curve)
+    if hsl is not None:
+        perceptual = apply_hsl(perceptual, hsl)
     perceptual = apply_color(
         perceptual,
         saturation=adjustments.saturation,
         vibrance=adjustments.vibrance,
     )
+    if color_grading is not None:
+        perceptual = apply_color_grading(perceptual, color_grading)
+    render_warnings: list[str] = []
+    if local_adjustments:
+        perceptual, local_warnings = apply_local_adjustments(
+            perceptual,
+            local_adjustments,
+            masks,
+            source_width=source.width,
+            source_height=source.height,
+            rotation_deg=adjustments.rotation_deg,
+            crop=adjustments.crop,
+        )
+        render_warnings.extend(local_warnings)
     perceptual = apply_local(
         perceptual,
         clarity=adjustments.clarity,
@@ -108,10 +145,12 @@ def render(
         denoise_simplified=denoise_simplified,
     )
 
+    if denoise_simplified:
+        render_warnings.append("denoise_simplified")
     return RenderedImage(
         rgb=to_uint8(perceptual, inplace=True),
         canvas_width=canvas_width,
         canvas_height=canvas_height,
         quality=quality,
-        warnings=("denoise_simplified",) if denoise_simplified else (),
+        warnings=tuple(render_warnings),
     )

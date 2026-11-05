@@ -7,7 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from app.imaging.loader import LoadedImage, resize_to_max_edge
-from app.imaging.tone import luminance_srgb, srgb_to_linear
+from app.imaging.tone import luma_srgb, srgb_to_linear
 from app.models.analysis import (
     AnalysisFeatures,
     CastEstimate,
@@ -185,7 +185,7 @@ def analyze(
     rgb = proxy.rgb
     height, width = rgb.shape[:2]
 
-    luminance = luminance_srgb(rgb)
+    luminance = luma_srgb(rgb)
     percentiles = np.percentile(luminance, [1.0, 5.0, 50.0, 95.0, 99.0])
     p1, p5, p50, p95, p99 = (float(value) for value in percentiles)
     saturation = _saturation(rgb)

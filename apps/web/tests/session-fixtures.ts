@@ -42,9 +42,7 @@ export function sessionState(options: SessionStateOptions = {}): SessionState {
       revisionNo,
       parentId: revisionNo > 1 ? NEXT_REVISION_ID : null,
       source: options.source ?? (revisionNo > 1 ? "user" : "initial"),
-      recipe: normalizeRecipe(
-        options.recipe ?? { schemaVersion: "1.0", styleId: "natural", styleStrength: 0 },
-      ),
+      recipe: normalizeRecipe(options.recipe),
       createdAt: "2026-11-02T00:00:00Z",
     },
   };

@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from app.imaging.detail import (
+    _grain_noise,
     apply_denoise,
     apply_detail,
     apply_grain,
@@ -12,14 +13,14 @@ from app.imaging.detail import (
     grain_seed,
 )
 from app.imaging.params_map import DENOISE_SEARCH_DRAFT, DENOISE_TEMPLATE_DRAFT
-from app.imaging.tone import luminance_srgb
+from app.imaging.tone import luma_srgb
 
 SHA_A = "a" * 64
 SHA_B = "b" * 64
 
 
 def _high_frequency_energy(rgb: np.ndarray) -> float:
-    luminance = luminance_srgb(rgb)
+    luminance = luma_srgb(rgb)
     blurred = cv2.GaussianBlur(luminance, (0, 0), sigmaX=1.0, sigmaY=1.0)
     return float(np.mean((luminance - blurred) ** 2))
 
@@ -174,6 +175,57 @@ def test_apply_detail_runs_denoise_then_sharpen_then_grain():
     )
 
 
+def test_grain_added_last_survives_the_smoothing_stages():
+    """Order proof that does not re-run the pipeline.
+
+    On a flat frame, denoise and sharpen only ever take texture away, so grain
+    that genuinely lands last keeps the exact spread it was given (measured
+    0.03000 for both). Grain fed in first is measured at 0.00484 because the
+    denoiser erases it.
+    """
+    flat = np.full((48, 64, 3), np.float32(128.0 / 255.0), dtype=np.float32)
+
+    detailed = apply_detail(
+        flat,
+        denoise=100,
+        sharpen=100,
+        grain=60,
+        image_sha256=SHA_A,
+        quality="draft",
+    )
+    grain_only = apply_grain(flat, 60, image_sha256=SHA_A)
+    grain_first = apply_sharpen(
+        apply_denoise(apply_grain(flat, 60, image_sha256=SHA_A), 100, quality="draft"),
+        100,
+    )
+
+    assert abs(float(np.std(detailed)) - float(np.std(grain_only))) <= 1e-4
+    assert float(np.std(detailed)) > 4.0 * float(np.std(grain_first))
+
+
+def test_smoothing_a_flat_region_beats_the_sharpen_first_order():
+    """Denoising before sharpening leaves a flat area measurably cleaner.
+
+    On the noisy ramp the middle columns hold no edge, so the spread there is
+    pure residual noise: 0.0409 for denoise-then-sharpen against 0.0519 when the
+    two swap and 0.0512 in the untouched input.
+    """
+    rgb = _noisy_gradient()
+
+    detailed = apply_detail(
+        rgb,
+        denoise=40,
+        sharpen=60,
+        grain=0,
+        image_sha256=SHA_A,
+        quality="draft",
+    )
+    sharpen_first = apply_denoise(apply_sharpen(rgb, 60), 40, quality="draft")
+
+    assert float(np.std(detailed[:, 20:40])) < 0.85 * float(np.std(sharpen_first[:, 20:40]))
+    assert float(np.std(detailed[:, 20:40])) < float(np.std(rgb[:, 20:40]))
+
+
 @pytest.mark.parametrize("amount", [25.0, 100.0])
 def test_detail_outputs_stay_in_range(amount: float):
     rgb = _noisy_gradient()
@@ -190,3 +242,12 @@ def test_detail_outputs_stay_in_range(amount: float):
     assert adjusted.dtype == np.float32
     assert 0.0 <= float(adjusted.min())
     assert float(adjusted.max()) <= 1.0
+
+
+def test_grain_noise_is_drawn_in_blocks_without_changing_the_stream():
+    expected = np.random.default_rng(20261105).standard_normal((300, 7)).astype(np.float32)
+
+    actual = _grain_noise(np.random.default_rng(20261105), 300, 7)
+
+    assert actual.dtype == np.float32
+    assert np.array_equal(actual, expected)

@@ -11,6 +11,8 @@ from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
 
+from app.imaging.loader import proxy_cache_directory
+
 logger = logging.getLogger("frame_ai.previews")
 
 PREVIEW_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -101,35 +103,33 @@ class PreviewStore:
         return destination
 
     def cleanup(self, *, now: float | None = None) -> CleanupReport:
-        """Delete expired regular files directly inside the preview directory."""
-        if not self.directory.is_dir():
-            return CleanupReport()
+        """Delete expired render files in the preview directory and proxy cache."""
         cutoff = (time.time() if now is None else now) - self.ttl_seconds
         deleted: list[str] = []
         skipped = 0
         errors = 0
-        try:
-            entries = list(os.scandir(self.directory))
-        except OSError:
-            logger.warning("preview_cleanup_scan_failed directory=%s", self.directory)
-            return CleanupReport(errors=1)
-
-        for entry in entries:
-            try:
-                if entry.is_symlink():
-                    skipped += 1
-                    continue
-                if not entry.is_file(follow_symlinks=False):
-                    continue
-                if entry.stat(follow_symlinks=False).st_mtime >= cutoff:
-                    continue
-                os.unlink(entry.path)
-                deleted.append(entry.name)
-            except FileNotFoundError:
-                continue
-            except OSError:
+        directories = [self.directory, proxy_cache_directory(self.directory)]
+        for directory in directories:
+            entries, scan_failed = self._scan(directory)
+            if scan_failed:
                 errors += 1
-                logger.warning("preview_cleanup_unlink_failed path=%s", entry.path)
+                continue
+            for entry in entries:
+                try:
+                    if entry.is_symlink():
+                        skipped += 1
+                        continue
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                    if entry.stat(follow_symlinks=False).st_mtime >= cutoff:
+                        continue
+                    os.unlink(entry.path)
+                    deleted.append(entry.name)
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    errors += 1
+                    logger.warning("preview_cleanup_unlink_failed path=%s", entry.path)
 
         if deleted:
             logger.info(
@@ -144,3 +144,13 @@ class PreviewStore:
             errors=errors,
             deleted_names=tuple(sorted(deleted)),
         )
+
+    @staticmethod
+    def _scan(directory: Path) -> tuple[list[os.DirEntry[str]], bool]:
+        if not directory.is_dir():
+            return [], False
+        try:
+            return list(os.scandir(directory)), False
+        except OSError:
+            logger.warning("preview_cleanup_scan_failed directory=%s", directory)
+            return [], True

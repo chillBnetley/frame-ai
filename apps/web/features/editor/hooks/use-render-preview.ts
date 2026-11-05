@@ -7,6 +7,7 @@ import type { PreviewState } from "@/features/editor/state/editor-reducer";
 import { renderPreview } from "@/lib/api/sessions";
 import { describeEditorError, isSilentEditorError } from "@/lib/error-messages";
 import { recipeFingerprint } from "@/lib/recipe";
+import { nextRenderSeq } from "@/lib/render-seq";
 import type { EditRecipe } from "@/types/session";
 
 export const PREVIEW_DEBOUNCE_MS = 250;
@@ -88,7 +89,7 @@ export function useRenderPreview(
         return;
       }
 
-      const seq = seqRef.current + 1;
+      const seq = nextRenderSeq();
       seqRef.current = seq;
       const request: InflightRender = {
         fingerprint: requestFingerprint,
@@ -105,6 +106,7 @@ export function useRenderPreview(
           sessionId,
           { recipe, quality },
           controller.signal,
+          seq,
         );
         if (controller.signal.aborted || seq !== seqRef.current) {
           return;
@@ -116,6 +118,7 @@ export function useRenderPreview(
           width: result.width,
           height: result.height,
           quality: result.quality,
+          warnings: result.warnings ?? [],
         });
         if (quality === "final") {
           completedFinalFingerprintRef.current = requestFingerprint;

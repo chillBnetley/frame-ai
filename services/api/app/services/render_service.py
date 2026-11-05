@@ -10,6 +10,7 @@ from uuid import UUID
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.imaging.loader import load_proxy, proxy_cache_directory
+from app.imaging.local_masks import local_adjustment_warnings
 from app.imaging.output import JPEG_QUALITY, encode_image
 from app.imaging.params_map import DRAFT_MAX_EDGE, ENGINE_VERSION
 from app.imaging.pipeline import render as render_image
@@ -17,6 +18,7 @@ from app.models.recipe import Adjustments, EditRecipe, render_key
 from app.models.render import CompareResponse, CompareSide, RenderRequest, RenderTier
 from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
+from app.services.proxy_cache import DecodedProxyCache
 from app.services.session_service import SessionService
 
 PREVIEW_URL_PREFIX = "/api/v1/previews"
@@ -31,6 +33,7 @@ class RenderResult:
     height: int
     quality: RenderTier
     cache_hit: bool
+    warnings: tuple[str, ...] = ()
 
     @property
     def preview_url(self) -> str:
@@ -45,6 +48,7 @@ class RenderService:
         sessions: SessionService,
         *,
         previews: PreviewStore | None = None,
+        proxy_cache: DecodedProxyCache | None = None,
         max_concurrent_renders: int = 2,
     ) -> None:
         self.settings = settings
@@ -53,6 +57,9 @@ class RenderService:
         self.previews = previews or PreviewStore(
             settings.preview_dir,
             ttl_seconds=settings.preview_ttl_seconds,
+        )
+        self.proxy_cache = proxy_cache or DecodedProxyCache(
+            settings.proxy_cache_mb * 1024 * 1024,
         )
         self._slots = threading.BoundedSemaphore(max_concurrent_renders)
         self._latest_seq: OrderedDict[str, int] = OrderedDict()
@@ -101,7 +108,7 @@ class RenderService:
         edge = max(1, min(edge, max(record.width, record.height)))
         preview_id = render_key(
             record.sha256,
-            request.recipe.adjustments,
+            request.recipe,
             edge=edge,
             quality=request.quality,
             engine_version=ENGINE_VERSION,
@@ -109,12 +116,26 @@ class RenderService:
 
         cached = self.previews.dimensions(preview_id)
         if cached is not None:
-            return RenderResult(preview_id, cached[0], cached[1], request.quality, True)
+            return RenderResult(
+                preview_id,
+                cached[0],
+                cached[1],
+                request.quality,
+                True,
+                self._cached_warnings(request.recipe),
+            )
 
         with self._render_slot():
             cached = self.previews.dimensions(preview_id)
             if cached is not None:
-                return RenderResult(preview_id, cached[0], cached[1], request.quality, True)
+                return RenderResult(
+                    preview_id,
+                    cached[0],
+                    cached[1],
+                    request.quality,
+                    True,
+                    self._cached_warnings(request.recipe),
+                )
             if self._superseded(session_id, render_seq):
                 raise AppError(
                     409,
@@ -122,17 +143,35 @@ class RenderService:
                     "A newer render request replaced this one.",
                 )
 
-            proxy = load_proxy(
-                path,
-                original_sha256=record.sha256,
-                max_edge=edge,
-                cache_dir=proxy_cache_directory(self.previews.directory),
-                max_pixels=self.settings.max_image_pixels,
-            )
+            proxy_key = self.proxy_cache.key_for(record.sha256, edge)
+            proxy = self.proxy_cache.get(proxy_key)
+            if proxy is None:
+                proxy = load_proxy(
+                    path,
+                    original_sha256=record.sha256,
+                    max_edge=edge,
+                    cache_dir=proxy_cache_directory(self.previews.directory),
+                    max_pixels=self.settings.max_image_pixels,
+                )
+                self.proxy_cache.put(proxy_key, proxy)
+            # Decoding the proxy can outlive the request it was made for, so the
+            # newest sequence number is re-checked before the expensive render.
+            if self._superseded(session_id, render_seq):
+                raise AppError(
+                    409,
+                    "render_superseded",
+                    "A newer render request replaced this one.",
+                )
+
             rendered = render_image(
                 proxy,
                 request.recipe.adjustments,
                 image_sha256=record.sha256,
+                curve=request.recipe.curve,
+                hsl=request.recipe.hsl,
+                color_grading=request.recipe.color_grading,
+                masks=request.recipe.masks,
+                local_adjustments=request.recipe.local_adjustments,
                 quality=request.quality,
                 max_edge=edge,
             )
@@ -145,7 +184,15 @@ class RenderService:
             rendered.height,
             request.quality,
             False,
+            rendered.warnings,
         )
+
+    @staticmethod
+    def _cached_warnings(recipe: EditRecipe) -> tuple[str, ...]:
+        # A content-addressed hit stores no render metadata. Warnings for the
+        # preview tiers (draft/final) depend only on the recipe, so they can be
+        # derived again without decoding pixels; denoise_simplified is export-only.
+        return local_adjustment_warnings(recipe.local_adjustments, recipe.masks)
 
     def compare(
         self,
@@ -189,6 +236,7 @@ class RenderService:
                 width=rendered.width,
                 height=rendered.height,
             ),
+            warnings=list(dict.fromkeys((*original.warnings, *rendered.warnings))),
         )
 
     def _resolve_edge(self, quality: RenderTier, max_edge: int | None) -> int:

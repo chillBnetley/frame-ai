@@ -33,6 +33,15 @@ async function scrollPageToBottom(page: Page): Promise<void> {
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
 }
 
+// Stage 4 keeps appending panels to the parameter column, so the bottom-most control
+// is asserted by position instead of by a hardcoded label.
+function bottomSlider(page: Page) {
+  return page
+    .getByTestId("adjustment-panel-scroll")
+    .locator('input[type="number"]')
+    .last();
+}
+
 test.describe("desktop preview visibility", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -45,8 +54,7 @@ test.describe("desktop preview visibility", () => {
     await page.getByTestId("adjustment-panel-scroll").scrollIntoViewIfNeeded();
     await scrollPanelToBottom(page);
 
-    const grain = page.getByRole("spinbutton", { name: "颗粒", exact: true });
-    await expect(grain).toBeInViewport();
+    await expect(bottomSlider(page)).toBeInViewport();
     await expect(page.getByAltText("编辑后的预览")).toBeInViewport({ ratio: 0.6 });
 
     const header = await page.locator("header").boundingBox();
@@ -74,9 +82,7 @@ test.describe("short desktop preview visibility", () => {
     await page.getByTestId("adjustment-panel-scroll").scrollIntoViewIfNeeded();
     await scrollPanelToBottom(page);
 
-    await expect(
-      page.getByRole("spinbutton", { name: "旋转", exact: true }),
-    ).toBeInViewport();
+    await expect(bottomSlider(page)).toBeInViewport();
     await expect(page.getByAltText("编辑后的预览")).toBeInViewport({ ratio: 0.5 });
 
     const header = await page.locator("header").boundingBox();

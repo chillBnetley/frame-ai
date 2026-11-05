@@ -15,8 +15,8 @@ WIDTH = 480
 HEIGHT = 320
 
 
-def build_pixels() -> np.ndarray:
-    rng = np.random.default_rng(20261102)
+def build_pixels(variant: int = 0) -> np.ndarray:
+    rng = np.random.default_rng(20261102 + variant)
     y, x = np.mgrid[0:HEIGHT, 0:WIDTH].astype(np.float32)
     red = 40.0 + 180.0 * x / (WIDTH - 1)
     green = 35.0 + 150.0 * y / (HEIGHT - 1)
@@ -42,9 +42,10 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     output = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("fixture.jpg")
+    variant = int(sys.argv[2]) if len(sys.argv) > 2 else 0
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    image = Image.fromarray(build_pixels(), mode="RGB")
+    image = Image.fromarray(build_pixels(variant), mode="RGB")
     exif = Image.Exif()
     exif[271] = "FRAME AI"
     exif[272] = "E2E Synthetic Camera"

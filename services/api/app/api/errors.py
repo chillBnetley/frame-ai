@@ -30,6 +30,19 @@ def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "-")
 
 
+def _all_analysis_options_disabled(exc: RequestValidationError) -> bool:
+    for error in exc.errors():
+        location = error.get("loc", ())
+        message = str(error.get("msg", ""))
+        if (
+            location
+            and str(location[-1]) == "options"
+            and "At least one analysis option" in message
+        ):
+            return True
+    return False
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
@@ -43,6 +56,14 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_validation_error(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        if _all_analysis_options_disabled(exc):
+            return JSONResponse(
+                status_code=400,
+                content=error_content(
+                    "invalid_analysis_options",
+                    "At least one analysis option must be enabled.",
+                ),
+            )
         details: list[dict[str, Any]] = []
         for error in exc.errors():
             context = error.get("ctx") or {}

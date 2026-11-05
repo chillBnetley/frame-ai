@@ -7,7 +7,7 @@ from uuid import UUID
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.models.recipe import EditRecipe, canonical_recipe_json, default_recipe, recipe_hash
+from app.models.recipe import EditRecipe, default_recipe, recipe_hash, stored_recipe_json
 from app.models.sessions import (
     CreateRevisionRequest,
     RevisionListResponse,
@@ -78,7 +78,7 @@ class SessionService:
         with _mapped():
             session, _ = self.repository.create_session(
                 image_id,
-                recipe_json=canonical_recipe_json(initial),
+                recipe_json=stored_recipe_json(initial),
                 recipe_hash=recipe_hash(initial),
             )
         return self._state(session)
@@ -101,7 +101,7 @@ class SessionService:
             _, replayed = self.repository.add_revision(
                 key,
                 parent_id=str(request.parent_revision_id),
-                recipe_json=canonical_recipe_json(request.recipe),
+                recipe_json=stored_recipe_json(request.recipe),
                 recipe_hash=recipe_hash(request.recipe),
                 source=request.source,
                 idempotency_key=idempotency_key,
@@ -157,7 +157,7 @@ class SessionService:
         with _mapped():
             self.repository.reset(
                 key,
-                default_recipe_json=canonical_recipe_json(default),
+                default_recipe_json=stored_recipe_json(default),
                 default_recipe_hash=recipe_hash(default),
             )
             session = self.repository.get(key)

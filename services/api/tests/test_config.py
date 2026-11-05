@@ -50,13 +50,14 @@ def test_relative_data_dir_resolves_against_repo_root(tmp_path, monkeypatch):
     assert settings.data_dir.is_absolute()
 
 
-def test_config_endpoint_exposes_runtime_limits(client: TestClient):
+def test_config_endpoint_exposes_runtime_limits(client: TestClient, settings: Settings):
     response = client.get("/api/v1/config")
 
     assert response.status_code == 200
     assert response.json() == {
-        "maxUploadBytes": 1024 * 1024,
-        "maxImagePixels": 1_000_000,
+        "maxUploadBytes": settings.max_upload_bytes,
+        "maxJsonBodyBytes": settings.max_json_body_bytes,
+        "maxImagePixels": settings.max_image_pixels,
         "allowedMimeTypes": ["image/jpeg", "image/png", "image/webp"],
     }
 
@@ -85,4 +86,5 @@ def test_uploaded_limit_matches_runtime_config(client: TestClient, settings):
     payload = make_image("PNG", size=(64, 48))
 
     assert config["maxUploadBytes"] == settings.max_upload_bytes
+    assert config["maxJsonBodyBytes"] == settings.max_json_body_bytes
     assert upload(client, payload).status_code == 201

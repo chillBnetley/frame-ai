@@ -47,6 +47,228 @@
         }
       }
     },
+    "/api/v1/settings/providers": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Read Provider Settings",
+        "operationId": "read_provider_settings_api_v1_settings_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Provider settings are incomplete or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider settings could not be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider settings service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Save Provider Settings",
+        "operationId": "save_provider_settings_api_v1_settings_providers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Provider settings are incomplete or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider settings could not be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider settings service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/providers/test": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Test Provider Settings",
+        "operationId": "test_provider_settings_api_v1_settings_providers_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderTestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Provider settings are incomplete or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider settings could not be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider settings service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/providers/reset": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Reset Provider Settings",
+        "operationId": "reset_provider_settings_api_v1_settings_providers_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Provider settings are incomplete or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider settings could not be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider settings service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images": {
       "post": {
         "tags": [
@@ -71,115 +293,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UploadImageResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid or empty upload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Image not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Upload or pixel limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Unsupported or invalid image",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Storage failure",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/images/{image_id}/analyze": {
-      "post": {
-        "tags": [
-          "images"
-        ],
-        "summary": "Analyze Image",
-        "operationId": "analyze_image_api_v1_images__image_id__analyze_post",
-        "parameters": [
-          {
-            "name": "image_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Image Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/AnalyzeRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyzeResponse"
                 }
               }
             }
@@ -326,6 +439,487 @@
           },
           "500": {
             "description": "Storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Create Analysis",
+        "operationId": "create_analysis_api_v1_analysis_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisTaskCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisTaskCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "All analysis options were disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Analysis task or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Result not ready or task still processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Analysis input copy exceeded the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Analysis failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/{analysis_id}": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Get Analysis",
+        "operationId": "get_analysis_api_v1_analysis__analysis_id__get",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisTaskStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "All analysis options were disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Analysis task or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Result not ready or task still processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Analysis input copy exceeded the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Analysis failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Delete Analysis",
+        "operationId": "delete_analysis_api_v1_analysis__analysis_id__delete",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "All analysis options were disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Analysis task or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Result not ready or task still processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Analysis input copy exceeded the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Analysis failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/{analysis_id}/result": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Get Analysis Result",
+        "operationId": "get_analysis_result_api_v1_analysis__analysis_id__result_get",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "All analysis options were disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Analysis task or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Result not ready or task still processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Analysis input copy exceeded the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Analysis failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -1269,6 +1863,7 @@
             "title": "Revisionid"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "revisionId"
@@ -1281,8 +1876,8 @@
             "type": "number",
             "title": "Exposureev",
             "default": 0.0,
-            "ge": -3,
-            "le": 3
+            "ge": -5,
+            "le": 5
           },
           "contrast": {
             "type": "number",
@@ -1301,6 +1896,20 @@
           "shadows": {
             "type": "number",
             "title": "Shadows",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "whites": {
+            "type": "number",
+            "title": "Whites",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "blacks": {
+            "type": "number",
+            "title": "Blacks",
             "default": 0.0,
             "ge": -100,
             "le": 100
@@ -1390,92 +1999,360 @@
         "type": "object",
         "title": "Adjustments"
       },
-      "AnalysisFeatures": {
+      "AnalysisErrorInfo": {
         "properties": {
-          "analyzerVersion": {
+          "code": {
             "type": "string",
-            "title": "Analyzerversion"
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
           },
-          "isHeuristic": {
-            "type": "boolean",
-            "title": "Isheuristic"
-          },
-          "size": {
-            "$ref": "#/components/schemas/SizeFeatures"
-          },
-          "luminance": {
-            "$ref": "#/components/schemas/LuminanceFeatures"
-          },
-          "clipping": {
-            "$ref": "#/components/schemas/ClippingFeatures"
-          },
-          "color": {
-            "$ref": "#/components/schemas/ColorFeatures"
-          },
-          "detail": {
-            "$ref": "#/components/schemas/DetailFeatures"
-          },
-          "composition": {
-            "$ref": "#/components/schemas/CompositionFeatures"
-          },
-          "sceneHints": {
-            "$ref": "#/components/schemas/SceneHints"
+          "message": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "analyzerVersion",
-          "isHeuristic",
-          "size",
-          "luminance",
-          "clipping",
-          "color",
-          "detail",
-          "composition",
-          "sceneHints"
+          "code",
+          "message"
         ],
-        "title": "AnalysisFeatures"
+        "title": "AnalysisErrorInfo"
       },
-      "AnalyzeRequest": {
+      "AnalysisOptions": {
         "properties": {
-          "sessionId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sessionid"
+          "sceneRecognition": {
+            "type": "boolean",
+            "title": "Scenerecognition",
+            "default": true
+          },
+          "subjectDetection": {
+            "type": "boolean",
+            "title": "Subjectdetection",
+            "default": true
+          },
+          "lightingAnalysis": {
+            "type": "boolean",
+            "title": "Lightinganalysis",
+            "default": true
+          },
+          "colorAnalysis": {
+            "type": "boolean",
+            "title": "Coloranalysis",
+            "default": true
+          },
+          "compositionAnalysis": {
+            "type": "boolean",
+            "title": "Compositionanalysis",
+            "default": true
+          },
+          "qualityDiagnosis": {
+            "type": "boolean",
+            "title": "Qualitydiagnosis",
+            "default": true
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "title": "AnalyzeRequest"
+        "title": "AnalysisOptions"
       },
-      "AnalyzeResponse": {
+      "AnalysisReport": {
         "properties": {
           "analysisId": {
             "type": "string",
             "format": "uuid",
             "title": "Analysisid"
           },
-          "features": {
-            "$ref": "#/components/schemas/AnalysisFeatures"
-          },
-          "analyzerVersion": {
+          "schemaVersion": {
             "type": "string",
-            "title": "Analyzerversion"
+            "const": "stage3/1",
+            "title": "Schemaversion",
+            "default": "stage3/1"
+          },
+          "status": {
+            "type": "string",
+            "const": "completed",
+            "title": "Status",
+            "default": "completed"
+          },
+          "image": {
+            "$ref": "#/components/schemas/ReportImage"
+          },
+          "engine": {
+            "$ref": "#/components/schemas/EngineInfo"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/SceneResult"
+          },
+          "subjects": {
+            "items": {
+              "$ref": "#/components/schemas/SubjectInfo"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Subjects",
+            "default": []
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/RegionInfo"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Regions",
+            "default": []
+          },
+          "lighting": {
+            "$ref": "#/components/schemas/LightingResult"
+          },
+          "color": {
+            "$ref": "#/components/schemas/ColorResult"
+          },
+          "composition": {
+            "$ref": "#/components/schemas/CompositionReport"
+          },
+          "technicalQuality": {
+            "$ref": "#/components/schemas/TechnicalQualityResult"
+          },
+          "measurements": {
+            "$ref": "#/components/schemas/MeasurementsReport"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueReport"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Issues",
+            "default": []
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendationReport"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Recommendations",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Limitations",
+            "default": []
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completedat"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "analysisId",
-          "features",
-          "analyzerVersion"
+          "image",
+          "engine",
+          "scene",
+          "lighting",
+          "color",
+          "composition",
+          "technicalQuality",
+          "measurements",
+          "createdAt",
+          "completedAt"
         ],
-        "title": "AnalyzeResponse"
+        "title": "AnalysisReport"
+      },
+      "AnalysisTaskCreateRequest": {
+        "properties": {
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "options": {
+            "$ref": "#/components/schemas/AnalysisOptions"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "imageId"
+        ],
+        "title": "AnalysisTaskCreateRequest"
+      },
+      "AnalysisTaskCreated": {
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/TaskStage"
+          },
+          "deduplicated": {
+            "type": "boolean",
+            "title": "Deduplicated"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "analysisId",
+          "status",
+          "stage",
+          "deduplicated"
+        ],
+        "title": "AnalysisTaskCreated"
+      },
+      "AnalysisTaskStatusResponse": {
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/TaskStage"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "resultAvailable": {
+            "type": "boolean",
+            "title": "Resultavailable"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedat"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "analysisId",
+          "status",
+          "stage",
+          "isMock",
+          "resultAvailable",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "AnalysisTaskStatusResponse"
+      },
+      "BBox": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y"
+          },
+          "width": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Height"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "BBox"
       },
       "Body_upload_image_api_v1_images_post": {
         "properties": {
@@ -1494,7 +2371,7 @@
         ],
         "title": "Body_upload_image_api_v1_images_post"
       },
-      "CastEstimate": {
+      "CastMeasurement": {
         "properties": {
           "temperature": {
             "type": "number",
@@ -1505,62 +2382,240 @@
             "title": "Tint"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "temperature",
           "tint"
         ],
-        "title": "CastEstimate"
+        "title": "CastMeasurement"
       },
-      "ClippingFeatures": {
+      "ClippingMeasurement": {
         "properties": {
           "highlightsPct": {
             "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Highlightspct"
           },
           "shadowsPct": {
             "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Shadowspct"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "highlightsPct",
           "shadowsPct"
         ],
-        "title": "ClippingFeatures"
+        "title": "ClippingMeasurement"
       },
-      "ColorFeatures": {
+      "ColorGradeZone": {
+        "properties": {
+          "hue": {
+            "type": "number",
+            "title": "Hue",
+            "default": 0.0,
+            "ge": 0,
+            "le": 360
+          },
+          "saturation": {
+            "type": "number",
+            "title": "Saturation",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ColorGradeZone"
+      },
+      "ColorGrading": {
+        "properties": {
+          "shadows": {
+            "$ref": "#/components/schemas/ColorGradeZone"
+          },
+          "midtones": {
+            "$ref": "#/components/schemas/ColorGradeZone"
+          },
+          "highlights": {
+            "$ref": "#/components/schemas/ColorGradeZone"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "blending": {
+            "type": "number",
+            "title": "Blending",
+            "default": 50.0,
+            "ge": 0,
+            "le": 100
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ColorGrading"
+      },
+      "ColorHarmony": {
+        "type": "string",
+        "enum": [
+          "harmonious",
+          "moderate",
+          "clashing",
+          "unknown"
+        ],
+        "title": "ColorHarmony"
+      },
+      "ColorMeasurement": {
         "properties": {
           "meanRgb": {
             "items": {
-              "type": "number"
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0
             },
             "type": "array",
             "maxItems": 3,
             "minItems": 3,
             "title": "Meanrgb"
           },
-          "castEstimate": {
-            "$ref": "#/components/schemas/CastEstimate"
+          "cast": {
+            "$ref": "#/components/schemas/CastMeasurement"
           },
           "saturationMean": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Saturationmean"
           },
           "saturationP95": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Saturationp95"
+          },
+          "saturationP10": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationp10",
+            "default": 0.0
+          },
+          "saturationP50": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationp50",
+            "default": 0.0
+          },
+          "saturationP90": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationp90",
+            "default": 0.0
+          },
+          "colorConcentration": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Colorconcentration",
+            "default": 0.0
+          },
+          "rgbHistogram": {
+            "items": {
+              "items": {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Rgbhistogram",
+            "default": []
+          },
+          "hsvHistogram": {
+            "items": {
+              "items": {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Hsvhistogram",
+            "default": []
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "meanRgb",
-          "castEstimate",
+          "cast",
           "saturationMean",
           "saturationP95"
         ],
-        "title": "ColorFeatures"
+        "title": "ColorMeasurement"
+      },
+      "ColorResult": {
+        "properties": {
+          "temperature": {
+            "$ref": "#/components/schemas/ColorTemperature"
+          },
+          "saturation": {
+            "$ref": "#/components/schemas/SaturationLevel"
+          },
+          "harmony": {
+            "$ref": "#/components/schemas/ColorHarmony",
+            "default": "unknown"
+          },
+          "dominantColors": {
+            "items": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Dominantcolors",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "temperature",
+          "saturation",
+          "confidence"
+        ],
+        "title": "ColorResult"
+      },
+      "ColorTemperature": {
+        "type": "string",
+        "enum": [
+          "warm",
+          "neutral",
+          "cool",
+          "unknown"
+        ],
+        "title": "ColorTemperature"
       },
       "CompareResponse": {
         "properties": {
@@ -1569,8 +2624,16 @@
           },
           "revision": {
             "$ref": "#/components/schemas/CompareSide"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "original",
@@ -1593,6 +2656,7 @@
             "title": "Height"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "previewUrl",
@@ -1601,22 +2665,23 @@
         ],
         "title": "CompareSide"
       },
-      "CompositionFeatures": {
+      "CompositionBalance": {
+        "type": "string",
+        "enum": [
+          "balanced",
+          "moderate",
+          "unbalanced",
+          "unknown"
+        ],
+        "title": "CompositionBalance"
+      },
+      "CompositionMeasurement": {
         "properties": {
-          "horizonTiltDeg": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Horizontiltdeg"
-          },
           "edgeDensityGrid3x3": {
             "items": {
-              "type": "number"
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0
             },
             "type": "array",
             "maxItems": 9,
@@ -1625,21 +2690,104 @@
           },
           "brightnessCentroid": {
             "items": {
-              "type": "number"
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0
             },
             "type": "array",
             "maxItems": 2,
             "minItems": 2,
             "title": "Brightnesscentroid"
+          },
+          "horizonTiltDeg": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizontiltdeg"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "horizonTiltDeg",
           "edgeDensityGrid3x3",
           "brightnessCentroid"
         ],
-        "title": "CompositionFeatures"
+        "title": "CompositionMeasurement"
+      },
+      "CompositionReport": {
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/CompositionBalance"
+          },
+          "subjectPosition": {
+            "$ref": "#/components/schemas/SubjectPosition"
+          },
+          "negativeSpace": {
+            "$ref": "#/components/schemas/NegativeSpace"
+          },
+          "occlusion": {
+            "$ref": "#/components/schemas/Occlusion",
+            "default": "unknown"
+          },
+          "subjectAreaRatio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjectarearatio"
+          },
+          "horizonTiltDeg": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizontiltdeg"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "balance",
+          "subjectPosition",
+          "negativeSpace",
+          "confidence"
+        ],
+        "title": "CompositionReport"
+      },
+      "ContrastLevel": {
+        "type": "string",
+        "enum": [
+          "low",
+          "moderate",
+          "high",
+          "unknown"
+        ],
+        "title": "ContrastLevel"
       },
       "CreateRevisionRequest": {
         "properties": {
@@ -1661,6 +2809,7 @@
             "default": "user"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "recipe",
@@ -1676,6 +2825,7 @@
             "title": "Imageid"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "imageId"
@@ -1719,31 +2869,108 @@
         ],
         "title": "Crop"
       },
-      "DetailFeatures": {
+      "CurvePoint": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X",
+            "ge": 0,
+            "le": 1
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "ge": 0,
+            "le": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "CurvePoint"
+      },
+      "CurveSet": {
+        "properties": {
+          "master": {
+            "items": {
+              "$ref": "#/components/schemas/CurvePoint"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Master",
+            "default": []
+          },
+          "red": {
+            "items": {
+              "$ref": "#/components/schemas/CurvePoint"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Red",
+            "default": []
+          },
+          "green": {
+            "items": {
+              "$ref": "#/components/schemas/CurvePoint"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Green",
+            "default": []
+          },
+          "blue": {
+            "items": {
+              "$ref": "#/components/schemas/CurvePoint"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Blue",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CurveSet"
+      },
+      "DetailMeasurement": {
         "properties": {
           "sharpness": {
             "type": "number",
+            "minimum": 0.0,
             "title": "Sharpness"
           },
           "noiseEstimate": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Noiseestimate"
+          },
+          "gradientAnisotropy": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Gradientanisotropy",
+            "default": 0.0
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "sharpness",
           "noiseEstimate"
         ],
-        "title": "DetailFeatures"
+        "title": "DetailMeasurement"
       },
       "EditRecipe": {
         "properties": {
           "schemaVersion": {
             "type": "string",
-            "const": "1.0",
+            "const": "2.0",
             "title": "Schemaversion",
-            "default": "1.0"
+            "default": "2.0"
           },
           "styleId": {
             "type": "string",
@@ -1769,6 +2996,36 @@
           "adjustments": {
             "$ref": "#/components/schemas/Adjustments"
           },
+          "curve": {
+            "$ref": "#/components/schemas/CurveSet"
+          },
+          "hsl": {
+            "$ref": "#/components/schemas/HslAdjustments"
+          },
+          "colorGrading": {
+            "$ref": "#/components/schemas/ColorGrading"
+          },
+          "masks": {
+            "items": {
+              "$ref": "#/components/schemas/UserMask"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Masks",
+            "default": []
+          },
+          "localAdjustments": {
+            "items": {
+              "$ref": "#/components/schemas/LocalAdjustment"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Localadjustments",
+            "default": []
+          },
+          "output": {
+            "$ref": "#/components/schemas/OutputSettings"
+          },
           "rationale": {
             "items": {
               "type": "string",
@@ -1791,6 +3048,62 @@
         "additionalProperties": false,
         "type": "object",
         "title": "EditRecipe"
+      },
+      "EngineInfo": {
+        "properties": {
+          "visionProvider": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Visionprovider"
+          },
+          "visionModel": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Visionmodel"
+          },
+          "decisionProvider": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Decisionprovider"
+          },
+          "decisionModel": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Decisionmodel"
+          },
+          "promptVersion": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Promptversion"
+          },
+          "analyzerVersion": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Analyzerversion"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "visionProvider",
+          "visionModel",
+          "decisionProvider",
+          "decisionModel",
+          "promptVersion",
+          "analyzerVersion",
+          "isMock"
+        ],
+        "title": "EngineInfo"
       },
       "ErrorBody": {
         "properties": {
@@ -1854,14 +3167,46 @@
               }
             ],
             "title": "Quality"
+          },
+          "maxEdge": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 64.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxedge"
+          },
+          "colorSpace": {
+            "type": "string",
+            "const": "sRGB",
+            "title": "Colorspace",
+            "default": "sRGB"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "revisionId",
           "format"
         ],
         "title": "ExportRequest"
+      },
+      "ExposureQuality": {
+        "type": "string",
+        "enum": [
+          "underexposed",
+          "slightly_underexposed",
+          "balanced",
+          "slightly_overexposed",
+          "overexposed",
+          "unknown"
+        ],
+        "title": "ExposureQuality"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1895,6 +3240,7 @@
             "$ref": "#/components/schemas/StorageHealth"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "status",
@@ -1904,39 +3250,396 @@
         ],
         "title": "HealthResponse"
       },
-      "LuminanceFeatures": {
+      "HslAdjustments": {
+        "properties": {
+          "red": {
+            "$ref": "#/components/schemas/HslBand"
+          },
+          "orange": {
+            "$ref": "#/components/schemas/HslBand"
+          },
+          "yellow": {
+            "$ref": "#/components/schemas/HslBand"
+          },
+          "green": {
+            "$ref": "#/components/schemas/HslBand"
+          },
+          "aqua": {
+            "$ref": "#/components/schemas/HslBand"
+          },
+          "blue": {
+            "$ref": "#/components/schemas/HslBand"
+          },
+          "purple": {
+            "$ref": "#/components/schemas/HslBand"
+          },
+          "magenta": {
+            "$ref": "#/components/schemas/HslBand"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HslAdjustments"
+      },
+      "HslBand": {
+        "properties": {
+          "hue": {
+            "type": "number",
+            "title": "Hue",
+            "default": 0.0,
+            "ge": -180,
+            "le": 180
+          },
+          "saturation": {
+            "type": "number",
+            "title": "Saturation",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "luminance": {
+            "type": "number",
+            "title": "Luminance",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HslBand"
+      },
+      "IssueReport": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/IssueType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Evidence"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion"
+          },
+          "regionIds": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Regionids",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "severity",
+          "confidence",
+          "evidence"
+        ],
+        "title": "IssueReport"
+      },
+      "IssueType": {
+        "type": "string",
+        "enum": [
+          "overexposure",
+          "underexposure",
+          "highlight_clipping",
+          "shadow_clipping",
+          "subject_underexposure",
+          "background_overexposure",
+          "color_cast",
+          "temperature_mismatch",
+          "saturation_issue",
+          "color_hierarchy_issue",
+          "subject_placement",
+          "balance_issue",
+          "negative_space_issue",
+          "horizon_tilt",
+          "focus_issue",
+          "motion_blur",
+          "high_noise",
+          "low_detail",
+          "harsh_contrast",
+          "flat_lighting"
+        ],
+        "title": "IssueType"
+      },
+      "LightingDirection": {
+        "type": "string",
+        "enum": [
+          "front",
+          "side",
+          "back",
+          "side_back",
+          "diffuse",
+          "overcast",
+          "artificial",
+          "mixed",
+          "unknown"
+        ],
+        "title": "LightingDirection"
+      },
+      "LightingResult": {
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/LightingDirection"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LightingType"
+          },
+          "contrast": {
+            "$ref": "#/components/schemas/ContrastLevel"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "direction",
+          "type",
+          "contrast",
+          "confidence"
+        ],
+        "title": "LightingResult"
+      },
+      "LightingType": {
+        "type": "string",
+        "enum": [
+          "natural",
+          "artificial",
+          "mixed",
+          "unknown"
+        ],
+        "title": "LightingType"
+      },
+      "LocalAdjustment": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^local_[A-Za-z0-9_-]{1,58}$",
+            "title": "Id"
+          },
+          "maskId": {
+            "type": "string",
+            "pattern": "^(full|mask_[A-Za-z0-9_-]{1,58})$",
+            "title": "Maskid",
+            "default": "full"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "adjustments": {
+            "$ref": "#/components/schemas/LocalAdjustments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "LocalAdjustment"
+      },
+      "LocalAdjustments": {
+        "properties": {
+          "exposureEv": {
+            "type": "number",
+            "title": "Exposureev",
+            "default": 0.0,
+            "ge": -5,
+            "le": 5
+          },
+          "contrast": {
+            "type": "number",
+            "title": "Contrast",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "highlights": {
+            "type": "number",
+            "title": "Highlights",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "shadows": {
+            "type": "number",
+            "title": "Shadows",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "whites": {
+            "type": "number",
+            "title": "Whites",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "blacks": {
+            "type": "number",
+            "title": "Blacks",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "tint": {
+            "type": "number",
+            "title": "Tint",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "saturation": {
+            "type": "number",
+            "title": "Saturation",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "vibrance": {
+            "type": "number",
+            "title": "Vibrance",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "clarity": {
+            "type": "number",
+            "title": "Clarity",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "sharpen": {
+            "type": "number",
+            "title": "Sharpen",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          },
+          "denoise": {
+            "type": "number",
+            "title": "Denoise",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          },
+          "vignette": {
+            "type": "number",
+            "title": "Vignette",
+            "default": 0.0,
+            "ge": -100,
+            "le": 100
+          },
+          "grain": {
+            "type": "number",
+            "title": "Grain",
+            "default": 0.0,
+            "ge": 0,
+            "le": 100
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LocalAdjustments"
+      },
+      "LuminanceMeasurement": {
         "properties": {
           "mean": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Mean"
           },
           "std": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Std"
           },
           "p1": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "P1"
           },
           "p5": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "P5"
           },
           "p50": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "P50"
           },
           "p95": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "P95"
           },
           "p99": {
             "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "P99"
           },
           "histogram32": {
             "items": {
-              "type": "number"
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0
             },
             "type": "array",
             "maxItems": 32,
@@ -1944,6 +3647,7 @@
             "title": "Histogram32"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "mean",
@@ -1955,7 +3659,428 @@
           "p99",
           "histogram32"
         ],
-        "title": "LuminanceFeatures"
+        "title": "LuminanceMeasurement"
+      },
+      "MeasurementsReport": {
+        "properties": {
+          "luminance": {
+            "$ref": "#/components/schemas/LuminanceMeasurement"
+          },
+          "clipping": {
+            "$ref": "#/components/schemas/ClippingMeasurement"
+          },
+          "color": {
+            "$ref": "#/components/schemas/ColorMeasurement"
+          },
+          "detail": {
+            "$ref": "#/components/schemas/DetailMeasurement"
+          },
+          "composition": {
+            "$ref": "#/components/schemas/CompositionMeasurement"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "luminance",
+          "clipping",
+          "color",
+          "detail",
+          "composition"
+        ],
+        "title": "MeasurementsReport"
+      },
+      "NegativeSpace": {
+        "type": "string",
+        "enum": [
+          "low",
+          "moderate",
+          "high",
+          "unknown"
+        ],
+        "title": "NegativeSpace"
+      },
+      "NoiseLevel": {
+        "type": "string",
+        "enum": [
+          "low",
+          "moderate",
+          "high",
+          "unknown"
+        ],
+        "title": "NoiseLevel"
+      },
+      "Occlusion": {
+        "type": "string",
+        "enum": [
+          "none",
+          "minor",
+          "significant",
+          "unknown"
+        ],
+        "title": "Occlusion"
+      },
+      "OutputSettings": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "jpeg",
+              "png"
+            ],
+            "title": "Format",
+            "default": "jpeg"
+          },
+          "quality": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Quality",
+            "default": 92
+          },
+          "colorSpace": {
+            "type": "string",
+            "const": "sRGB",
+            "title": "Colorspace",
+            "default": "sRGB"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OutputSettings"
+      },
+      "Priority": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "title": "Priority"
+      },
+      "ProviderEntryUpdate": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "mock",
+                  "openai"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "apiKey": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8192,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apikey"
+          },
+          "clearApiKey": {
+            "type": "boolean",
+            "title": "Clearapikey",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProviderEntryUpdate"
+      },
+      "ProviderEntryView": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "mock",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "baseUrl": {
+            "type": "string",
+            "title": "Baseurl"
+          },
+          "hasApiKey": {
+            "type": "boolean",
+            "title": "Hasapikey"
+          },
+          "apiKeySource": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "environment",
+              "none"
+            ],
+            "title": "Apikeysource"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "model",
+          "baseUrl",
+          "hasApiKey",
+          "apiKeySource"
+        ],
+        "title": "ProviderEntryView"
+      },
+      "ProviderSettingsUpdate": {
+        "properties": {
+          "vision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderEntryUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderEntryUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProviderSettingsUpdate"
+      },
+      "ProviderSettingsView": {
+        "properties": {
+          "vision": {
+            "$ref": "#/components/schemas/ProviderEntryView"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/ProviderEntryView"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "hasSavedOverrides": {
+            "type": "boolean",
+            "title": "Hassavedoverrides"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "vision",
+          "decision",
+          "isMock",
+          "hasSavedOverrides"
+        ],
+        "title": "ProviderSettingsView"
+      },
+      "ProviderTestResponse": {
+        "properties": {
+          "vision": {
+            "$ref": "#/components/schemas/ProviderTestResult"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/ProviderTestResult"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "vision",
+          "decision"
+        ],
+        "title": "ProviderTestResponse"
+      },
+      "ProviderTestResult": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "mock",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "latencyMs": {
+            "type": "integer",
+            "title": "Latencyms"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ok",
+          "provider",
+          "model",
+          "latencyMs"
+        ],
+        "title": "ProviderTestResult"
+      },
+      "RecommendationCategory": {
+        "type": "string",
+        "enum": [
+          "exposure",
+          "color",
+          "composition",
+          "sharpness",
+          "lighting"
+        ],
+        "title": "RecommendationCategory"
+      },
+      "RecommendationReport": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/RecommendationCategory"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/Priority"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "targetRegions": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Targetregions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "priority",
+          "description"
+        ],
+        "title": "RecommendationReport"
+      },
+      "RegionInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SubjectType"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "vision",
+              "detector"
+            ],
+            "title": "Source"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BBox"
+          },
+          "mask": {
+            "type": "null",
+            "title": "Mask"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "source",
+          "confidence",
+          "bbox"
+        ],
+        "title": "RegionInfo"
       },
       "RenderRequest": {
         "properties": {
@@ -1985,6 +4110,7 @@
             "default": "final"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "recipe"
@@ -2016,8 +4142,16 @@
           "cacheHit": {
             "type": "boolean",
             "title": "Cachehit"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "previewUrl",
@@ -2027,6 +4161,45 @@
           "cacheHit"
         ],
         "title": "RenderResponse"
+      },
+      "ReportImage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "width": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Height"
+          },
+          "aspectRatio": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Aspectratio"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "width",
+          "height",
+          "aspectRatio",
+          "sha256"
+        ],
+        "title": "ReportImage"
       },
       "RevisionListResponse": {
         "properties": {
@@ -2049,6 +4222,7 @@
             "title": "Nextcursor"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "items"
@@ -2098,6 +4272,7 @@
             "title": "Createdat"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -2151,6 +4326,7 @@
             "title": "Createdat"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -2168,6 +4344,10 @@
             "type": "integer",
             "title": "Maxuploadbytes"
           },
+          "maxJsonBodyBytes": {
+            "type": "integer",
+            "title": "Maxjsonbodybytes"
+          },
           "maxImagePixels": {
             "type": "integer",
             "title": "Maximagepixels"
@@ -2180,41 +4360,68 @@
             "title": "Allowedmimetypes"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "maxUploadBytes",
+          "maxJsonBodyBytes",
           "maxImagePixels",
           "allowedMimeTypes"
         ],
         "title": "RuntimeConfigResponse"
       },
-      "SceneHints": {
+      "SaturationLevel": {
+        "type": "string",
+        "enum": [
+          "low",
+          "moderate",
+          "high",
+          "unknown"
+        ],
+        "title": "SaturationLevel"
+      },
+      "SceneLabel": {
+        "type": "string",
+        "enum": [
+          "portrait",
+          "landscape",
+          "street",
+          "architecture",
+          "night",
+          "indoor",
+          "food",
+          "nature",
+          "other"
+        ],
+        "title": "SceneLabel"
+      },
+      "SceneResult": {
         "properties": {
-          "isLowLight": {
-            "type": "boolean",
-            "title": "Islowlight"
+          "primary": {
+            "$ref": "#/components/schemas/SceneLabel"
           },
-          "isHighKey": {
-            "type": "boolean",
-            "title": "Ishighkey"
+          "secondary": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "title": "Secondary",
+            "default": []
           },
-          "isLowKey": {
-            "type": "boolean",
-            "title": "Islowkey"
-          },
-          "isMonochrome": {
-            "type": "boolean",
-            "title": "Ismonochrome"
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "isLowLight",
-          "isHighKey",
-          "isLowKey",
-          "isMonochrome"
+          "primary",
+          "confidence"
         ],
-        "title": "SceneHints"
+        "title": "SceneResult"
       },
       "SessionState": {
         "properties": {
@@ -2250,6 +4457,7 @@
             "$ref": "#/components/schemas/RevisionView"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "sessionId",
@@ -2262,33 +4470,24 @@
         ],
         "title": "SessionState"
       },
-      "SizeFeatures": {
-        "properties": {
-          "width": {
-            "type": "integer",
-            "title": "Width"
-          },
-          "height": {
-            "type": "integer",
-            "title": "Height"
-          },
-          "orientation": {
-            "type": "integer",
-            "title": "Orientation"
-          },
-          "aspectRatio": {
-            "type": "number",
-            "title": "Aspectratio"
-          }
-        },
-        "type": "object",
-        "required": [
-          "width",
-          "height",
-          "orientation",
-          "aspectRatio"
+      "Severity": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high"
         ],
-        "title": "SizeFeatures"
+        "title": "Severity"
+      },
+      "SharpnessQuality": {
+        "type": "string",
+        "enum": [
+          "poor",
+          "soft",
+          "good",
+          "unknown"
+        ],
+        "title": "SharpnessQuality"
       },
       "StorageHealth": {
         "properties": {
@@ -2301,12 +4500,141 @@
             "title": "Writable"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "ok",
           "writable"
         ],
         "title": "StorageHealth"
+      },
+      "SubjectInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SubjectType"
+          },
+          "role": {
+            "$ref": "#/components/schemas/SubjectRole"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BBox"
+          },
+          "regionId": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Regionid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "role",
+          "confidence",
+          "bbox",
+          "regionId"
+        ],
+        "title": "SubjectInfo"
+      },
+      "SubjectPosition": {
+        "type": "string",
+        "enum": [
+          "left",
+          "right",
+          "center",
+          "top",
+          "bottom",
+          "unknown"
+        ],
+        "title": "SubjectPosition"
+      },
+      "SubjectRole": {
+        "type": "string",
+        "enum": [
+          "primary",
+          "secondary"
+        ],
+        "title": "SubjectRole"
+      },
+      "SubjectType": {
+        "type": "string",
+        "enum": [
+          "person",
+          "building",
+          "sky",
+          "road",
+          "plant",
+          "animal",
+          "food",
+          "vehicle",
+          "other"
+        ],
+        "title": "SubjectType"
+      },
+      "TaskStage": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "preprocessing",
+          "vision",
+          "features",
+          "diagnosis",
+          "completed",
+          "failed"
+        ],
+        "title": "TaskStage"
+      },
+      "TaskStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "processing",
+          "completed",
+          "failed"
+        ],
+        "title": "TaskStatus"
+      },
+      "TechnicalQualityResult": {
+        "properties": {
+          "exposure": {
+            "$ref": "#/components/schemas/ExposureQuality"
+          },
+          "sharpness": {
+            "$ref": "#/components/schemas/SharpnessQuality"
+          },
+          "noise": {
+            "$ref": "#/components/schemas/NoiseLevel"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "exposure",
+          "sharpness",
+          "noise",
+          "confidence"
+        ],
+        "title": "TechnicalQualityResult"
       },
       "UndoRequest": {
         "properties": {
@@ -2323,6 +4651,7 @@
             "title": "Revisionid"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "UndoRequest"
       },
@@ -2358,6 +4687,7 @@
             "title": "Bytes"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "imageId",
@@ -2369,6 +4699,89 @@
           "bytes"
         ],
         "title": "UploadImageResponse"
+      },
+      "UserMask": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^mask_[A-Za-z0-9_-]{1,58}$",
+            "title": "Id"
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "rectangle",
+              "ellipse"
+            ],
+            "title": "Shape",
+            "default": "rectangle"
+          },
+          "source": {
+            "type": "string",
+            "const": "user",
+            "title": "Source",
+            "default": "user"
+          },
+          "coordinateSpace": {
+            "type": "string",
+            "const": "source-normalized",
+            "title": "Coordinatespace",
+            "default": "source-normalized"
+          },
+          "x": {
+            "type": "number",
+            "title": "X",
+            "ge": 0,
+            "le": 1
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "ge": 0,
+            "le": 1
+          },
+          "width": {
+            "type": "number",
+            "title": "Width",
+            "gt": 0,
+            "le": 1
+          },
+          "height": {
+            "type": "number",
+            "title": "Height",
+            "gt": 0,
+            "le": 1
+          },
+          "feather": {
+            "type": "number",
+            "title": "Feather",
+            "default": 15.0,
+            "ge": 0,
+            "le": 100
+          },
+          "opacity": {
+            "type": "number",
+            "title": "Opacity",
+            "default": 100.0,
+            "ge": 0,
+            "le": 100
+          },
+          "inverted": {
+            "type": "boolean",
+            "title": "Inverted",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "UserMask"
       },
       "ValidationError": {
         "properties": {

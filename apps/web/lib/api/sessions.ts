@@ -221,7 +221,12 @@ function parseDimension(value: string | null): number | null {
 
 export async function exportSession(
   sessionId: string,
-  request: { revisionId: string; format: ExportFormat; quality?: number | null },
+  request: {
+    revisionId: string;
+    format: ExportFormat;
+    quality?: number | null;
+    maxEdge?: number | null;
+  },
   signal?: AbortSignal,
 ): Promise<ExportResult> {
   const response = await apiRequest(
@@ -235,6 +240,9 @@ export async function exportSession(
         ...(request.quality === undefined || request.quality === null
           ? {}
           : { quality: request.quality }),
+        ...(request.maxEdge === undefined || request.maxEdge === null
+          ? {}
+          : { maxEdge: request.maxEdge }),
       }),
     },
     { signal, timeoutMs: EXPORT_TIMEOUT_MS },

@@ -103,7 +103,7 @@ test("upload, adjust, compare, undo/redo/reset, and export JPEG", async ({
     "false",
   );
 
-  await page.getByRole("button", { name: "重置" }).click();
+  await page.getByRole("button", { name: "重置", exact: true }).click();
   const resetRevision = page.getByRole("button", { name: /#4 · 重置/ });
   await expect(resetRevision).toHaveAttribute("aria-current", "true");
   await expect(page.getByText("已保存")).toBeVisible();

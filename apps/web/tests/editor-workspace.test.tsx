@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EditorWorkspace } from "@/features/editor/editor-workspace";
+import { analysisReport, analysisStatus, ANALYSIS_ID } from "./analysis-fixtures";
 
 const UPLOADED_IMAGE = {
   imageId: "2b1d0f76-4a1e-4de0-8a7b-3c0f2f9c1a55",
@@ -26,7 +27,7 @@ const SESSION_STATE = {
     revisionNo: 1,
     parentId: null,
     source: "initial",
-    recipe: { schemaVersion: "1.0", styleId: "natural", styleStrength: 0 },
+    recipe: { schemaVersion: "2.0", styleId: "natural", styleStrength: 0 },
     createdAt: "2026-11-02T00:00:00Z",
   },
 };
@@ -57,6 +58,21 @@ interface MockApiOptions {
   sessionError?: SessionErrorOption;
   revisionError?: UploadErrorOption;
   revisionGate?: Promise<void>;
+  renderError?: UploadErrorOption;
+  renderErrorOnce?: UploadErrorOption;
+}
+
+function reportForUploadedImage() {
+  const base = analysisReport();
+  return analysisReport({
+    image: {
+      ...base.image,
+      id: UPLOADED_IMAGE.imageId,
+      width: UPLOADED_IMAGE.width,
+      height: UPLOADED_IMAGE.height,
+      aspectRatio: UPLOADED_IMAGE.width / UPLOADED_IMAGE.height,
+    },
+  });
 }
 
 function mockApi(options: MockApiOptions = {}) {
@@ -155,6 +171,20 @@ function mockApi(options: MockApiOptions = {}) {
       return jsonResponse({ items: [], nextCursor: null });
     }
     if (url.endsWith(`/api/v1/sessions/${SESSION_STATE.sessionId}/render`)) {
+      const renderError = options.renderError ?? options.renderErrorOnce;
+      if (renderError) {
+        options.renderErrorOnce = undefined;
+        return jsonResponse(
+          {
+            error: {
+              code: renderError.code,
+              message: renderError.message,
+              details: {},
+            },
+          },
+          renderError.status,
+        );
+      }
       return jsonResponse({
         previewUrl: "/api/v1/previews/mocked-preview",
         width: 800,
@@ -162,6 +192,30 @@ function mockApi(options: MockApiOptions = {}) {
         quality: "final",
         cacheHit: false,
       });
+    }
+    if (url.endsWith("/api/v1/analysis") && init?.method === "POST") {
+      return jsonResponse(
+        {
+          analysisId: ANALYSIS_ID,
+          status: "pending",
+          stage: "queued",
+          deduplicated: false,
+        },
+        202,
+      );
+    }
+    if (url.endsWith(`/api/v1/analysis/${ANALYSIS_ID}/result`)) {
+      return jsonResponse(reportForUploadedImage());
+    }
+    if (url.endsWith(`/api/v1/analysis/${ANALYSIS_ID}`)) {
+      return jsonResponse(
+        analysisStatus({
+          status: "completed",
+          stage: "completed",
+          resultAvailable: true,
+          result: reportForUploadedImage(),
+        }),
+      );
     }
     return jsonResponse({ error: { code: "not_found", message: "Not found", details: {} } }, 404);
   });
@@ -223,7 +277,37 @@ function callCount(fetchMock: FetchMock, suffix: string, method?: string): numbe
   }).length;
 }
 
-function revisionBodies(fetchMock: FetchMock): Array<{ recipe: { adjustments?: { exposureEv?: number } } }> {
+function revisionBodies(
+  fetchMock: FetchMock,
+): Array<{
+  recipe: {
+    adjustments?: { exposureEv?: number };
+    curve?: { master?: Array<{ x: number; y: number }> };
+    hsl?: {
+      blue?: { hue?: number; saturation?: number; luminance?: number };
+    };
+    colorGrading?: {
+      shadows?: { hue?: number; saturation?: number };
+      midtones?: { hue?: number; saturation?: number };
+      highlights?: { hue?: number; saturation?: number };
+      balance?: number;
+      blending?: number;
+    };
+    masks?: Array<{
+      id: string;
+      shape: string;
+      feather: number;
+      opacity: number;
+      inverted: boolean;
+    }>;
+    localAdjustments?: Array<{
+      id: string;
+      maskId: string;
+      enabled: boolean;
+      adjustments: { exposureEv?: number };
+    }>;
+  };
+}> {
   return fetchMock.mock.calls
     .filter(
       ([input, init]) =>
@@ -240,6 +324,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("EditorWorkspace", () => {
@@ -274,6 +359,46 @@ describe("EditorWorkspace", () => {
     );
     expect(uploadCall).toBeTruthy();
     expect((uploadCall?.[1] as RequestInit).body).toBeInstanceOf(FormData);
+  });
+
+  it("opens the analysis panel and renders a completed report", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /AI 摄影分析/ }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "AI 摄影分析" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "开始分析" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "场景识别" }, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("模拟分析（未调用真实视觉模型）"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "AI 摄影建议" }),
+    ).toBeInTheDocument();
+
+    const createCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        typeof input === "string" &&
+        input.endsWith("/api/v1/analysis") &&
+        (init as RequestInit | undefined)?.method === "POST",
+    );
+    expect(createCall).toBeTruthy();
+    expect(JSON.parse(String((createCall?.[1] as RequestInit).body))).toEqual({
+      imageId: UPLOADED_IMAGE.imageId,
+      force: false,
+    });
   });
 
   it("shows a readable error when the server rejects the file", async () => {
@@ -394,6 +519,58 @@ describe("EditorWorkspace", () => {
     expect(callCount(fetchMock, "/revisions", "POST")).toBe(revisionsBefore);
   });
 
+  it("retries the crop base once when a newer render supersedes it", async () => {
+    const options: MockApiOptions = {};
+    const fetchMock = mockApi(options);
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+
+    const rendersBefore = callCount(fetchMock, "/render");
+    options.renderErrorOnce = {
+      code: "render_superseded",
+      message: "A newer render request replaced this one.",
+      status: 409,
+    };
+
+    await userEvent.click(screen.getByRole("button", { name: "裁切" }));
+
+    expect(await screen.findByAltText("裁切基准画面")).toBeInTheDocument();
+    expect(callCount(fetchMock, "/render")).toBe(rendersBefore + 2);
+    expect(screen.queryByText("操作未完成，请重试。")).not.toBeInTheDocument();
+  });
+
+  it("shows a non-empty crop base error when the retry is also superseded", async () => {
+    const options: MockApiOptions = {};
+    const fetchMock = mockApi(options);
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+
+    options.renderError = {
+      code: "render_superseded",
+      message: "A newer render request replaced this one.",
+      status: 409,
+    };
+    const rendersBefore = callCount(fetchMock, "/render");
+
+    await userEvent.click(screen.getByRole("button", { name: "裁切" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("操作未完成，请重试。");
+    expect(callCount(fetchMock, "/render")).toBe(rendersBefore + 2);
+
+    options.renderError = undefined;
+    await userEvent.click(
+      screen.getByRole("button", { name: "重新获取裁切基准" }),
+    );
+    expect(await screen.findByAltText("裁切基准画面")).toBeInTheDocument();
+  });
+
   it("keeps adjusting while saving and merges the latest draft into a follow-up save", async () => {
     let releaseFirstSave!: () => void;
     const revisionGate = new Promise<void>((resolve) => {
@@ -461,5 +638,153 @@ describe("EditorWorkspace", () => {
     });
     expect(screen.getByText("已保存")).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "曝光" })).toHaveValue("0");
+  });
+
+  it("adds curve nodes to the draft, re-renders, and saves them", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/render")).toBeGreaterThan(0);
+    });
+
+    vi.spyOn(SVGSVGElement.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 100,
+      bottom: 100,
+      width: 100,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    const rendersBefore = callCount(fetchMock, "/render");
+    fireEvent.click(screen.getByTestId("curve-surface"), {
+      clientX: 50,
+      clientY: 50,
+    });
+
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(1);
+    });
+    expect(callCount(fetchMock, "/render")).toBeGreaterThan(rendersBefore);
+
+    const [body] = revisionBodies(fetchMock);
+    expect(body?.recipe.curve?.master).toHaveLength(3);
+    expect(body?.recipe.curve?.master?.[1]?.x).toBeCloseTo(0.5, 6);
+    expect(screen.getByTestId("curve-node-1")).toBeInTheDocument();
+  });
+
+  it("edits an HSL band, re-renders, and saves it", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/render")).toBeGreaterThan(0);
+    });
+
+    const rendersBefore = callCount(fetchMock, "/render");
+    await userEvent.click(screen.getByRole("button", { name: "蓝色" }));
+    const hue = screen.getByRole("slider", { name: "蓝色 色相" });
+    fireEvent.change(hue, { target: { value: "20" } });
+    fireEvent.pointerUp(hue);
+
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(1);
+    });
+    expect(callCount(fetchMock, "/render")).toBeGreaterThan(rendersBefore);
+
+    const [body] = revisionBodies(fetchMock);
+    expect(body?.recipe.hsl?.blue?.hue).toBe(20);
+    expect(screen.getByRole("slider", { name: "蓝色 色相" })).toHaveValue("20");
+  });
+
+  it("edits a grading zone, re-renders, and saves it", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/render")).toBeGreaterThan(0);
+    });
+
+    const rendersBefore = callCount(fetchMock, "/render");
+    await userEvent.click(screen.getByRole("button", { name: "阴影" }));
+    const hue = screen.getByRole("slider", { name: "阴影 色相" });
+    fireEvent.change(hue, { target: { value: "220" } });
+    fireEvent.pointerUp(hue);
+
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(1);
+    });
+
+    const strength = screen.getByRole("slider", { name: "阴影 强度" });
+    fireEvent.change(strength, { target: { value: "30" } });
+    fireEvent.pointerUp(strength);
+
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBeGreaterThan(1);
+    });
+    expect(callCount(fetchMock, "/render")).toBeGreaterThan(rendersBefore);
+
+    const bodies = revisionBodies(fetchMock);
+    const latest = bodies[bodies.length - 1];
+    expect(latest?.recipe.colorGrading?.shadows?.hue).toBe(220);
+    expect(latest?.recipe.colorGrading?.shadows?.saturation).toBe(30);
+  });
+
+  it("creates a local mask, re-renders, and saves the local adjustment", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    await screen.findByAltText("编辑后的预览");
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/render")).toBeGreaterThan(0);
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "添加矩形区域" }));
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(1);
+    });
+
+    const exposure = screen.getByRole("slider", { name: "局部曝光" });
+    fireEvent.change(exposure, { target: { value: "0.75" } });
+    fireEvent.pointerUp(exposure);
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(2);
+    });
+
+    const feather = screen.getByRole("slider", { name: "局部羽化" });
+    fireEvent.change(feather, { target: { value: "35" } });
+    fireEvent.pointerUp(feather);
+    await waitFor(() => {
+      expect(callCount(fetchMock, "/revisions", "POST")).toBe(3);
+    });
+
+    const bodies = revisionBodies(fetchMock);
+    const latest = bodies[bodies.length - 1];
+    expect(latest?.recipe.masks).toHaveLength(1);
+    expect(latest?.recipe.masks?.[0]?.shape).toBe("rectangle");
+    expect(latest?.recipe.masks?.[0]?.feather).toBe(35);
+    expect(latest?.recipe.localAdjustments).toHaveLength(1);
+    expect(latest?.recipe.localAdjustments?.[0]?.maskId).toBe(
+      latest?.recipe.masks?.[0]?.id,
+    );
+    expect(latest?.recipe.localAdjustments?.[0]?.adjustments.exposureEv).toBe(
+      0.75,
+    );
+    expect(screen.getByTestId("mask-outline")).toBeInTheDocument();
   });
 });

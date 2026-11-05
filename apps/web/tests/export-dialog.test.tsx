@@ -46,7 +46,7 @@ describe("ExportDialog", () => {
     expect(screen.queryByLabelText("JPEG 质量")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenCalledWith("png", null);
+    expect(onExport).toHaveBeenCalledWith("png", null, null);
   });
 
   it("passes the JPEG quality", async () => {
@@ -55,7 +55,71 @@ describe("ExportDialog", () => {
     fireEvent.change(screen.getByLabelText("JPEG 质量"), { target: { value: "80" } });
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
 
-    expect(onExport).toHaveBeenCalledWith("jpeg", 80);
+    expect(onExport).toHaveBeenCalledWith("jpeg", 80, null);
+  });
+
+  it("sends no max edge for the default original size", async () => {
+    const { onExport } = renderDialog();
+
+    expect(screen.getByRole("radio", { name: /原图尺寸/ })).toBeChecked();
+    expect(screen.getByText("原图尺寸（不发送 maxEdge）")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenCalledWith("jpeg", 92, null);
+  });
+
+  it("sends the selected size preset as max edge", async () => {
+    const { onExport } = renderDialog();
+
+    await userEvent.click(screen.getByRole("radio", { name: /长边 2400/ }));
+    expect(screen.getByText("长边 2400 像素（maxEdge）")).toBeInTheDocument();
+    expect(screen.queryByLabelText("自定义长边（像素）")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenCalledWith("jpeg", 92, 2400);
+
+    await userEvent.click(screen.getByRole("radio", { name: /长边 1080/ }));
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 1080);
+  });
+
+  it("sends a custom long edge and treats an empty value as original size", async () => {
+    const { onExport } = renderDialog();
+
+    await userEvent.click(screen.getByRole("radio", { name: /自定义/ }));
+    const input = screen.getByLabelText("自定义长边（像素）");
+
+    fireEvent.change(input, { target: { value: "3200" } });
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 3200);
+
+    fireEvent.change(input, { target: { value: "" } });
+    expect(screen.getByText(/留空表示原图尺寸/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, null);
+  });
+
+  it("clamps out-of-range custom sizes and explains the clamp", async () => {
+    const { onExport } = renderDialog();
+
+    await userEvent.click(screen.getByRole("radio", { name: /自定义/ }));
+    const input = screen.getByLabelText("自定义长边（像素）");
+
+    fireEvent.change(input, { target: { value: "20" } });
+    expect(screen.getByText(/已限制到 64–8192 之间，实际使用 64 像素/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 64);
+
+    fireEvent.change(input, { target: { value: "99999" } });
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 8192);
+  });
+
+  it("shows the pinned sRGB colour space", () => {
+    renderDialog();
+
+    expect(screen.getByText("色彩空间")).toBeInTheDocument();
+    expect(screen.getByText("sRGB（固定，嵌入 ICC）")).toBeInTheDocument();
   });
 
   it("blocks export while the draft has unsaved changes", () => {
@@ -111,7 +175,10 @@ describe("ExportDialog", () => {
       },
     });
 
-    expect(screen.getByText("大图降噪使用了简化算法。")).toBeInTheDocument();
+    expect(
+      screen.getByText(/降噪已简化（导出尺寸超过 12 MP）/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/改用更小的长边/)).toBeInTheDocument();
   });
 
   it("announces export failures", () => {

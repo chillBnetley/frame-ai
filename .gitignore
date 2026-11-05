@@ -21,6 +21,7 @@ test-results/
 blob-report/
 tests/e2e/.artifacts/
 tests/e2e/.tmp/
+apps/web/.e2e-web/
 
 # next.js
 .next/
@@ -36,6 +37,12 @@ next-env.d.ts
 
 # runtime image data: only the repository-root data directory is generated.
 /data/
+
+# in-app provider overrides may contain API keys
+provider-settings.json
+
+# local human-labeled evaluation datasets and result files
+/eval-data/
 
 # local tooling
 *.log

@@ -39,8 +39,14 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
     finally:
         connection.close()
 
-    assert versions == [1]
-    assert {"image_asset", "edit_session", "edit_revision"} <= tables
+    assert versions == [1, 2]
+    assert {
+        "image_asset",
+        "edit_session",
+        "edit_revision",
+        "analysis_task",
+        "analysis_result",
+    } <= tables
     assert foreign_key_issues == []
     assert journal_mode == "wal"
 

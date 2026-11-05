@@ -38,6 +38,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Provider Settings */
+        get: operations["read_provider_settings_api_v1_settings_providers_get"];
+        put?: never;
+        /** Save Provider Settings */
+        post: operations["save_provider_settings_api_v1_settings_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/providers/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Provider Settings */
+        post: operations["test_provider_settings_api_v1_settings_providers_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/providers/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Provider Settings */
+        post: operations["reset_provider_settings_api_v1_settings_providers_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images": {
         parameters: {
             query?: never;
@@ -55,23 +107,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/images/{image_id}/analyze": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Analyze Image */
-        post: operations["analyze_image_api_v1_images__image_id__analyze_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/images/{image_id}/original": {
         parameters: {
             query?: never;
@@ -81,6 +116,58 @@ export interface paths {
         };
         /** Get Original Image */
         get: operations["get_original_image_api_v1_images__image_id__original_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Analysis */
+        post: operations["create_analysis_api_v1_analysis_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analysis/{analysis_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Analysis */
+        get: operations["get_analysis_api_v1_analysis__analysis_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Analysis */
+        delete: operations["delete_analysis_api_v1_analysis__analysis_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analysis/{analysis_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Analysis Result */
+        get: operations["get_analysis_result_api_v1_analysis__analysis_id__result_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -312,6 +399,16 @@ export interface components {
              */
             shadows: number;
             /**
+             * Whites
+             * @default 0
+             */
+            whites: number;
+            /**
+             * Blacks
+             * @default 0
+             */
+            blacks: number;
+            /**
              * Temperature
              * @default 0
              */
@@ -363,69 +460,294 @@ export interface components {
             rotationDeg: number;
             crop?: components["schemas"]["Crop"] | null;
         };
-        /** AnalysisFeatures */
-        AnalysisFeatures: {
-            /** Analyzerversion */
-            analyzerVersion: string;
-            /** Isheuristic */
-            isHeuristic: boolean;
-            size: components["schemas"]["SizeFeatures"];
-            luminance: components["schemas"]["LuminanceFeatures"];
-            clipping: components["schemas"]["ClippingFeatures"];
-            color: components["schemas"]["ColorFeatures"];
-            detail: components["schemas"]["DetailFeatures"];
-            composition: components["schemas"]["CompositionFeatures"];
-            sceneHints: components["schemas"]["SceneHints"];
+        /** AnalysisErrorInfo */
+        AnalysisErrorInfo: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
         };
-        /** AnalyzeRequest */
-        AnalyzeRequest: {
-            /** Sessionid */
-            sessionId?: string | null;
+        /** AnalysisOptions */
+        AnalysisOptions: {
+            /**
+             * Scenerecognition
+             * @default true
+             */
+            sceneRecognition: boolean;
+            /**
+             * Subjectdetection
+             * @default true
+             */
+            subjectDetection: boolean;
+            /**
+             * Lightinganalysis
+             * @default true
+             */
+            lightingAnalysis: boolean;
+            /**
+             * Coloranalysis
+             * @default true
+             */
+            colorAnalysis: boolean;
+            /**
+             * Compositionanalysis
+             * @default true
+             */
+            compositionAnalysis: boolean;
+            /**
+             * Qualitydiagnosis
+             * @default true
+             */
+            qualityDiagnosis: boolean;
         };
-        /** AnalyzeResponse */
-        AnalyzeResponse: {
+        /** AnalysisReport */
+        AnalysisReport: {
             /**
              * Analysisid
              * Format: uuid
              */
             analysisId: string;
-            features: components["schemas"]["AnalysisFeatures"];
-            /** Analyzerversion */
-            analyzerVersion: string;
+            /**
+             * Schemaversion
+             * @default stage3/1
+             * @constant
+             */
+            schemaVersion: "stage3/1";
+            /**
+             * Status
+             * @default completed
+             * @constant
+             */
+            status: "completed";
+            image: components["schemas"]["ReportImage"];
+            engine: components["schemas"]["EngineInfo"];
+            scene: components["schemas"]["SceneResult"];
+            /**
+             * Subjects
+             * @default []
+             */
+            subjects: components["schemas"]["SubjectInfo"][];
+            /**
+             * Regions
+             * @default []
+             */
+            regions: components["schemas"]["RegionInfo"][];
+            lighting: components["schemas"]["LightingResult"];
+            color: components["schemas"]["ColorResult"];
+            composition: components["schemas"]["CompositionReport"];
+            technicalQuality: components["schemas"]["TechnicalQualityResult"];
+            measurements: components["schemas"]["MeasurementsReport"];
+            /**
+             * Issues
+             * @default []
+             */
+            issues: components["schemas"]["IssueReport"][];
+            /**
+             * Recommendations
+             * @default []
+             */
+            recommendations: components["schemas"]["RecommendationReport"][];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Completedat
+             * Format: date-time
+             */
+            completedAt: string;
+        };
+        /** AnalysisTaskCreateRequest */
+        AnalysisTaskCreateRequest: {
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            options?: components["schemas"]["AnalysisOptions"];
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** AnalysisTaskCreated */
+        AnalysisTaskCreated: {
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            status: components["schemas"]["TaskStatus"];
+            stage: components["schemas"]["TaskStage"];
+            /** Deduplicated */
+            deduplicated: boolean;
+        };
+        /** AnalysisTaskStatusResponse */
+        AnalysisTaskStatusResponse: {
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            status: components["schemas"]["TaskStatus"];
+            stage: components["schemas"]["TaskStage"];
+            /** Ismock */
+            isMock: boolean;
+            /** Resultavailable */
+            resultAvailable: boolean;
+            error?: components["schemas"]["AnalysisErrorInfo"] | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Startedat */
+            startedAt?: string | null;
+            /** Completedat */
+            completedAt?: string | null;
+            result?: components["schemas"]["AnalysisReport"] | null;
+        };
+        /** BBox */
+        BBox: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
         };
         /** Body_upload_image_api_v1_images_post */
         Body_upload_image_api_v1_images_post: {
             /** File */
             file: string[];
         };
-        /** CastEstimate */
-        CastEstimate: {
+        /** CastMeasurement */
+        CastMeasurement: {
             /** Temperature */
             temperature: number;
             /** Tint */
             tint: number;
         };
-        /** ClippingFeatures */
-        ClippingFeatures: {
+        /** ClippingMeasurement */
+        ClippingMeasurement: {
             /** Highlightspct */
             highlightsPct: number;
             /** Shadowspct */
             shadowsPct: number;
         };
-        /** ColorFeatures */
-        ColorFeatures: {
+        /** ColorGradeZone */
+        ColorGradeZone: {
+            /**
+             * Hue
+             * @default 0
+             */
+            hue: number;
+            /**
+             * Saturation
+             * @default 0
+             */
+            saturation: number;
+        };
+        /** ColorGrading */
+        ColorGrading: {
+            shadows?: components["schemas"]["ColorGradeZone"];
+            midtones?: components["schemas"]["ColorGradeZone"];
+            highlights?: components["schemas"]["ColorGradeZone"];
+            /**
+             * Balance
+             * @default 0
+             */
+            balance: number;
+            /**
+             * Blending
+             * @default 50
+             */
+            blending: number;
+        };
+        /**
+         * ColorHarmony
+         * @enum {string}
+         */
+        ColorHarmony: "harmonious" | "moderate" | "clashing" | "unknown";
+        /** ColorMeasurement */
+        ColorMeasurement: {
             /** Meanrgb */
             meanRgb: number[];
-            castEstimate: components["schemas"]["CastEstimate"];
+            cast: components["schemas"]["CastMeasurement"];
             /** Saturationmean */
             saturationMean: number;
             /** Saturationp95 */
             saturationP95: number;
+            /**
+             * Saturationp10
+             * @default 0
+             */
+            saturationP10: number;
+            /**
+             * Saturationp50
+             * @default 0
+             */
+            saturationP50: number;
+            /**
+             * Saturationp90
+             * @default 0
+             */
+            saturationP90: number;
+            /**
+             * Colorconcentration
+             * @default 0
+             */
+            colorConcentration: number;
+            /**
+             * Rgbhistogram
+             * @default []
+             */
+            rgbHistogram: number[][];
+            /**
+             * Hsvhistogram
+             * @default []
+             */
+            hsvHistogram: number[][];
         };
+        /** ColorResult */
+        ColorResult: {
+            temperature: components["schemas"]["ColorTemperature"];
+            saturation: components["schemas"]["SaturationLevel"];
+            /** @default unknown */
+            harmony: components["schemas"]["ColorHarmony"];
+            /**
+             * Dominantcolors
+             * @default []
+             */
+            dominantColors: string[];
+            /** Confidence */
+            confidence: number;
+        };
+        /**
+         * ColorTemperature
+         * @enum {string}
+         */
+        ColorTemperature: "warm" | "neutral" | "cool" | "unknown";
         /** CompareResponse */
         CompareResponse: {
             original: components["schemas"]["CompareSide"];
             revision: components["schemas"]["CompareSide"];
+            /** Warnings */
+            warnings?: string[];
         };
         /** CompareSide */
         CompareSide: {
@@ -436,15 +758,39 @@ export interface components {
             /** Height */
             height: number;
         };
-        /** CompositionFeatures */
-        CompositionFeatures: {
-            /** Horizontiltdeg */
-            horizonTiltDeg: number | null;
+        /**
+         * CompositionBalance
+         * @enum {string}
+         */
+        CompositionBalance: "balanced" | "moderate" | "unbalanced" | "unknown";
+        /** CompositionMeasurement */
+        CompositionMeasurement: {
             /** Edgedensitygrid3X3 */
             edgeDensityGrid3x3: number[];
             /** Brightnesscentroid */
             brightnessCentroid: number[];
+            /** Horizontiltdeg */
+            horizonTiltDeg?: number | null;
         };
+        /** CompositionReport */
+        CompositionReport: {
+            balance: components["schemas"]["CompositionBalance"];
+            subjectPosition: components["schemas"]["SubjectPosition"];
+            negativeSpace: components["schemas"]["NegativeSpace"];
+            /** @default unknown */
+            occlusion: components["schemas"]["Occlusion"];
+            /** Subjectarearatio */
+            subjectAreaRatio?: number | null;
+            /** Horizontiltdeg */
+            horizonTiltDeg?: number | null;
+            /** Confidence */
+            confidence: number;
+        };
+        /**
+         * ContrastLevel
+         * @enum {string}
+         */
+        ContrastLevel: "low" | "moderate" | "high" | "unknown";
         /** CreateRevisionRequest */
         CreateRevisionRequest: {
             recipe: components["schemas"]["EditRecipe"];
@@ -479,21 +825,56 @@ export interface components {
             /** H */
             h: number;
         };
-        /** DetailFeatures */
-        DetailFeatures: {
+        /** CurvePoint */
+        CurvePoint: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /** CurveSet */
+        CurveSet: {
+            /**
+             * Master
+             * @default []
+             */
+            master: components["schemas"]["CurvePoint"][];
+            /**
+             * Red
+             * @default []
+             */
+            red: components["schemas"]["CurvePoint"][];
+            /**
+             * Green
+             * @default []
+             */
+            green: components["schemas"]["CurvePoint"][];
+            /**
+             * Blue
+             * @default []
+             */
+            blue: components["schemas"]["CurvePoint"][];
+        };
+        /** DetailMeasurement */
+        DetailMeasurement: {
             /** Sharpness */
             sharpness: number;
             /** Noiseestimate */
             noiseEstimate: number;
+            /**
+             * Gradientanisotropy
+             * @default 0
+             */
+            gradientAnisotropy: number;
         };
         /** EditRecipe */
         EditRecipe: {
             /**
              * Schemaversion
-             * @default 1.0
+             * @default 2.0
              * @constant
              */
-            schemaVersion: "1.0";
+            schemaVersion: "2.0";
             /**
              * Styleid
              * @default natural
@@ -506,10 +887,41 @@ export interface components {
              */
             styleStrength: number;
             adjustments?: components["schemas"]["Adjustments"];
+            curve?: components["schemas"]["CurveSet"];
+            hsl?: components["schemas"]["HslAdjustments"];
+            colorGrading?: components["schemas"]["ColorGrading"];
+            /**
+             * Masks
+             * @default []
+             */
+            masks: components["schemas"]["UserMask"][];
+            /**
+             * Localadjustments
+             * @default []
+             */
+            localAdjustments: components["schemas"]["LocalAdjustment"][];
+            output?: components["schemas"]["OutputSettings"];
             /** Rationale */
             rationale?: string[];
             /** Warnings */
             warnings?: string[];
+        };
+        /** EngineInfo */
+        EngineInfo: {
+            /** Visionprovider */
+            visionProvider: string;
+            /** Visionmodel */
+            visionModel: string;
+            /** Decisionprovider */
+            decisionProvider: string;
+            /** Decisionmodel */
+            decisionModel: string;
+            /** Promptversion */
+            promptVersion: string;
+            /** Analyzerversion */
+            analyzerVersion: string;
+            /** Ismock */
+            isMock: boolean;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -540,7 +952,20 @@ export interface components {
             format: "jpeg" | "png";
             /** Quality */
             quality?: number | null;
+            /** Maxedge */
+            maxEdge?: number | null;
+            /**
+             * Colorspace
+             * @default sRGB
+             * @constant
+             */
+            colorSpace: "sRGB";
         };
+        /**
+         * ExposureQuality
+         * @enum {string}
+         */
+        ExposureQuality: "underexposed" | "slightly_underexposed" | "balanced" | "slightly_overexposed" | "overexposed" | "unknown";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -559,8 +984,172 @@ export interface components {
             version: string;
             storage: components["schemas"]["StorageHealth"];
         };
-        /** LuminanceFeatures */
-        LuminanceFeatures: {
+        /** HslAdjustments */
+        HslAdjustments: {
+            red?: components["schemas"]["HslBand"];
+            orange?: components["schemas"]["HslBand"];
+            yellow?: components["schemas"]["HslBand"];
+            green?: components["schemas"]["HslBand"];
+            aqua?: components["schemas"]["HslBand"];
+            blue?: components["schemas"]["HslBand"];
+            purple?: components["schemas"]["HslBand"];
+            magenta?: components["schemas"]["HslBand"];
+        };
+        /** HslBand */
+        HslBand: {
+            /**
+             * Hue
+             * @default 0
+             */
+            hue: number;
+            /**
+             * Saturation
+             * @default 0
+             */
+            saturation: number;
+            /**
+             * Luminance
+             * @default 0
+             */
+            luminance: number;
+        };
+        /** IssueReport */
+        IssueReport: {
+            /** Id */
+            id: string;
+            type: components["schemas"]["IssueType"];
+            severity: components["schemas"]["Severity"];
+            /** Confidence */
+            confidence: number;
+            /** Evidence */
+            evidence: string;
+            /** Suggestion */
+            suggestion?: string | null;
+            /**
+             * Regionids
+             * @default []
+             */
+            regionIds: string[];
+        };
+        /**
+         * IssueType
+         * @enum {string}
+         */
+        IssueType: "overexposure" | "underexposure" | "highlight_clipping" | "shadow_clipping" | "subject_underexposure" | "background_overexposure" | "color_cast" | "temperature_mismatch" | "saturation_issue" | "color_hierarchy_issue" | "subject_placement" | "balance_issue" | "negative_space_issue" | "horizon_tilt" | "focus_issue" | "motion_blur" | "high_noise" | "low_detail" | "harsh_contrast" | "flat_lighting";
+        /**
+         * LightingDirection
+         * @enum {string}
+         */
+        LightingDirection: "front" | "side" | "back" | "side_back" | "diffuse" | "overcast" | "artificial" | "mixed" | "unknown";
+        /** LightingResult */
+        LightingResult: {
+            direction: components["schemas"]["LightingDirection"];
+            type: components["schemas"]["LightingType"];
+            contrast: components["schemas"]["ContrastLevel"];
+            /** Confidence */
+            confidence: number;
+        };
+        /**
+         * LightingType
+         * @enum {string}
+         */
+        LightingType: "natural" | "artificial" | "mixed" | "unknown";
+        /** LocalAdjustment */
+        LocalAdjustment: {
+            /** Id */
+            id: string;
+            /**
+             * Maskid
+             * @default full
+             */
+            maskId: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            adjustments?: components["schemas"]["LocalAdjustments"];
+        };
+        /** LocalAdjustments */
+        LocalAdjustments: {
+            /**
+             * Exposureev
+             * @default 0
+             */
+            exposureEv: number;
+            /**
+             * Contrast
+             * @default 0
+             */
+            contrast: number;
+            /**
+             * Highlights
+             * @default 0
+             */
+            highlights: number;
+            /**
+             * Shadows
+             * @default 0
+             */
+            shadows: number;
+            /**
+             * Whites
+             * @default 0
+             */
+            whites: number;
+            /**
+             * Blacks
+             * @default 0
+             */
+            blacks: number;
+            /**
+             * Temperature
+             * @default 0
+             */
+            temperature: number;
+            /**
+             * Tint
+             * @default 0
+             */
+            tint: number;
+            /**
+             * Saturation
+             * @default 0
+             */
+            saturation: number;
+            /**
+             * Vibrance
+             * @default 0
+             */
+            vibrance: number;
+            /**
+             * Clarity
+             * @default 0
+             */
+            clarity: number;
+            /**
+             * Sharpen
+             * @default 0
+             */
+            sharpen: number;
+            /**
+             * Denoise
+             * @default 0
+             */
+            denoise: number;
+            /**
+             * Vignette
+             * @default 0
+             */
+            vignette: number;
+            /**
+             * Grain
+             * @default 0
+             */
+            grain: number;
+        };
+        /** LuminanceMeasurement */
+        LuminanceMeasurement: {
             /** Mean */
             mean: number;
             /** Std */
@@ -577,6 +1166,159 @@ export interface components {
             p99: number;
             /** Histogram32 */
             histogram32: number[];
+        };
+        /** MeasurementsReport */
+        MeasurementsReport: {
+            luminance: components["schemas"]["LuminanceMeasurement"];
+            clipping: components["schemas"]["ClippingMeasurement"];
+            color: components["schemas"]["ColorMeasurement"];
+            detail: components["schemas"]["DetailMeasurement"];
+            composition: components["schemas"]["CompositionMeasurement"];
+        };
+        /**
+         * NegativeSpace
+         * @enum {string}
+         */
+        NegativeSpace: "low" | "moderate" | "high" | "unknown";
+        /**
+         * NoiseLevel
+         * @enum {string}
+         */
+        NoiseLevel: "low" | "moderate" | "high" | "unknown";
+        /**
+         * Occlusion
+         * @enum {string}
+         */
+        Occlusion: "none" | "minor" | "significant" | "unknown";
+        /** OutputSettings */
+        OutputSettings: {
+            /**
+             * Format
+             * @default jpeg
+             * @enum {string}
+             */
+            format: "jpeg" | "png";
+            /**
+             * Quality
+             * @default 92
+             */
+            quality: number;
+            /**
+             * Colorspace
+             * @default sRGB
+             * @constant
+             */
+            colorSpace: "sRGB";
+        };
+        /**
+         * Priority
+         * @enum {string}
+         */
+        Priority: "low" | "medium" | "high";
+        /** ProviderEntryUpdate */
+        ProviderEntryUpdate: {
+            /** Provider */
+            provider?: ("mock" | "openai") | null;
+            /** Model */
+            model?: string | null;
+            /** Baseurl */
+            baseUrl?: string | null;
+            /** Apikey */
+            apiKey?: string | null;
+            /**
+             * Clearapikey
+             * @default false
+             */
+            clearApiKey: boolean;
+        };
+        /** ProviderEntryView */
+        ProviderEntryView: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "mock" | "openai";
+            /** Model */
+            model: string;
+            /** Baseurl */
+            baseUrl: string;
+            /** Hasapikey */
+            hasApiKey: boolean;
+            /**
+             * Apikeysource
+             * @enum {string}
+             */
+            apiKeySource: "saved" | "environment" | "none";
+        };
+        /** ProviderSettingsUpdate */
+        ProviderSettingsUpdate: {
+            vision?: components["schemas"]["ProviderEntryUpdate"] | null;
+            decision?: components["schemas"]["ProviderEntryUpdate"] | null;
+        };
+        /** ProviderSettingsView */
+        ProviderSettingsView: {
+            vision: components["schemas"]["ProviderEntryView"];
+            decision: components["schemas"]["ProviderEntryView"];
+            /** Ismock */
+            isMock: boolean;
+            /** Hassavedoverrides */
+            hasSavedOverrides: boolean;
+        };
+        /** ProviderTestResponse */
+        ProviderTestResponse: {
+            vision: components["schemas"]["ProviderTestResult"];
+            decision: components["schemas"]["ProviderTestResult"];
+        };
+        /** ProviderTestResult */
+        ProviderTestResult: {
+            /** Ok */
+            ok: boolean;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "mock" | "openai";
+            /** Model */
+            model: string;
+            /** Latencyms */
+            latencyMs: number;
+            /** Code */
+            code?: string | null;
+            /** Message */
+            message?: string | null;
+        };
+        /**
+         * RecommendationCategory
+         * @enum {string}
+         */
+        RecommendationCategory: "exposure" | "color" | "composition" | "sharpness" | "lighting";
+        /** RecommendationReport */
+        RecommendationReport: {
+            category: components["schemas"]["RecommendationCategory"];
+            priority: components["schemas"]["Priority"];
+            /** Description */
+            description: string;
+            /**
+             * Targetregions
+             * @default []
+             */
+            targetRegions: string[];
+        };
+        /** RegionInfo */
+        RegionInfo: {
+            /** Id */
+            id: string;
+            type: components["schemas"]["SubjectType"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "vision" | "detector";
+            /** Confidence */
+            confidence: number;
+            bbox: components["schemas"]["BBox"];
+            /** Mask */
+            mask?: null;
         };
         /** RenderRequest */
         RenderRequest: {
@@ -605,6 +1347,24 @@ export interface components {
             quality: "draft" | "final";
             /** Cachehit */
             cacheHit: boolean;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** ReportImage */
+        ReportImage: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Aspectratio */
+            aspectRatio: number;
+            /** Sha256 */
+            sha256: string;
         };
         /** RevisionListResponse */
         RevisionListResponse: {
@@ -664,21 +1424,33 @@ export interface components {
         RuntimeConfigResponse: {
             /** Maxuploadbytes */
             maxUploadBytes: number;
+            /** Maxjsonbodybytes */
+            maxJsonBodyBytes: number;
             /** Maximagepixels */
             maxImagePixels: number;
             /** Allowedmimetypes */
             allowedMimeTypes: string[];
         };
-        /** SceneHints */
-        SceneHints: {
-            /** Islowlight */
-            isLowLight: boolean;
-            /** Ishighkey */
-            isHighKey: boolean;
-            /** Islowkey */
-            isLowKey: boolean;
-            /** Ismonochrome */
-            isMonochrome: boolean;
+        /**
+         * SaturationLevel
+         * @enum {string}
+         */
+        SaturationLevel: "low" | "moderate" | "high" | "unknown";
+        /**
+         * SceneLabel
+         * @enum {string}
+         */
+        SceneLabel: "portrait" | "landscape" | "street" | "architecture" | "night" | "indoor" | "food" | "nature" | "other";
+        /** SceneResult */
+        SceneResult: {
+            primary: components["schemas"]["SceneLabel"];
+            /**
+             * Secondary
+             * @default []
+             */
+            secondary: components["schemas"]["SceneLabel"][];
+            /** Confidence */
+            confidence: number;
         };
         /** SessionState */
         SessionState: {
@@ -708,23 +1480,67 @@ export interface components {
             canRedo: boolean;
             revision: components["schemas"]["RevisionView"];
         };
-        /** SizeFeatures */
-        SizeFeatures: {
-            /** Width */
-            width: number;
-            /** Height */
-            height: number;
-            /** Orientation */
-            orientation: number;
-            /** Aspectratio */
-            aspectRatio: number;
-        };
+        /**
+         * Severity
+         * @enum {string}
+         */
+        Severity: "low" | "medium" | "high";
+        /**
+         * SharpnessQuality
+         * @enum {string}
+         */
+        SharpnessQuality: "poor" | "soft" | "good" | "unknown";
         /** StorageHealth */
         StorageHealth: {
             /** Ok */
             ok: boolean;
             /** Writable */
             writable: boolean;
+        };
+        /** SubjectInfo */
+        SubjectInfo: {
+            /** Id */
+            id: string;
+            type: components["schemas"]["SubjectType"];
+            role: components["schemas"]["SubjectRole"];
+            /** Confidence */
+            confidence: number;
+            bbox: components["schemas"]["BBox"];
+            /** Regionid */
+            regionId: string;
+        };
+        /**
+         * SubjectPosition
+         * @enum {string}
+         */
+        SubjectPosition: "left" | "right" | "center" | "top" | "bottom" | "unknown";
+        /**
+         * SubjectRole
+         * @enum {string}
+         */
+        SubjectRole: "primary" | "secondary";
+        /**
+         * SubjectType
+         * @enum {string}
+         */
+        SubjectType: "person" | "building" | "sky" | "road" | "plant" | "animal" | "food" | "vehicle" | "other";
+        /**
+         * TaskStage
+         * @enum {string}
+         */
+        TaskStage: "queued" | "preprocessing" | "vision" | "features" | "diagnosis" | "completed" | "failed";
+        /**
+         * TaskStatus
+         * @enum {string}
+         */
+        TaskStatus: "pending" | "processing" | "completed" | "failed";
+        /** TechnicalQualityResult */
+        TechnicalQualityResult: {
+            exposure: components["schemas"]["ExposureQuality"];
+            sharpness: components["schemas"]["SharpnessQuality"];
+            noise: components["schemas"]["NoiseLevel"];
+            /** Confidence */
+            confidence: number;
         };
         /** UndoRequest */
         UndoRequest: {
@@ -750,6 +1566,52 @@ export interface components {
             mimeType: string;
             /** Bytes */
             bytes: number;
+        };
+        /** UserMask */
+        UserMask: {
+            /** Id */
+            id: string;
+            /**
+             * Shape
+             * @default rectangle
+             * @enum {string}
+             */
+            shape: "rectangle" | "ellipse";
+            /**
+             * Source
+             * @default user
+             * @constant
+             */
+            source: "user";
+            /**
+             * Coordinatespace
+             * @default source-normalized
+             * @constant
+             */
+            coordinateSpace: "source-normalized";
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /**
+             * Feather
+             * @default 15
+             */
+            feather: number;
+            /**
+             * Opacity
+             * @default 100
+             */
+            opacity: number;
+            /**
+             * Inverted
+             * @default false
+             */
+            inverted: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -813,6 +1675,202 @@ export interface operations {
             };
         };
     };
+    read_provider_settings_api_v1_settings_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSettingsView"];
+                };
+            };
+            /** @description Provider settings are incomplete or invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings could not be saved */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings service is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_provider_settings_api_v1_settings_providers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSettingsView"];
+                };
+            };
+            /** @description Provider settings are incomplete or invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings could not be saved */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings service is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_provider_settings_api_v1_settings_providers_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderTestResponse"];
+                };
+            };
+            /** @description Provider settings are incomplete or invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings could not be saved */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings service is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_provider_settings_api_v1_settings_providers_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSettingsView"];
+                };
+            };
+            /** @description Provider settings are incomplete or invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings could not be saved */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings service is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     upload_image_api_v1_images_post: {
         parameters: {
             query?: never;
@@ -833,86 +1891,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadImageResponse"];
-                };
-            };
-            /** @description Invalid or empty upload */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Image not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Upload or pixel limit exceeded */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unsupported or invalid image */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Storage failure */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    analyze_image_api_v1_images__image_id__analyze_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                image_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["AnalyzeRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnalyzeResponse"];
                 };
             };
             /** @description Invalid or empty upload */
@@ -1040,6 +2018,418 @@ export interface operations {
             };
             /** @description Storage failure */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_analysis_api_v1_analysis_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisTaskCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisTaskCreated"];
+                };
+            };
+            /** @description All analysis options were disabled */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis task or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Result not ready or task still processing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis input copy exceeded the size limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Analysis failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider not configured or unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_analysis_api_v1_analysis__analysis_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisTaskStatusResponse"];
+                };
+            };
+            /** @description All analysis options were disabled */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis task or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Result not ready or task still processing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis input copy exceeded the size limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Analysis failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider not configured or unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_analysis_api_v1_analysis__analysis_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description All analysis options were disabled */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis task or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Result not ready or task still processing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis input copy exceeded the size limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Analysis failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider not configured or unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_analysis_result_api_v1_analysis__analysis_id__result_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisReport"];
+                };
+            };
+            /** @description All analysis options were disabled */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis task or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Result not ready or task still processing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis input copy exceeded the size limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Analysis failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider not configured or unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider timed out */
+            504: {
                 headers: {
                     [name: string]: unknown;
                 };

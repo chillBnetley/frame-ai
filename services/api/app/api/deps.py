@@ -4,9 +4,10 @@ from fastapi import Request
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.services.analysis_service import AnalysisService
+from app.services.analysis_task_service import AnalysisTaskService
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
+from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.session_service import SessionService
 
@@ -25,10 +26,17 @@ def get_image_service(request: Request) -> ImageService:
     return service
 
 
-def get_analysis_service(request: Request) -> AnalysisService:
-    service = getattr(request.app.state, "analysis_service", None)
-    if not isinstance(service, AnalysisService):
+def get_analysis_task_service(request: Request) -> AnalysisTaskService:
+    service = getattr(request.app.state, "analysis_task_service", None)
+    if not isinstance(service, AnalysisTaskService):
         raise AppError(503, "service_unavailable", "The service is not ready.")
+    return service
+
+
+def get_provider_settings_service(request: Request) -> ProviderSettingsService:
+    service = getattr(request.app.state, "provider_settings_service", None)
+    if not isinstance(service, ProviderSettingsService):
+        raise AppError(503, "provider_settings_unavailable", "The service is not ready.")
     return service
 
 

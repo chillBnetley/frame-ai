@@ -85,6 +85,7 @@ def render_preview(
         height=result.height,
         quality=result.quality,
         cache_hit=result.cache_hit,
+        warnings=list(result.warnings),
     )
 
 

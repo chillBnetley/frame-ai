@@ -49,3 +49,27 @@ def test_cross_site_fetch_metadata_is_rejected(client: TestClient):
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "origin_not_allowed"
+
+
+def test_preflight_allows_delete(client: TestClient):
+    response = client.options(
+        "/api/v1/analysis/00000000-0000-4000-8000-000000000000",
+        headers={"Origin": "http://testserver", "Access-Control-Request-Method": "DELETE"},
+    )
+
+    assert response.status_code == 200
+    assert "DELETE" in response.headers["access-control-allow-methods"]
+
+
+def test_preflight_for_unsupported_method_returns_the_json_envelope(client: TestClient):
+    response = client.options(
+        "/api/v1/images",
+        headers={"Origin": "http://testserver", "Access-Control-Request-Method": "PUT"},
+    )
+
+    assert response.status_code == 405
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["x-request-id"]
+    body = response.json()
+    assert body["error"]["code"] == "cors_method_denied"
+    assert body["error"]["details"]["method"] == "PUT"

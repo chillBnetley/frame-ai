@@ -26,6 +26,8 @@ const GROUPS: AdjustmentGroup[] = [
       { key: "contrast", label: "对比度" },
       { key: "highlights", label: "高光" },
       { key: "shadows", label: "阴影" },
+      { key: "whites", label: "白色色阶" },
+      { key: "blacks", label: "黑色色阶" },
     ],
   },
   {
@@ -98,7 +100,7 @@ export function AdjustmentPanel({
           手动参数
         </h3>
         <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
-          Recipe 1.0
+          Recipe 2.0
         </span>
       </div>
 

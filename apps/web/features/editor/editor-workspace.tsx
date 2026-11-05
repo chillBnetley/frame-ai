@@ -9,11 +9,17 @@ import {
   RefreshIcon,
   ShieldCheckIcon,
 } from "@/components/icons";
+import { AnalysisPanel } from "@/features/analysis/components/analysis-panel";
+import { useAnalysis } from "@/features/analysis/hooks/use-analysis";
 import { AdjustmentPanel } from "@/features/editor/components/adjustment-panel";
+import { ColorGradingPanel } from "@/features/editor/components/color-grading-panel";
 import { CompareView } from "@/features/editor/components/compare-view";
 import { CropOverlay } from "@/features/editor/components/crop-overlay";
+import { CurveEditor } from "@/features/editor/components/curve-editor";
 import { ExportDialog } from "@/features/editor/components/export-dialog";
+import { HslPanel } from "@/features/editor/components/hsl-panel";
 import { HistoryBar } from "@/features/editor/components/history-bar";
+import { LocalAdjustmentsPanel } from "@/features/editor/components/local-adjustments-panel";
 import { PreviewImage } from "@/features/editor/components/preview-image";
 import { PreviewMonitor } from "@/features/editor/components/preview-monitor";
 import { HealthIndicator } from "@/features/editor/health-indicator";
@@ -48,10 +54,18 @@ import {
 } from "@/lib/api/client";
 import { renderPreview } from "@/lib/api/sessions";
 import { describeUploadError } from "@/lib/api/errors";
-import { describeEditorError } from "@/lib/error-messages";
+import { describeEditorError, ERROR_FALLBACK_MESSAGE } from "@/lib/error-messages";
+import { nextRenderSeq } from "@/lib/render-seq";
 import {
   DEFAULT_ADJUSTMENTS,
+  normalizeColorGrading,
+  normalizeHsl,
   normalizeRecipe,
+  withColorGradingSet,
+  withColorGradeZone,
+  withCurveSet,
+  withHsl,
+  withHslSet,
 } from "@/lib/recipe";
 import { validateUploadFile, type UploadLimits } from "@/lib/upload-validation";
 import type { ApiStatus, UploadedImage, UploadError } from "@/types/image";
@@ -70,6 +84,9 @@ const NON_RETRYABLE_CODES = new Set([
 
 const toolButtonBase =
   "inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 text-xs text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-accent/40 aria-pressed:bg-accent/10 aria-pressed:text-accent";
+
+const CROP_BASE_MAX_AUTO_RETRIES = 1;
+const CROP_BASE_RETRYABLE_CODES = new Set(["render_superseded", "request_timeout"]);
 
 function useApiHealth(): ApiStatus {
   const [status, setStatus] = useState<ApiStatus>("checking");
@@ -168,12 +185,16 @@ function EditorStage({
   const { sentinelRef: previewSentinelRef, isVisible: previewVisible } =
     usePreviewVisibility();
   const exporter = useExport();
+  const analysis = useAnalysis(uploading ? null : state.imageId);
 
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [cropMode, setCropMode] = useState(false);
   const [cropBase, setCropBase] = useState<CropBase | null>(null);
   const [cropBaseError, setCropBaseError] = useState<string | null>(null);
   const [cropAttempt, setCropAttempt] = useState(0);
+  const cropBaseRetriesRef = useRef(0);
+  const cropBaseRotationRef = useRef<number | null>(null);
   const [cropBefore, setCropBefore] = useState<Crop | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [commitNonce, setCommitNonce] = useState(0);
@@ -225,6 +246,7 @@ function EditorStage({
     void requestFinal();
   }, [requestFinal, state.activeRevisionId]);
 
+  
   const sessionId = state.sessionId;
   const rotationDeg = state.draft.adjustments.rotationDeg;
 
@@ -232,10 +254,14 @@ function EditorStage({
     if (!cropMode || sessionId === null) {
       return;
     }
+    if (cropBaseRotationRef.current !== rotationDeg) {
+      cropBaseRotationRef.current = rotationDeg;
+      cropBaseRetriesRef.current = 0;
+    }
     let cancelled = false;
     const controller = new AbortController();
     const recipe = normalizeRecipe({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       styleId: "natural",
       styleStrength: 0,
       adjustments: { ...DEFAULT_ADJUSTMENTS, rotationDeg },
@@ -243,7 +269,7 @@ function EditorStage({
       warnings: [],
     });
 
-    renderPreview(sessionId, { recipe, quality: "final" }, controller.signal)
+    renderPreview(sessionId, { recipe, quality: "final" }, controller.signal, nextRenderSeq())
       .then((result) => {
         if (!cancelled) {
           setCropBase({
@@ -255,10 +281,20 @@ function EditorStage({
         }
       })
       .catch((error: unknown) => {
-        if (!cancelled && !controller.signal.aborted) {
-          setCropBase(null);
-          setCropBaseError(describeEditorError(error).message);
+        if (cancelled || controller.signal.aborted) {
+          return;
         }
+        const described = describeEditorError(error);
+        if (
+          CROP_BASE_RETRYABLE_CODES.has(described.code) &&
+          cropBaseRetriesRef.current < CROP_BASE_MAX_AUTO_RETRIES
+        ) {
+          cropBaseRetriesRef.current += 1;
+          setCropAttempt((value) => value + 1);
+          return;
+        }
+        setCropBase(null);
+        setCropBaseError(described.message.trim() || ERROR_FALLBACK_MESSAGE);
       });
 
     return () => {
@@ -276,8 +312,10 @@ function EditorStage({
     setCropBefore(state.draft.adjustments.crop ?? null);
     setCropBase(null);
     setCropBaseError(null);
+    cropBaseRetriesRef.current = 0;
+    cropBaseRotationRef.current = state.draft.adjustments.rotationDeg;
     setCropMode(true);
-  }, [state.draft.adjustments.crop]);
+  }, [state.draft.adjustments.crop, state.draft.adjustments.rotationDeg]);
 
   const handleCancelCrop = useCallback(() => {
     dispatch({ type: "draft-crop", crop: cropBefore });
@@ -309,7 +347,7 @@ function EditorStage({
   }, []);
 
   const handleExport = useCallback(
-    (format: "jpeg" | "png", quality: number | null) => {
+    (format: "jpeg" | "png", quality: number | null, maxEdge: number | null) => {
       if (state.activeRevisionId === null) {
         return;
       }
@@ -317,6 +355,7 @@ function EditorStage({
         revisionId: state.activeRevisionId,
         format,
         quality,
+        maxEdge,
       });
     },
     [exporter, state.activeRevisionId],
@@ -337,8 +376,18 @@ function EditorStage({
     !exportOpen;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="editor-preview-column grid content-start gap-4">
+    <div
+      className={
+        analysisOpen
+          ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px_360px]"
+          : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]"
+      }
+    >
+      <div
+        className={`editor-preview-column grid content-start gap-4 ${
+          analysisOpen ? "lg:col-start-1 lg:row-start-1" : ""
+        }`}
+      >
         <section
           aria-labelledby="editor-preview-heading"
           className="editor-preview-card rounded-2xl border border-white/8 bg-black/20 p-4 sm:p-5"
@@ -399,6 +448,20 @@ function EditorStage({
             </button>
             <button
               type="button"
+              aria-pressed={analysisOpen}
+              aria-expanded={analysisOpen}
+              aria-controls="analysis-panel"
+              onClick={() => setAnalysisOpen((value) => !value)}
+              disabled={uploading}
+              className={toolButtonBase}
+            >
+              AI 摄影分析
+              {analysis.running && (
+                <span className="font-mono text-[10px] text-accent">分析中</span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setExportOpen(true)}
               disabled={!canExport || dirty || saving}
               title={
@@ -428,6 +491,7 @@ function EditorStage({
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) {
+                  setAnalysisOpen(false);
                   onFileSelected(file);
                 }
                 event.target.value = "";
@@ -511,6 +575,7 @@ function EditorStage({
                     type="button"
                     onClick={() => {
                       setCropBaseError(null);
+                      cropBaseRetriesRef.current = 0;
                       setCropAttempt((value) => value + 1);
                     }}
                     className="min-h-11 rounded-lg border border-red-300/25 bg-red-300/10 px-3 text-xs text-red-100"
@@ -616,7 +681,24 @@ function EditorStage({
         </div>
       </div>
 
-      <aside aria-label="参数面板" className="editor-adjustment-panel min-w-0">
+      <AnalysisPanel
+        open={analysisOpen}
+        imageId={state.imageId ?? ""}
+        analysis={analysis}
+        onClose={() => setAnalysisOpen(false)}
+        className={
+          analysisOpen
+            ? "lg:col-start-1 lg:row-start-2 xl:col-start-2 xl:row-start-1"
+            : undefined
+        }
+      />
+
+      <aside
+        aria-label="参数面板"
+        className={`editor-adjustment-panel min-w-0 ${
+          analysisOpen ? "lg:col-start-2 lg:row-start-1 xl:col-start-3" : ""
+        }`}
+      >
         <div
           className="editor-adjustment-scroll rounded-2xl border border-white/8 bg-black/20 p-4"
           data-testid="adjustment-panel-scroll"
@@ -632,6 +714,105 @@ function EditorStage({
               requestCommit();
             }}
           />
+          <div className="mt-5">
+            <CurveEditor
+              curve={state.draft.curve}
+              disabled={cropMode || compareOpen}
+              onChange={(curve) =>
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withCurveSet(state.draft, curve),
+                })
+              }
+              onCommit={requestCommit}
+            />
+          </div>
+          <div className="mt-5">
+            <HslPanel
+              hsl={state.draft.hsl}
+              disabled={cropMode || compareOpen}
+              onChange={(band, key, value) =>
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withHsl(state.draft, band, key, value),
+                })
+              }
+              onResetBand={(band) => {
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withHslSet(state.draft, {
+                    ...normalizeHsl(state.draft.hsl),
+                    [band]: {},
+                  }),
+                });
+                requestCommit();
+              }}
+              onResetAll={() => {
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withHslSet(state.draft, {}),
+                });
+                requestCommit();
+              }}
+              onCommit={requestCommit}
+            />
+          </div>
+          <div className="mt-5">
+            <ColorGradingPanel
+              grading={state.draft.colorGrading}
+              disabled={cropMode || compareOpen}
+              onChange={(zone, key, value) =>
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withColorGradeZone(state.draft, zone, key, value),
+                })
+              }
+              onOptionChange={(key, value) => {
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withColorGradingSet(state.draft, {
+                    ...normalizeColorGrading(state.draft.colorGrading),
+                    [key]: value,
+                  }),
+                });
+              }}
+              onResetZone={(zone) => {
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withColorGradingSet(state.draft, {
+                    ...normalizeColorGrading(state.draft.colorGrading),
+                    [zone]: { hue: 0, saturation: 0 },
+                  }),
+                });
+                requestCommit();
+              }}
+              onResetAll={() => {
+                dispatch({
+                  type: "draft-recipe",
+                  recipe: withColorGradingSet(state.draft, {}),
+                });
+                requestCommit();
+              }}
+              onCommit={requestCommit}
+            />
+          </div>
+          <div className="mt-5">
+            <LocalAdjustmentsPanel
+              recipe={state.draft}
+              previewUrl={preview.url}
+              previewWidth={preview.width}
+              previewHeight={preview.height}
+              sourceSize={
+                image ? { width: image.width, height: image.height } : null
+              }
+              renderWarnings={preview.warnings}
+              disabled={cropMode || compareOpen}
+              onChange={(recipe) =>
+                dispatch({ type: "draft-recipe", recipe })
+              }
+              onCommit={requestCommit}
+            />
+          </div>
         </div>
       </aside>
 
@@ -836,7 +1017,7 @@ function EditorWorkspaceInner() {
           </span>
           <span className="inline-flex items-center gap-2">
             <CheckCircleIcon className="size-3.5 text-white/25" />
-            导出移除 EXIF/GPS 并嵌入 sRGB；阶段 2 不调用 AI 模型。
+            导出移除 EXIF/GPS 并嵌入 sRGB；AI 摄影分析只在你主动开启时运行。
           </span>
         </div>
       </div>

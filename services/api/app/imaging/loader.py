@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import threading
+import time
 import warnings
 from dataclasses import dataclass
 from io import BytesIO
@@ -18,11 +20,14 @@ from app.core.errors import AppError
 
 logger = logging.getLogger("frame_ai.loader")
 
-PROXY_VERSION = "loader/2"
+PROXY_VERSION = "loader/3"
 PROXY_SUBDIR = "proxies"
 PROXY_EDGE_STEP = 64
 _UINT16_MODES = {"I;16", "I;16B", "I;16L", "I;16N"}
 _SRGB_PROFILE = ImageCms.createProfile("sRGB")
+# Windows refuses to replace a file another handle has open, so concurrent
+# writers of the same content-addressed proxy must not race on the rename.
+_PROXY_WRITE_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -98,14 +103,15 @@ def _to_float_rgb(image: Image.Image) -> NDArray[np.float32]:
         gray = np.clip(np.asarray(image, dtype=np.float32), 0.0, 1.0)
         return np.ascontiguousarray(np.repeat(gray[..., None], 3, axis=2))
 
+    # Profiles are applied after mode normalization so P/1/L/LA inputs are managed too.
     if mode == "CMYK":
         rgb_image = _cmyk_to_rgb(image)
     elif mode in {"RGBA", "LA"} or "transparency" in image.info:
-        rgba = image.convert("RGBA")
+        rgba = _apply_embedded_profile(image.convert("RGBA"))
         background = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
         rgb_image = Image.alpha_composite(background, rgba).convert("RGB")
     else:
-        rgb_image = image.convert("RGB")
+        rgb_image = _apply_embedded_profile(image.convert("RGB"))
 
     data = np.asarray(rgb_image, dtype=np.float32)
     data /= np.float32(255.0)
@@ -139,8 +145,7 @@ def load_image(
                     )
                 image.load()
                 oriented = ImageOps.exif_transpose(image)
-                managed = _apply_embedded_profile(oriented)
-                rgb = _to_float_rgb(managed)
+                rgb = _to_float_rgb(oriented)
     except AppError:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
@@ -206,17 +211,26 @@ def _quantize(image: LoadedImage) -> LoadedImage:
 def _write_proxy(image: LoadedImage, destination: Path) -> None:
     data = np.clip(np.rint(image.rgb * 255.0), 0.0, 255.0).astype(np.uint8)
     temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
-    try:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(data, "RGB").save(temporary, format="PNG")
-        os.replace(temporary, destination)
-    except OSError:
-        logger.warning("proxy_cache_write_failed path=%s", destination)
-    finally:
+    with _PROXY_WRITE_LOCK:
         try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(data, "RGB").save(temporary, format="PNG")
+            for attempt in range(5):
+                try:
+                    os.replace(temporary, destination)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        logger.warning("proxy_cache_write_failed path=%s", destination)
+                        break
+                    time.sleep(0.02)
+        except OSError:
+            logger.warning("proxy_cache_write_failed path=%s", destination)
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def load_proxy(

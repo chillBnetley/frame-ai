@@ -44,7 +44,11 @@ function installRenderMock() {
   return { fetchMock, pending };
 }
 
-function renderResponse(previewUrl: string, quality: "draft" | "final"): Response {
+function renderResponse(
+  previewUrl: string,
+  quality: "draft" | "final",
+  warnings: string[] = [],
+): Response {
   return new Response(
     JSON.stringify({
       previewUrl,
@@ -52,6 +56,7 @@ function renderResponse(previewUrl: string, quality: "draft" | "final"): Respons
       height: 1200,
       quality,
       cacheHit: false,
+      warnings,
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
@@ -120,6 +125,42 @@ describe("useRenderPreview", () => {
     expect(result.current.store.state.preview.url).toBe("/previews/first");
     expect(result.current.store.state.preview.status).toBe("ready");
     expect(result.current.store.state.preview.width).toBe(1600);
+  });
+
+  it("stores render warnings reported by the API", async () => {
+    const { pending } = installRenderMock();
+    const { result } = hookFor(readyEditorState());
+
+    await resolveRequest(
+      pending,
+      0,
+      renderResponse("/previews/first", "final", ["local_mask_missing:mask_gone"]),
+    );
+
+    expect(result.current.store.state.preview.warnings).toEqual([
+      "local_mask_missing:mask_gone",
+    ]);
+  });
+
+  it("sends a strictly increasing render sequence for every request", async () => {
+    const { pending } = installRenderMock();
+    const { result } = hookFor(readyEditorState());
+    await resolveRequest(pending, 0, renderResponse("/previews/first", "final"));
+
+    for (const value of [10, 20, 30]) {
+      dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value });
+      await act(async () => {
+        vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS);
+        await flushMicrotasks();
+      });
+    }
+
+    // Fake timers freeze Date.now(), so every request shares one millisecond and
+    // only the hook's own counter can keep the sequence increasing.
+    const sequences = pending.map((request) => Number(request.headers["X-Render-Seq"]));
+    expect(sequences).toHaveLength(4);
+    expect(sequences).toEqual([...sequences].sort((left, right) => left - right));
+    expect(new Set(sequences).size).toBe(sequences.length);
   });
 
   it("debounces draft renders with a trailing 250ms timer", async () => {

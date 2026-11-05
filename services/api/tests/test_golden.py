@@ -10,7 +10,7 @@ from PIL import Image
 from app.imaging.loader import load_image
 from app.imaging.params_map import ENGINE_VERSION
 from app.imaging.pipeline import render
-from app.models.recipe import Adjustments
+from app.models.recipe import EditRecipe
 from tests.golden_support import (
     GOLDEN_DIR,
     IMAGE_NAMES,
@@ -44,10 +44,16 @@ def test_golden_images_match_within_one_gray_level(
 ):
     payload = (SOURCES_DIR / f"{image_name}.png").read_bytes()
     loaded = load_image(payload)
+    recipe = EditRecipe.model_validate(RECIPES[recipe_name])
     rendered = render(
         loaded,
-        Adjustments(**RECIPES[recipe_name]),
+        recipe.adjustments,
         image_sha256=sha256(payload).hexdigest(),
+        curve=recipe.curve,
+        hsl=recipe.hsl,
+        color_grading=recipe.color_grading,
+        masks=recipe.masks,
+        local_adjustments=recipe.local_adjustments,
         quality="export",
     )
 

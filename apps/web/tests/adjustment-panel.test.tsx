@@ -31,12 +31,27 @@ describe("AdjustmentPanel", () => {
     for (const title of ["光线", "色彩", "细节", "效果", "几何"]) {
       expect(screen.getByText(title)).toBeInTheDocument();
     }
-    for (const label of ["曝光", "对比度", "色温", "饱和度", "降噪", "颗粒", "旋转"]) {
+    for (const label of [
+      "曝光",
+      "对比度",
+      "高光",
+      "阴影",
+      "白色色阶",
+      "黑色色阶",
+      "色温",
+      "色调",
+      "饱和度",
+      "自然饱和度",
+      "降噪",
+      "颗粒",
+      "旋转",
+    ]) {
       expect(screen.getByRole("slider", { name: label })).toBeInTheDocument();
     }
 
     expect(screen.getByRole("slider", { name: "曝光" })).toHaveAttribute("step", "0.01");
     expect(screen.getByRole("slider", { name: "对比度" })).toHaveAttribute("step", "1");
+    expect(screen.getByRole("slider", { name: "白色色阶" })).toHaveAttribute("step", "1");
   });
 
   it("warns that rotation crops the edges", () => {
@@ -54,6 +69,20 @@ describe("AdjustmentPanel", () => {
 
     fireEvent.pointerUp(slider);
     expect(onCommit).toHaveBeenCalled();
+  });
+
+  it("reports whites and blacks changes with their own keys", () => {
+    const { onChange } = renderPanel();
+
+    fireEvent.change(screen.getByRole("slider", { name: "白色色阶" }), {
+      target: { value: "40" },
+    });
+    expect(onChange).toHaveBeenCalledWith("whites", 40);
+
+    fireEvent.change(screen.getByRole("slider", { name: "黑色色阶" }), {
+      target: { value: "-35" },
+    });
+    expect(onChange).toHaveBeenCalledWith("blacks", -35);
   });
 
   it("shows the crop summary and opens the crop editor", async () => {
@@ -82,6 +111,7 @@ describe("AdjustmentPanel", () => {
     renderPanel({ disabled: true });
 
     expect(screen.getByRole("slider", { name: "曝光" })).toBeDisabled();
+    expect(screen.getByRole("slider", { name: "白色色阶" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "调整裁切" })).toBeDisabled();
   });
 });

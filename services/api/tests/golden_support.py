@@ -11,22 +11,136 @@ from PIL import Image, ImageDraw
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 SOURCES_DIR = GOLDEN_DIR / "sources"
 IMAGE_NAMES = ("ramp", "detail", "mixed")
-RECIPE_NAMES = ("neutral", "tone", "color", "geometry", "detail")
+RECIPE_NAMES = (
+    "neutral",
+    "tone",
+    "color",
+    "geometry",
+    "detail",
+    "curve",
+    "hsl",
+    "grading",
+    "local",
+)
 
 RECIPES: dict[str, dict[str, Any]] = {
     "neutral": {},
-    "tone": {"exposure_ev": 0.5, "contrast": 30, "highlights": -40, "shadows": 35},
-    "color": {"temperature": 30, "tint": -15, "saturation": 20, "vibrance": 45},
+    "tone": {
+        "adjustments": {
+            "exposure_ev": 0.5,
+            "contrast": 30,
+            "highlights": -40,
+            "shadows": 35,
+        }
+    },
+    "color": {"adjustments": {"temperature": 30, "tint": -15, "saturation": 20, "vibrance": 45}},
     "geometry": {
-        "rotation_deg": 7.5,
-        "crop": {"x": 0.1, "y": 0.08, "w": 0.72, "h": 0.78},
+        "adjustments": {
+            "rotation_deg": 7.5,
+            "crop": {"x": 0.1, "y": 0.08, "w": 0.72, "h": 0.78},
+        }
     },
     "detail": {
-        "clarity": 40,
-        "vignette": 35,
-        "sharpen": 30,
-        "grain": 20,
-        "denoise": 25,
+        "adjustments": {
+            "clarity": 40,
+            "vignette": 35,
+            "sharpen": 30,
+            "grain": 20,
+            "denoise": 25,
+        }
+    },
+    "curve": {
+        "adjustments": {"contrast": 8},
+        "curve": {
+            "master": [
+                {"x": 0.0, "y": 0.05},
+                {"x": 0.25, "y": 0.2},
+                {"x": 0.75, "y": 0.85},
+                {"x": 1.0, "y": 0.95},
+            ],
+            "red": [
+                {"x": 0.0, "y": 0.0},
+                {"x": 0.5, "y": 0.58},
+                {"x": 1.0, "y": 1.0},
+            ],
+        },
+    },
+    "hsl": {
+        "hsl": {
+            "red": {"hue": 15, "saturation": 25, "luminance": 10},
+            "orange": {"hue": -10, "saturation": 20, "luminance": 8},
+            "green": {"hue": -20, "saturation": -30, "luminance": -10},
+            "aqua": {"hue": 10, "saturation": 15, "luminance": 5},
+            "blue": {"hue": 20, "saturation": 30, "luminance": -12},
+            "magenta": {"hue": -15, "saturation": -20, "luminance": 6},
+        },
+    },
+    "grading": {
+        "colorGrading": {
+            "shadows": {"hue": 220, "saturation": 35},
+            "midtones": {"hue": 160, "saturation": 10},
+            "highlights": {"hue": 45, "saturation": 40},
+            "balance": 10,
+            "blending": 60,
+        },
+    },
+    "local": {
+        "adjustments": {"contrast": 6},
+        "masks": [
+            {
+                "id": "mask_warm",
+                "x": 0.08,
+                "y": 0.1,
+                "width": 0.4,
+                "height": 0.45,
+                "feather": 20,
+            },
+            {
+                "id": "mask_cool",
+                "shape": "ellipse",
+                "x": 0.52,
+                "y": 0.45,
+                "width": 0.4,
+                "height": 0.45,
+                "feather": 30,
+                "opacity": 80,
+            },
+            {
+                "id": "mask_invert",
+                "x": 0.3,
+                "y": 0.55,
+                "width": 0.4,
+                "height": 0.35,
+                "feather": 10,
+                "inverted": True,
+            },
+        ],
+        "localAdjustments": [
+            {
+                "id": "local_warm",
+                "maskId": "mask_warm",
+                "adjustments": {
+                    "exposureEv": 0.35,
+                    "temperature": 25,
+                    "saturation": 15,
+                },
+            },
+            {
+                "id": "local_cool",
+                "maskId": "mask_cool",
+                "adjustments": {
+                    "exposureEv": -0.3,
+                    "temperature": -20,
+                    "tint": 8,
+                    "clarity": 20,
+                },
+            },
+            {
+                "id": "local_shadow",
+                "maskId": "mask_invert",
+                "adjustments": {"shadows": 25, "vibrance": 30},
+            },
+        ],
     },
 }
 

@@ -92,32 +92,76 @@ class RequestContextMiddleware:
 
 
 class CorsPreflightGuardMiddleware:
-    """Return the unified error envelope when a preflight origin is denied."""
+    """Answer denied preflights with the unified error envelope.
 
-    def __init__(self, app: ASGIApp, *, allowed_origins: list[str]) -> None:
+    Without this guard Starlette's ``CORSMiddleware`` replies to a rejected
+    method with ``400 text/plain``, which breaks the single error contract.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        allowed_origins: list[str],
+        allowed_methods: list[str] | None = None,
+    ) -> None:
         self.app = app
         self.allowed_origins = set(allowed_origins)
+        self.allowed_methods = {method.upper() for method in (allowed_methods or [])}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (
+        if not (
             scope["type"] == "http"
             and scope.get("method") == "OPTIONS"
             and "access-control-request-method" in Headers(scope=scope)
         ):
-            origin = Headers(scope=scope).get("origin", "")
-            if origin and "*" not in self.allowed_origins and origin not in self.allowed_origins:
-                await self._reject(scope, send)
-                return
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        origin = headers.get("origin", "")
+        if origin and "*" not in self.allowed_origins and origin not in self.allowed_origins:
+            await self._reject(
+                scope,
+                send,
+                status=403,
+                code="cors_origin_denied",
+                message="The request origin is not allowed.",
+                details={"origin": origin},
+            )
+            return
+
+        requested = headers.get("access-control-request-method", "").upper()
+        if self.allowed_methods and requested not in self.allowed_methods:
+            await self._reject(
+                scope,
+                send,
+                status=405,
+                code="cors_method_denied",
+                message="The requested method is not allowed for cross-origin calls.",
+                details={"method": requested},
+            )
+            return
+
         await self.app(scope, receive, send)
 
-    async def _reject(self, scope: Scope, send: Send) -> None:
+    async def _reject(
+        self,
+        scope: Scope,
+        send: Send,
+        *,
+        status: int,
+        code: str,
+        message: str,
+        details: dict[str, Any],
+    ) -> None:
         await _send_error(
             scope,
             send,
-            status=403,
-            code="cors_origin_denied",
-            message="The request origin is not allowed.",
-            details={"origin": Headers(scope=scope).get("origin", "")},
+            status=status,
+            code=code,
+            message=message,
+            details=details,
             extra_headers=[(b"vary", b"Origin")],
         )
 

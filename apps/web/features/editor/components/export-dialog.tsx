@@ -26,13 +26,48 @@ function statusText(state: ExportState): string {
   }
 }
 
+const CUSTOM_EDGE_MIN = 64;
+const CUSTOM_EDGE_MAX = 8192;
+
+const SIZE_PRESETS = [
+  { value: "original", label: "原图尺寸", hint: "不限制长边" },
+  { value: "2400", label: "长边 2400", hint: "打印 / 归档" },
+  { value: "1600", label: "长边 1600", hint: "屏幕分享" },
+  { value: "1080", label: "长边 1080", hint: "社交 / 网页" },
+  { value: "custom", label: "自定义", hint: `${CUSTOM_EDGE_MIN}–${CUSTOM_EDGE_MAX} 像素` },
+] as const;
+
+type SizeChoice = (typeof SIZE_PRESETS)[number]["value"];
+
+function clampEdge(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.min(CUSTOM_EDGE_MAX, Math.max(CUSTOM_EDGE_MIN, parsed));
+}
+
+function resolveMaxEdge(choice: SizeChoice, custom: string): number | null {
+  if (choice === "original") {
+    return null;
+  }
+  if (choice === "custom") {
+    return clampEdge(custom);
+  }
+  return Number.parseInt(choice, 10);
+}
+
 export interface ExportDialogProps {
   open: boolean;
   onClose: () => void;
   state: ExportState;
   dirty: boolean;
   disabled?: boolean;
-  onExport: (format: ExportFormat, quality: number | null) => void;
+  onExport: (format: ExportFormat, quality: number | null, maxEdge: number | null) => void;
 }
 
 const FOCUSABLE =
@@ -49,6 +84,8 @@ export function ExportDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const [format, setFormat] = useState<ExportFormat>("jpeg");
   const [quality, setQuality] = useState(92);
+  const [sizeChoice, setSizeChoice] = useState<SizeChoice>("original");
+  const [customEdge, setCustomEdge] = useState("");
 
   useEffect(() => {
     if (!open) {
@@ -97,6 +134,26 @@ export function ExportDialog({
   const exporting = state.status === "exporting";
   const blocked = disabled || dirty || exporting;
   const status = statusText(state);
+  const maxEdge = resolveMaxEdge(sizeChoice, customEdge);
+  const edgeHint =
+    maxEdge === null ? "原图尺寸（不发送 maxEdge）" : `长边 ${maxEdge} 像素（maxEdge）`;
+  const customEdgeNotice = (() => {
+    if (sizeChoice !== "custom") {
+      return null;
+    }
+    const trimmed = customEdge.trim();
+    if (trimmed === "") {
+      return "留空表示原图尺寸。";
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed)) {
+      return `请输入 ${CUSTOM_EDGE_MIN}–${CUSTOM_EDGE_MAX} 之间的整数。`;
+    }
+    if (parsed !== maxEdge) {
+      return `已限制到 ${CUSTOM_EDGE_MIN}–${CUSTOM_EDGE_MAX} 之间，实际使用 ${maxEdge} 像素。`;
+    }
+    return null;
+  })();
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
@@ -161,6 +218,62 @@ export function ExportDialog({
           </div>
         </fieldset>
 
+        <fieldset className="mt-4 grid gap-2" disabled={exporting}>
+          <legend className="text-xs text-white/55">输出尺寸</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {SIZE_PRESETS.map((option) => (
+              <label
+                key={option.value}
+                className={`flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-xs transition-colors ${
+                  option.value === "custom" ? "col-span-2" : ""
+                } ${
+                  sizeChoice === option.value
+                    ? "border-accent/45 bg-accent/[0.08] text-white"
+                    : "border-white/12 bg-white/[0.02] text-white/65"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="export-size"
+                  value={option.value}
+                  checked={sizeChoice === option.value}
+                  onChange={() => setSizeChoice(option.value)}
+                  className="mt-0.5 accent-[#d8ff5f]"
+                />
+                <span>
+                  <span className="block font-medium">{option.label}</span>
+                  <span className="mt-0.5 block text-[10px] text-white/35">{option.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {sizeChoice === "custom" && (
+            <div className="mt-1 grid gap-1.5">
+              <label htmlFor="export-max-edge" className="text-xs text-white/55">
+                自定义长边（像素）
+              </label>
+              <input
+                id="export-max-edge"
+                type="number"
+                inputMode="numeric"
+                aria-label="自定义长边像素"
+                aria-describedby="export-max-edge-hint"
+                min={CUSTOM_EDGE_MIN}
+                max={CUSTOM_EDGE_MAX}
+                step={1}
+                value={customEdge}
+                onChange={(event) => setCustomEdge(event.target.value)}
+                placeholder="留空表示原图"
+                className="w-32 rounded-md border border-white/12 bg-black/35 px-2 py-1.5 font-mono text-[11px] text-white/80 placeholder:text-white/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              />
+            </div>
+          )}
+          <p id="export-max-edge-hint" className="text-[10px] text-white/35">
+            {edgeHint}
+            {customEdgeNotice ? ` · ${customEdgeNotice}` : ""}
+          </p>
+        </fieldset>
+
         {format === "jpeg" && (
           <div className="mt-3 grid gap-1.5">
             <label htmlFor="export-quality" className="flex items-baseline justify-between text-xs text-white/55">
@@ -187,6 +300,11 @@ export function ExportDialog({
             />
           </div>
         )}
+
+        <div className="mt-3 flex items-baseline justify-between text-xs text-white/55">
+          <span>色彩空间</span>
+          <span className="font-mono text-[10px] text-white/35">sRGB（固定，嵌入 ICC）</span>
+        </div>
 
         {dirty && (
           <p className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
@@ -216,7 +334,7 @@ export function ExportDialog({
 
         {state.status === "success" && state.warnings.includes("denoise_simplified") && (
           <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
-            大图降噪使用了简化算法。
+            降噪已简化（导出尺寸超过 12 MP），细节表现可能与预览不同。若需要全量降噪，请改用更小的长边（使总像素不超过 12 MP）后重新导出。
           </p>
         )}
 
@@ -232,7 +350,7 @@ export function ExportDialog({
             type="button"
             data-autofocus
             disabled={blocked}
-            onClick={() => onExport(format, format === "jpeg" ? quality : null)}
+            onClick={() => onExport(format, format === "jpeg" ? quality : null, maxEdge)}
             className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-xs font-semibold text-[#101208] transition-colors hover:bg-accent/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
             <DownloadIcon className="size-4" />

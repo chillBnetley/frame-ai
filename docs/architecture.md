@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-仓库处于阶段 2.1 审查修复收尾：安全上传、SQLite 持久化、非破坏编辑会话、确定性渲染、内容寻址预览、前后对比与全分辨率导出。AI provider、自动配方与分析持久化属于阶段 3。
+仓库处于阶段 3 完成状态：在阶段 2 的安全上传、SQLite 持久化、非破坏编辑会话、确定性渲染、内容寻址预览、前后对比与全分辨率导出之上，新增异步 AI 分析任务、预处理与 CV 测量、可替换的视觉/决策 Provider、主体与区域引用、摄影诊断与五区前端。AI 只读取原图并输出结构化诊断，不自动修改配方或原图。
 
 ## 总体结构
 
@@ -20,9 +20,12 @@ FastAPI (127.0.0.1 only, D-13)
   ├─ UploadSizeLimitMiddleware      Content-Length 预检与流式字节限制
   ├─ ImageService                   解码校验 → originals/ → image_asset
   ├─ SessionService                 revision 事务、undo/redo/activate/reset、幂等
-  ├─ RenderService                  渲染序号 → 代理缓存 → pipeline → previews/<hash>
-  ├─ ExportService                  串行槽位 → 内存预算 → 全分辨率重渲染 → 元数据剥离
-  ├─ AnalysisService                启发式特征（进程内 LRU）
+  ├─ RenderService                  渲染序号 → 代理内存/磁盘缓存 → pipeline（含蒙版权重缓存）→ previews/<hash>
+  ├─ ExportService                  并发+内存准入 → 全分辨率解码 → 按计划尺寸缩放 → 重渲染 → 元数据剥离
+  ├─ AnalysisService                阶段 2 启发式特征（进程内 LRU，保留兼容）
+  ├─ AnalysisTaskService            任务队列、去重、启动恢复、重试、结果入库
+  ├─ AnalysisOrchestrator           预处理 → 视觉 → CV 特征 → 诊断 → 报告
+  ├─ ProviderBundle                 vision/decision Provider（mock 或 OpenAI 兼容）
   └─ PreviewStore                   TTL 清理、原子写入、Windows 占用兜底
 ```
 
@@ -51,8 +54,9 @@ POST /api/v1/sessions/{id}/revisions   → 事务内校验 parentRevisionId、�
 POST /api/v1/sessions/{id}/undo|redo|activate|reset
 ```
 
-- 预览是按配方内容寻址的缓存，不写数据库；方向归一/缩放代理图另存于 `previews/proxies/`。
-- 同进程最多并发 2 次渲染，槽位等待上限 10 秒；等待期间被更高 `X-Render-Seq` 取代的请求返回 409，防止旧结果覆盖新操作。
+- 预览是按配方内容寻址的缓存，不写数据库；方向归一/缩放代理图另存于 `previews/proxies/`，与预览共用同一 TTL 清理轮。
+- 阶段四加了两层进程内 LRU：解码后的代理图（`FRAME_PROXY_CACHE_MB`，默认 64）与蒙版权重（`FRAME_MASK_CACHE_MB`，默认 64，单条 24 MB 上限）。两者只在能给出与直接计算完全一致的字节时才命中——代理只存可无损转为 8-bit 的数组，权重数组取出即只读。
+- 同进程最多并发 2 次渲染，槽位等待上限 10 秒；等待期间被更高 `X-Render-Seq` 取代的请求返回 409，防止旧结果覆盖新操作。前端序号由 `nextRenderSeq()` 统一发放（`max(Date.now(), 上一次 + 1)`），滑杆预览与裁切底图共用，跨重挂载与多标签页仍单调递增。
 - revision 提交使用 `BEGIN IMMEDIATE`；`Idempotency-Key` 同 key 同内容命中时返回原 revision（200），内容或父 revision 不同则返回 409。
 - 历史是 `parent_id` 图：`active` 是当前编辑点，`head` 是路径末端；在历史中间提交会形成分支。
 
@@ -60,23 +64,153 @@ POST /api/v1/sessions/{id}/undo|redo|activate|reset
 
 ```text
 原图字节
-  → 嵌入 ICC 转 sRGB（适用的 RGB/RGBA 输入）
   → 方向归一（EXIF 1–8）
-  → 代理缩放（draft 960 / final 默认 1600 / export 全分辨率）
+  → 模式归一 + 嵌入 ICC 转 sRGB（携带有效 RGB 设备空间配置的输入：RGB/RGBA/P/PA/1/L/LA）
+  → 代理缩放（draft 960 / final 默认 1600 / export 全分辨率或请求的 maxEdge）
   → 旋转内接（无填充，最大同比例矩形）
   → 裁切（坐标位于旋转后画布）
   → sRGB → 线性
-  → 曝光 / 白平衡 / 高光 / 阴影
+  → 曝光 / 白平衡 / 高光 / 阴影 / 白色色阶 / 黑色色阶
   → 线性 → sRGB
   → 对比度
+  → 曲线（Master → R → G → B）
+  → HSL 色带（红 / 橙 / 黄 / 绿 / 青 / 蓝 / 紫 / 洋红）
   → 饱和度 / 自然饱和度
+  → 颜色分级（阴影 / 中间调 / 高光）
+  → 局部调整（全图 / 矩形 / 椭圆蒙版）
   → 清晰度 / 暗角
   → 降噪 / 锐化
   → 颗粒
   → uint8 编码
 ```
 
-`adjustments` 是唯一渲染权威；`styleId/styleStrength` 只作为来源元数据（D-10）。任何算法、常数或顺序变化必须提升 `ENGINE_VERSION` 并重新生成黄金图。
+`adjustments`、`curve`、`hsl`、`colorGrading`、`masks` 与 `localAdjustments` 是渲染权威；`styleId/styleStrength` 只作为来源元数据（D-10）。任何算法、常数或顺序变化必须提升 `ENGINE_VERSION` 并重新生成黄金图。
+
+### 色彩管理
+
+完整策略与实测数据见 [color-management.md](color-management.md)，决策见 [ADR-0004](decisions/ADR-0004-color-management.md)。摘要：
+
+- **输入**：EXIF 方向先烘焙，再在模式归一之后做配置管理。携带有效 RGB 设备空间配置的输入（`RGB`/`RGBA`/`P`/`PA`/`1`/`L`/`LA`）经 lcms2 转 sRGB（相对色度 + 黑点补偿）；配置设备空间非 RGB、配置损坏或为空时**回退按 sRGB 解释**；无配置时**按 sRGB 解释**——这是显式默认策略，不是隐含行为。不存在"把所有输入无条件当作同一色彩空间"的分支。
+- **入口分层**：上传闸门只接受 JPEG/PNG/WebP；loader 能解码更多容器（实测 TIFF），但不受入口暴露。色彩管理与容器无关。
+- **工作空间**：float32 `[0,1]` sRGB 编码值贯穿管线，只在末端量化一次。`app/imaging` 内 `astype(np.uint8)` 站点固定 4 处（末端量化、OpenCV 去噪的 8-bit 限制、8-bit 代理、分析用边缘检测），渲染阶段模块由测试禁止引入中间量化。
+- **位深**：16-bit RGB 输入在 Pillow 解码阶段降 8-bit（实测 ≤0.72 级）；16-bit 灰度直接进 float32。8-bit 代理是实测取舍：强曲线下 max 4 级 / mean 0.33 级且不产生色带，因此不升级 16-bit 代理。
+- **输出**：目标空间恒为 sRGB、8-bit，JPEG/PNG 均嵌入固定 sRGB ICC（头部时间戳 pin 死以保证跨进程字节一致），预览与导出都剥离全部元数据。原图字节不改写，`GET /images/{id}/original` 仍带原配置与原 EXIF/GPS。
+- **依赖**：实测确认 OpenCV 不参与色彩管理（`cv2.iccread` 不存在）、Pillow 无 16-bit RGB 模式、`rawpy`/`pillow-heif` 未安装 → **不新增任何依赖**；RAW、高位深管线、CMYK 正确显影、灰度配置转换、导出 PNG alpha 均为明确不支持项。
+
+### 全局调色数学定义
+
+全局调色固定按以下顺序执行；所有参数为 0 时每一步都是恒等变换。
+
+| 步骤 | 参数 | 定义 |
+|---|---|---|
+| 1 | 曝光 | 线性光 `RGB' = RGB × 2^E`，`E ∈ [-5, 5]` EV。 |
+| 2 | 色温 / 色调 | 通道增益 `gR = 1 + 0.25·T`、`gG = 1 − 0.12·M`、`gB = 1 − 0.25·T`，其中 `T = temperature/100`、`M = tint/100`；随后按全图平均亮度比 `Ȳ_before / Ȳ_after` 对三通道施加**同一个**标量，保持全图平均亮度。逐像素守恒会在纯色像素上自我抵消（红/蓝通道增益被自己除回 1），故不采用。 |
+| 3 | 高光 / 阴影 | 令感知亮度 `L = sRGB(Y)`（可选高斯模糊，`σ = 0.004·max(W,H)`）；`m_h = smoothstep(L; 0.5, 1)`、`m_s = 1 − smoothstep(L; 0, 0.5)`；`gain = 2^{(highlights/100)·1.0·m_h + (shadows/100)·1.5·m_s}`，三通道同乘。 |
+| 4 | 白色色阶 / 黑色色阶 | 同一 `L`；`m_w = smoothstep(L; 0.7, 1)`、`m_b = 1 − smoothstep(L; 0, 0.20)`；`gain = 2^{(whites/100)·0.7·m_w − (blacks/100)·1.0·m_b}`，三通道同乘。正向 Blacks 压暗阴影末端、负向提亮，遵循 Lightroom/ACR 约定；掩膜端点从 0.30 收到 0.20 以降低与 Shadows（0–0.5）的功能重叠。 |
+| 5 | 对比度 | 转回 sRGB 后，令 `L = Y`，`L' = L + (contrast/100)·(smoothstep(L; 0, 1) − L)`；`r = L'/L`（`L ≤ 1e-6` 时取 1），`c = clip(r, 0.95, 1.05)`，输出 `RGB' = L' + (RGB − L)·c` 并截断到 `[0,1]`。Rec.709 权重和为 1，因此缩放色度不改变曲线给定的亮度；旧实现按 `r` 缩放三通道会把色度一并放大，实测非灰像素 ±14.3%。 |
+| 6 | 曲线 | 在 sRGB 编码空间依次应用 Master → Red → Green → Blue；每条曲线先按 Fritsch–Carlson 单调三次 Hermite 预计算 8192 格点 LUT，再逐像素线性插值；空通道为恒等。 |
+| 7 | HSL 色带 | 转 sRGB→HSL，按色相在八个色带中心之间平滑加权，调整色相 / 饱和度 / 明度后再转回 sRGB；详见下节。 |
+| 8 | 饱和度 | `RGB' = Y + (RGB − Y)·(1 + saturation/100)`，其中 `Y` 为 Rec.709 亮度。 |
+| 9 | 自然饱和度 | 色度 `C = max(RGB) − min(RGB)`，权重 `w = (1 − C)^1.5`，`RGB' = Y + (RGB − Y)·(1 + vibrance/100·w)`。 |
+| 10 | 颜色分级 | 按 Rec.709 亮度把像素平滑分配到阴影 / 中间调 / 高光，叠加各自色相与强度对应的零亮度色偏；详见下节。 |
+
+- 第 1–4 步在线性光空间执行；第 5–10 步在 sRGB 编码空间执行；所有通道缩放均为等比缩放，避免改变色相。
+- 高光/阴影与白色/黑色采用不同的亮度掩码区间（`0.5–1.0` / `0–0.5` 对 `0.7–1.0` / `0–0.20`），减少功能重叠。
+- 白色/黑色增益上限经过约束，使亮度映射在参数区间内保持单调，避免可见色阶反转。
+- 参数为有限值，掩码有界，因此输出不会出现 NaN 或 Infinity；亮度映射只使用有限指数与截断。
+
+### 曲线插值
+
+曲线控制点按 `x` 严格递增，每个通道 0 或 ≥2 个点、最多 32 个，`x,y ∈ [0,1]` 且最多六位小数。空数组表示恒等，单点被拒绝。
+
+对区间 `h_i = x_{i+1} − x_i`、斜率 `δ_i = (y_{i+1} − y_i)/h_i`：
+
+1. 初始切线 `m_0 = δ_0`、`m_{n−1} = δ_{n−2}`，内部 `m_i = (δ_{i−1} + δ_i)/2`。
+2. 逐区间做 Fritsch–Carlson 限制：`δ_i = 0` 时令两端切线为 0；否则 `α = m_i/δ_i`、`β = m_{i+1}/δ_i`，负值置 0；若 `α² + β² > 9`，取 `τ = 3/√(α²+β²)` 并按 `τ` 缩放两端切线。
+3. 区间内使用三次 Hermite：`t = (x − x_i)/h_i`，`y = h00·y_i + h10·h_i·m_i + h01·y_{i+1} + h11·h_i·m_{i+1}`，其中 `h00 = 2t³ − 3t² + 1`、`h10 = t³ − 2t² + t`、`h01 = −2t³ + 3t²`、`h11 = t³ − t²`。
+4. 首末节点之外按端点切线线性外推（`y = y_0 + m_0·(x − x_0)` / `y = y_{n−1} + m_{n−1}·(x − x_{n−1})`），再截断到 `[0,1]`；悬空曲线因此不会把暗部/高光压平，clip 处可能出现斜率折点但在测试中保持连续与单调。
+5. 渲染时不在整图上逐点求 Hermite，而是在 `x∈[0,1]` 的 8192 个均匀格点上用同一套系数求值得到 LUT（每条曲线约 32 KB），像素值按 `u = clamp(v,0,1)·8191` 取相邻两格点做线性插值。与逐点 Hermite 相比，整图临时量从 9 个降到 4 个、无 int64 索引，24 MP 曲线阶段从 4.3 GB 降到 1.15 GB 瞬态分配；插值误差实测最大 0.000918（1 万条随机曲线 × 1 万采样点），低于半个 8-bit 级（1/510）。
+
+该算法在控制点单调的区间内保持单调，在局部极值处不产生额外振荡，避免可见过冲。
+
+### HSL 色带
+
+HSL 阶段在曲线之后、全局饱和度/自然饱和度之前执行，输入为 sRGB 编码值 `[0,1]`：
+
+1. `RGB → HSL`：`L = (max+min)/2`，`S = Δ/(1 − |2L − 1|)`（`Δ≈0` 时 `S=0`），`H` 为标准 0…360 色相；无彩色像素 `H=0`。
+2. 色带中心依次为红 0°、橙 30°、黄 60°、绿 120°、青 180°、蓝 240°、紫 285°、洋红 330°，并以 0°/360° 首尾相接。对色相 `H` 找到相邻中心 `c_i ≤ H ≤ c_{i+1}`，令 `t = (H − c_i)/(c_{i+1} − c_i)`、`w = smoothstep(t; 0, 1)`；参数按 `(1 − w)·p_i + w·p_{i+1}` 插值。相邻色带权重和为 1，在中心处只受该色带影响，边界连续无跳变。
+3. 色相先查一张**周期单调**映射表：把八个带参数 `ΔH_i` 按相邻带心间距做斜率预算——平滑阶跃在宽度 `g` 的间隙上导数上界为 `1.5/g`，因此约束 `|ΔH_i − ΔH_j| ≤ g·(1 − 0.05)/1.5`（超出部分对半分给这一对，不扩散到远端色带），再在 0.25° 网格（1440 点）上采样 `shift(h)`，逐像素线性插值后 `H' = mod(H + shift(H), 360)`。这样 `h ↦ H'` 斜率恒 ≥ 0.05，**不会局部反序，也不会产生等色轮廓带**；代价是单个色带的色相滑杆在邻带很近时（30° 间距）约 ±20° 后不再增长。`S' = clip(S × clip(1 + ΔS/100, 0, 2), 0, 1)`；`L' = clip(L × 2^(ΔL/100), 0, 1)`，即明度 ±100 对应 ±1 EV。
+4. 色度门控按参数分档：`g_h = smoothstep(C; 0.02, 0.10)` 用于色相偏移（色相在色度趋零时无定义），`g_t = smoothstep(C; 0.005, 0.03)` 用于饱和度/明度；最终 `RGB' = RGB + (HSL→RGB(H',S',L') − RGB)·g`，其中色相分量的权重为 `g_h`、饱和度/明度分量为 `g_t`。灰色与接近无彩色的像素不受色相影响，但明度/饱和度仍能在低色度皮肤、天空与浅色背景上生效。
+5. 只有插值后的参数非零的像素才执行混合，未受影响的像素保持原始值。
+
+每个色带包含 `hue ∈ [-180,180]`、`saturation/luminance ∈ [-100,100]`；全部为 0 时该阶段为恒等变换。色相表按本次渲染的八个 `ΔH_i` 生成一次，供所有分块共用，不参与缓存键。大图按 1,000,000 像素分块处理，控制导出时的峰值内存。
+
+### 颜色分级
+
+颜色分级在全局饱和度/自然饱和度之后、清晰度/暗角之前执行，输入为 sRGB 编码值 `[0,1]`，每个区域包含 `hue ∈ [0,360]` 与 `saturation（强度）∈ [0,100]`：
+
+1. 令 `L = 0.2126·R + 0.7152·G + 0.0722·B`，并按 `balance ∈ [-100,100]` 平移亮度锚点：`L_s = clip(L + balance/100·0.25, 0, 1)`。
+2. 分界点固定在 `0.35` / `0.65`；半宽 `h = (0.08 + 0.52·blending/100)/2`（`blending ∈ [0,100]` 映射到过渡宽度 0.08–0.60）。
+3. 两个平滑阶跃 `a = smoothstep(L_s; 0.35−h, 0.35+h)`、`c = smoothstep(L_s; 0.65−h, 0.65+h)`，得到权重 `w_shadow = 1−a`、`w_mid = a(1−c)`、`w_high = a·c`。三者恒和为 1，区域间连续过渡，不会出现固定全图色偏。
+4. 每个区域的色偏方向取 `HSV(hue,1,1)` 并减去自身 Rec.709 亮度，得到零亮度向量；幅度为 `strength/100·0.30`。令 `Δ = Σ w_z·amp_z·dir_z`，对每个通道求"刚好不越界"的比例 `t_c = (1 − RGB_c)/Δ_c`（`Δ_c > 0`）或 `RGB_c/(−Δ_c)`（`Δ_c < 0`），`Δ_c = 0` 时为 `∞`；`scale = clip(min_c t_c, 0, 1)`，最终 `RGB' = RGB + Δ·scale`。
+5. 三个区域强度均为 0 时直接返回输入，不产生任何像素变化。`scale` 是标量而 `Δ` 零亮度，因此**输出亮度与输入严格相等**，越界像素只是分级力度减弱，不再出现"裁剪抬高黑位"。
+
+大图按 1,000,000 像素分块。触及 `[0,1]` 边界的极端高光或纯色像素不再被裁剪，而是把色偏按比例缩到刚好不越界，因此黑位不会被抬亮；代价是这些像素的分级强度弱于滑杆标称值。
+
+### 局部蒙版与区域调整
+
+局部调整阶段在颜色分级之后、全局清晰度/暗角之前执行，输入为 sRGB 编码值 `[0,1]`。蒙版与局部参数都来自不可变 revision 的 recipe，前端预览、对比与导出共用同一套映射和混合代码。
+
+#### 坐标空间
+
+- `UserMask.x/y/width/height` 是 **EXIF 方向归一化后的原图坐标**，范围 `[0,1]`；原点为原图左上角。
+- 蒙版不保存像素尺寸或栅格文件，也不依赖代理尺寸；预览（draft 960 / final 1600）与全分辨率导出使用同一个归一化定义，因此不会出现蒙版与原图尺寸不一致的问题。
+- 旋转与裁切只改变显示位置，不改变蒙版绑定的原图内容；旋转后蒙版随内容一起旋转。
+
+#### 蒙版类型
+
+| 类型 | 表示 | 说明 |
+| --- | --- | --- |
+| 全图 | `maskId: "full"` | 内置 ID，不需要 `UserMask` 对象，权重恒为 1 |
+| 矩形 | `shape: "rectangle"` | 原图坐标轴对齐；旋转后随内容旋转 |
+| 椭圆 | `shape: "ellipse"` | 外接矩形内切椭圆 |
+
+**不提供人物 / 天空蒙版。** 阶段三的视觉结果只有边界框，没有像素级分割；把 bbox 当蒙版会污染框内背景，因此后端没有 `person`/`sky` 类型，界面上对应按钮禁用并说明需要真实分割模型。未来接入真实分割后再新增类型，不在本版伪造。
+
+#### 权重计算
+
+对输出像素 `(i, j)`，先通过旋转矩阵的逆与裁切偏移找到对应的源像素，再按像素中心归一化 `px = (src_x + 0.5) / src_w`、`py = (src_y + 0.5) / src_h`。几何函数（`rotation_target_size`、`rotation_matrix`、`crop_bounds`）与真正的 `rotate_inscribed` / `crop_pixels` 同源，避免复制公式产生漂移。
+
+设 `cx=x+w/2`、`cy=y+h/2`、`hw=w/2`、`hh=h/2`、`f=feather/100`：
+
+- 矩形：`wx = 1 − smoothstep(|px−cx|; hw(1−f), hw)`、`wy = 1 − smoothstep(|py−cy|; hh(1−f), hh)`，`weight = wx·wy`；`f=0` 时退化为二值包含判断。
+- 椭圆：`d = sqrt(((px−cx)/hw)² + ((py−cy)/hh)²)`，`weight = 1 − smoothstep(d; 1−f, 1)`；`f=0` 时 `d≤1` 为 1。
+- 羽化带完全位于形状内部，形状外权重严格为 0，因此不会向蒙版外泄漏；这也意味着 `feather=100` 时只有中心（矩形为中心线）完全生效。
+- 之后应用 `inverted`（`weight = 1 − weight`）与 `opacity/100`；结果裁剪到 `[0,1]`。
+- 权重图按行分块计算（`LOCAL_MASK_CHUNK_PIXELS = 1,000,000`），整图权重以 `float32` 保留到该局部调整处理完毕。
+
+#### 局部参数与混合
+
+v1 支持 11 个局部字段：`exposureEv`、`contrast`、`highlights`、`shadows`、`whites`、`blacks`、`temperature`、`tint`、`saturation`、`vibrance`、`clarity`。内部顺序与全局语义一致：
+
+```text
+曝光/色温/色调/高光/阴影/白色/黑色（线性光）
+→ 对比度（sRGB）
+→ 饱和度/自然饱和度（sRGB）
+→ 清晰度（sRGB）
+```
+
+- `sharpen/denoise/vignette/grain` 的 schema 字段保留，但局部非零值保存时返回 422；前端不暴露这些控件。局部降噪/锐化在代理与导出分辨率之间的语义未验证，局部暗角本质是全局径向效果。
+- 多个局部调整按 `id` 字典序依次处理，后一项看到前一项的结果；这与 canonical JSON 的排序一致，结果确定可复现。没有图层合成或蒙版布尔运算。
+- `full` 蒙版直接以权重 1 混合；形状蒙版按 `rgb·(1−w) + adjusted·w` 混合。全部参数为 0、`enabled=false`、`opacity=0` 或权重全 0（例如蒙版完全在裁切范围外）时不执行像素运算。
+- `maskId` 引用不存在的蒙版时，跳过该局部调整并返回 `local_mask_missing:<maskId>` warning；不崩溃，也不回退到全图或错误区域。
+
+#### 预览 / 导出一致性与限制
+
+- 预览与导出调用同一个 `render()` 和 `mask_weights()`；差异仅来自代理与全分辨率的目标尺寸取整，边界位置在归一化空间一致（误差不超过一个预览像素对应的归一化量）。
+- 前端缩略图上的蒙版轮廓是近似显示，用于定位与拖动创建；像素级结果以服务端渲染为准。
+- 每个 mask 的坐标最多 4 位小数，`feather/opacity` 2 位；`x+width≤1`、`y+height≤1`、`width/height>0`。最多 20 个蒙版与 20 个局部调整。
+- 早期阶段四版本（`frame-engine/6` 及以前）没有真实局部渲染；`frame-engine/7` 起局部调整参与像素计算；`frame-engine/8` 把嵌入 ICC 管理的适用范围从 `RGB`/`RGBA` 扩展到全部可归一为 RGB 的模式（调色板、1-bit、灰度）；`frame-engine/9` 修正白平衡守恒对象（全图均值）、HSL 色相单调性与颜色分级的越界处理方式；`frame-engine/10` 落地复审摄影语义决策——Blacks 方向与掩膜端点、HSL 分档门控、曲线端点线性外推、对比度色度回收（±5%），并删除遗留 `POST /images/{id}/analyze`。`schemaVersion` 参与 canonical 哈希，因此 v1→v2 重标会改变同一旧配方在新代码下计算出的摘要；自复审整改起 revision 身份口径为 **v2.1**，`output`/`styleId`/`styleStrength` 移出 canonical 哈希但保留在持久化的完整配方中（见 [ADR-0005](decisions/ADR-0005-recipe-identity.md)）。`recipe_hash` 列只作缓存，重置与幂等比较都用当前代码从已存 `recipe_json` 重新推导，不承诺跨版本哈希恒定。空 `masks` 是唯一被省略的惰性字段，不出现在 canonical/pixel JSON 中。
 
 ### 对比与导出
 
@@ -87,12 +221,60 @@ GET  /api/v1/sessions/{id}/compare
   → 两张同尺寸 JPEG URL
 
 POST /api/v1/sessions/{id}/export
-  → 获取单进程导出槽位（失败 503 server_busy）
-  → 按像素与配方估算内存（超限 413 export_too_large）
-  → 从原图全分辨率重渲染（大图降噪简化时带 X-Export-Warning）
+  → 按本次计划像素与配方估算内存（超限 413 export_too_large）
+  → 并发槽位 + 在跑导出估算之和双重准入（不满足立即 503 server_busy，带 Retry-After: 2）
+  → 全分辨率解码原图 → 需要时先把源缩放到 maxEdge 对应尺寸（不放大）
+  → 与预览同一个 render(quality="export")（计划像素超阈值且启用降噪时带 X-Export-Warning）
   → 剥离 EXIF/XMP/IPTC/GPS，嵌入 sRGB ICC
-  → JPEG/PNG 文件流 + X-Export-Width/Height
+  → JPEG/PNG 文件流 + X-Export-Width/Height（缩放后的实际画布）
 ```
+
+- 缩放发生在解码之后、管线之前：`maxEdge` 导出仍读原图字节，但参与渲染的像素数按计划尺寸计算，因此耗时与内存都显著低于全尺寸导出，构图与全尺寸一致。
+- 估算按计划像素计算，但解码始终读整张原图，因此再小的 `maxEdge` 也不会让估算低于"原图像素 × 45 B/px + 150 MB"这条解码地板。系数在 Task 8 用 11 个实测峰值标定，复审整改 G4 又用 8 个新峰值把满配方从 240 下调到 **160 B/px**（本轮最高 131 B/px，仍留约 22% 余量）；中性 45 与每个启用局部调整 8 B/px 不变。静态估算通过后还有第二道 psutil 实时可用内存门（`FRAME_EXPORT_RESERVE_MB`，默认 256），不满足返回 503。数据见 [performance.md](performance.md) 的 Task 8 与 G4 小节，默认预算下的行为变化见 [known-issues.md](known-issues.md)。
+
+### AI 分析
+
+```text
+POST /api/v1/analysis
+  → 读取 image_asset 与只读原图 → 计算 config_key / dedupe_key
+  → 未失败的去重任务：200 返回当前状态；已失败任务：重置 pending 重新入队
+  → force=true 或首次：插入 analysis_task，202，提交到进程内线程池
+      → preprocessing：sha256 复核 → 解码 → 最长边缩放 → 白底合成 → 内存 JPEG
+      → vision：发送 JPEG 副本 + 选项 + 测量摘要；输出经 Pydantic Schema 校验
+      → features：亮度分位/直方图/截断/色偏/饱和度分布/RGB/HSV 直方图/
+                  主色集中度/清晰度/噪声/梯度各向异性/边缘/主色
+      → diagnosis：候选问题（测量证据）→ 决策 Provider → 证据/范围校验
+      → report `stage3/1` → analysis_result 入库 → completed
+      → 任一步失败：记录安全 error_code/message，status=failed，任务保留供重试
+GET  /api/v1/analysis/{id}         → 状态、真实阶段、isMock；完成时内嵌报告
+GET  /api/v1/analysis/{id}/result  → 仅 completed 返回报告
+DELETE /api/v1/analysis/{id}       → 运行中返回 409，否则删除任务与结果
+```
+
+- 视觉 Provider 只收到内存 JPEG 副本；决策 Provider 只收到结构化测量、语义与候选问题，**不收到图片**。
+- Mock Provider 完全离线；真实 Provider 通过 OpenAI 兼容适配与标准库 HTTP 传输，带超时、有限重试与安全错误映射；每次调用记录 provider/model/阶段/尝试/token/延迟，不记录 prompt、图片或 Base64。
+- `unknown` 是合法枚举值，不确定信息进入 `limitations`；后端校验决策不得新增候选之外的问题。关闭任一 `AnalysisOptions` 时对应结果退化为 `unknown`/空数组并记录限制，`qualityDiagnosis=false` 时不输出问题与建议。
+- 报告包含色彩协调、构图遮挡、主体面积占比、问题级建议；测量包含 RGB/HSV 直方图与饱和度分布。
+- 主体与区域只有归一化边界框和区域引用，`regions[].mask` 恒为 `null`；不伪造像素蒙版。
+- 任务状态、阶段、尝试次数、错误码与报告都持久化；进程重启时 `pending/processing` 任务按尝试次数恢复或标记失败。
+
+### 模型设置与热替换
+
+```text
+GET  /api/v1/settings/providers       → 脱敏视图（无密钥）
+POST /api/v1/settings/providers       → 合并补丁 → 解析生效配置 → 校验 →
+                                        构建候选 Bundle → 原子写覆盖文件 →
+                                        交换内存 Bundle → 通知 AnalysisTaskService
+POST /api/v1/settings/providers/test  → 当前配置 + 临时补丁 → 构建候选 Bundle →
+                                        每个 Provider 一条纯文本请求 → 返回 ok/延迟/安全错误
+POST /api/v1/settings/providers/reset → 删除覆盖文件 → 按环境变量重建
+```
+
+- `ProviderSettingsService` 在启动时读取 `<FRAME_DATA_DIR>/provider-settings.json`，按“本地保存字段 > 环境变量”解析生效配置并构建 `ProviderBundle`；文件损坏或 `openai` 配置缺字段时启动失败，不回退 Mock。
+- 保存流程先校验并构建候选 Bundle，再以临时文件 + `os.replace` 原子写入；写入失败时内存与运行时 Provider 都不变。交换操作由 `RLock` 保护。
+- `AnalysisTaskService.update_providers` 在同一把锁内替换 Provider 与 Orchestrator；已提交的任务持有旧 Orchestrator 并继续执行，新任务读取新快照。去重键仍由生效 Provider 类型、模型与提示词版本生成。
+- 覆盖文件包含明文 API Key，Unix 上尽力 `chmod 0600`；GET、错误、日志与测试结果均不含密钥或上游响应正文。测试连接只发送文本提示，不发送图片。
+- 本机覆盖文件与 `.env` 都是服务端配置，前端只持有脱敏视图；修改后无需重启 API。
 
 ## 数据模型
 
@@ -109,16 +291,20 @@ data/
 - `edit_session`：`image_id`、`active_revision_id`、`head_revision_id`、状态与时间。
 - `edit_revision`：`session_id`、`parent_id`、`revision_no`、配方 JSON/哈希、`source`、`idempotency_key`、时间。
 - `UNIQUE(session_id, revision_no)` 与 `UNIQUE(session_id, idempotency_key)`。
-- 迁移：`app/repositories/migrations/`，`schema_migrations` 记录版本与 checksum；已应用迁移不可修改。
+- `analysis_task`：`image_id`、`image_sha256`、选项、`config_key`、唯一 `dedupe_key`、状态/阶段/尝试次数、错误码与时间。
+- `analysis_result`：`task_id`、报告 Schema 版本、`is_mock`、报告 JSON 与时间。
+- 迁移：`app/repositories/migrations/`，`schema_migrations` 记录版本与 checksum；已应用迁移不可修改；`0002_analysis.sql` 新增分析两表。
 - 阶段 1 的 `image_registry.json` 在启动时幂等导入，之后备份为 `*.imported.bak`。
 
 `FRAME_DATA_DIR` 若为相对路径，一律相对**仓库根目录**解析，与启动时的工作目录无关。
 
 ## 一致性与并发
 
-- 单进程假设：SQLite 写事务、预览写锁与导出槽位都是进程内机制。
+- 单进程假设：SQLite 写事务、预览写锁、导出准入（并发槽位 + 内存预算）、两层渲染 LRU 与分析线程池都是进程内机制。
 - 会话提交在 `BEGIN IMMEDIATE` 中完成校验、取号、插入与 active/head 更新，避免重复 `revision_no`。
+- 分析任务用唯一 `dedupe_key`（含 `image.id`、内容 sha256 与配置）与 `BEGIN IMMEDIATE` 防重复创建；同一资产同配置才复用，失败重试复用原记录；`analysis_max_concurrency` 默认 2。
 - 原图写入与 SQLite 插入之间失败会回滚删除文件；进程在两步之间崩溃可能留下孤儿文件，启动扫描只告警。
+- 导出准入是进程内的“并发上限 + 估算总和”两道门（`FRAME_EXPORT_MAX_CONCURRENCY` 默认 1）：任一不满足立即 503，不排队；释放按估算值扣减，因此并发导出共享同一内存预算。
 - 预览写入使用临时文件 + `os.replace`；Windows 目标被占用时短重试并回退到已存在文件。
 - 多 uvicorn worker、跨进程缓存一致性与水平扩展不在当前范围。
 
@@ -130,7 +316,9 @@ data/
 - 用户文件名只用于展示与下载头；磁盘文件名始终是 UUID。
 - 原图只读：没有覆盖或改写接口；导出从原图重算。
 - 导出剥离全部元数据并嵌入 sRGB ICC；原图下载保留原始 EXIF/GPS，界面提示。
-- 日志不记录图片字节、原始文件名、配方内容或密钥。
+- 日志不记录图片字节、Base64、原始文件名、配方内容、分析报告正文或密钥。
+- 默认 Mock Provider 完全离线；只有显式选择 `openai` 时才会把 1024 px JPEG 副本发给视觉服务，决策服务只收结构化数据。
+- Provider 错误统一包装为安全错误码与文案；响应/任务错误不包含密钥、原始模型响应、图片字节或绝对路径。
 - API 无鉴权，只绑定 `127.0.0.1`（D-13）。
 
 ## 测试布局（对任务书 §3 的有记录偏离）

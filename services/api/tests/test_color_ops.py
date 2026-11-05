@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from app.imaging.color_ops import apply_color, apply_saturation, apply_vibrance
-from app.imaging.tone import luminance_srgb
+from app.imaging.tone import luma_srgb
 
 
 def _rgb(*pixels: tuple[float, float, float]) -> np.ndarray:
@@ -29,7 +29,7 @@ def test_minus_hundred_saturation_is_grayscale():
 
     assert np.allclose(gray[..., 0], gray[..., 1], atol=1e-7)
     assert np.allclose(gray[..., 1], gray[..., 2], atol=1e-7)
-    assert np.allclose(gray[..., 0], luminance_srgb(rgb), atol=1e-6)
+    assert np.allclose(gray[..., 0], luma_srgb(rgb), atol=1e-6)
 
 
 def test_positive_saturation_increases_chroma_without_clipping():

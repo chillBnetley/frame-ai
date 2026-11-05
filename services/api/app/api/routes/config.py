@@ -18,6 +18,7 @@ def runtime_config(
 ) -> RuntimeConfigResponse:
     return RuntimeConfigResponse(
         max_upload_bytes=settings.max_upload_bytes,
+        max_json_body_bytes=settings.max_json_body_bytes,
         max_image_pixels=settings.max_image_pixels,
         allowed_mime_types=list(SUPPORTED_MIME_TYPES),
     )

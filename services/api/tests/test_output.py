@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from io import BytesIO
 
 import numpy as np
@@ -26,6 +27,25 @@ def test_to_uint8_clips_and_rounds():
 
     assert result.dtype == np.uint8
     assert result.tolist() == [[[0, 101, 255], [128, 0, 255]]]
+
+
+def test_to_uint8_sanitizes_non_finite_values_and_warns(caplog: pytest.LogCaptureFixture):
+    rgb = np.array([[[np.nan, np.inf, -np.inf], [0.5, -1.0, 2.0]]], dtype=np.float32)
+
+    with caplog.at_level(logging.WARNING, logger="frame_ai.output"):
+        result = to_uint8(rgb)
+
+    assert result.tolist() == [[[0, 255, 0], [128, 0, 255]]]
+    assert "non_finite_pixels_sanitized" in caplog.text
+
+
+def test_inplace_sanitizing_does_not_leave_non_finite_pixels():
+    rgb = np.array([[[np.nan, np.inf, 0.25]]], dtype=np.float32)
+
+    result = to_uint8(rgb, inplace=True)
+
+    assert result.tolist() == [[[0, 255, 64]]]
+    assert not np.any(np.isnan(rgb))
 
 
 @pytest.mark.parametrize("image_format", ["jpeg", "png"])

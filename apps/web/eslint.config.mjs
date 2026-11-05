@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Isolated E2E copy created by the Playwright runner.
+    ".e2e-web/**",
   ]),
 ]);
 

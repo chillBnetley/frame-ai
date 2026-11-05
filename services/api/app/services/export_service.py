@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import logging
-import threading
 import time
 from dataclasses import dataclass
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.imaging.loader import load_image
+from app.imaging.geometry import export_target_size, resize_exact
+from app.imaging.loader import LoadedImage, load_image
 from app.imaging.output import FORMAT_INFO, encode_image
 from app.imaging.params_map import (
     EXPORT_BASELINE_MB,
     EXPORT_BYTES_PER_PIXEL_FULL,
+    EXPORT_BYTES_PER_PIXEL_LOCAL,
     EXPORT_BYTES_PER_PIXEL_NEUTRAL,
 )
 from app.imaging.pipeline import render as render_image
 from app.models.export import ExportRequest
-from app.models.recipe import Adjustments
+from app.models.recipe import EditRecipe
+from app.services.export_admission import ExportAdmission
 from app.services.image_service import ImageService
 from app.services.session_service import SessionService
 
@@ -25,10 +27,34 @@ logger = logging.getLogger("frame_ai.export")
 EXPORT_JPEG_QUALITY = 92
 
 
-def estimate_export_peak_mb(pixels: int, adjustments: Adjustments) -> float:
-    neutral = adjustments == Adjustments()
+def _active_local_count(recipe: EditRecipe) -> int:
+    return sum(
+        1
+        for item in recipe.local_adjustments
+        if item.enabled and any(item.adjustments.model_dump().values())
+    )
+
+
+def estimate_export_peak_mb(
+    pixels: int,
+    recipe: EditRecipe,
+    *,
+    decode_pixels: int | None = None,
+) -> float:
+    """Conservative peak-RSS estimate for one export plan.
+
+    ``decode_pixels`` is the size of the image that still gets decoded whole.
+    A downscaled export renders ``pixels`` but reads the original at full size,
+    so its plan can never be cheaper than a neutral pass over that decode.
+    """
+    neutral = recipe == EditRecipe()
     per_pixel = EXPORT_BYTES_PER_PIXEL_NEUTRAL if neutral else EXPORT_BYTES_PER_PIXEL_FULL
-    return pixels * per_pixel / (1024 * 1024) + EXPORT_BASELINE_MB
+    per_pixel += _active_local_count(recipe) * EXPORT_BYTES_PER_PIXEL_LOCAL
+    estimate = pixels * per_pixel / (1024 * 1024) + EXPORT_BASELINE_MB
+    if decode_pixels is not None and decode_pixels > pixels:
+        floor = decode_pixels * EXPORT_BYTES_PER_PIXEL_NEUTRAL / (1024 * 1024)
+        estimate = max(estimate, floor + EXPORT_BASELINE_MB)
+    return estimate
 
 
 @dataclass(frozen=True)
@@ -48,52 +74,110 @@ class ExportService:
         images: ImageService,
         sessions: SessionService,
         *,
-        max_concurrent_exports: int = 1,
+        admission: ExportAdmission | None = None,
     ) -> None:
         self.settings = settings
         self.images = images
         self.sessions = sessions
-        self._slots = threading.BoundedSemaphore(max_concurrent_exports)
+        self.admission = admission or ExportAdmission(
+            max_concurrency=settings.export_max_concurrency,
+            max_total_mb=settings.export_max_rss_mb,
+            reserve_mb=settings.export_reserve_mb,
+        )
 
     def export(self, session_id: str, request: ExportRequest) -> ExportResult:
         state = self.sessions.get(session_id)
         revision = self.sessions.get_revision(session_id, request.revision_id)
-
-        if not self._slots.acquire(blocking=False):
+        record, path = self.images.get_original(str(state.image_id))
+        adjustments = revision.recipe.adjustments
+        # Sizing happens before decoding so the memory estimate describes the
+        # pixels this export will actually touch, not the original's.
+        target_width, target_height, source_scale = export_target_size(
+            record.width,
+            record.height,
+            adjustments.rotation_deg,
+            adjustments.crop,
+            request.max_edge,
+        )
+        source_pixels = max(1, round(record.width * source_scale)) * max(
+            1, round(record.height * source_scale)
+        )
+        estimate_mb = estimate_export_peak_mb(
+            source_pixels,
+            revision.recipe,
+            decode_pixels=record.width * record.height,
+        )
+        if estimate_mb > self.settings.export_max_rss_mb:
+            raise AppError(
+                413,
+                "export_too_large",
+                "This export would need more memory than allowed.",
+                {
+                    "estimatedPeakMb": round(estimate_mb),
+                    "limitMb": self.settings.export_max_rss_mb,
+                    "pixels": source_pixels,
+                    "maxEdge": request.max_edge,
+                },
+            )
+        if not self.admission.try_acquire(estimate_mb):
             raise AppError(
                 503,
                 "server_busy",
-                "Another high-resolution export is in progress; retry shortly.",
+                "The server does not have enough free memory for another export; retry shortly.",
                 headers={"Retry-After": "2"},
             )
         started = time.perf_counter()
         try:
-            record, path = self.images.get_original(str(state.image_id))
-            pixels = record.width * record.height
-            estimate_mb = estimate_export_peak_mb(pixels, revision.recipe.adjustments)
-            if estimate_mb > self.settings.export_max_rss_mb:
-                raise AppError(
-                    413,
-                    "export_too_large",
-                    "This export would need more memory than allowed.",
-                    {
-                        "estimatedPeakMb": round(estimate_mb),
-                        "limitMb": self.settings.export_max_rss_mb,
-                        "pixels": pixels,
-                    },
-                )
             image = load_image(path, max_pixels=self.settings.max_image_pixels)
+            image_width, image_height = image.width, image.height
+            if (image_width, image_height) != (record.width, record.height):
+                # Orientation-normalised decoding can differ from the stored
+                # dimensions; re-derive the plan instead of trusting it.
+                target_width, target_height, source_scale = export_target_size(
+                    image_width,
+                    image_height,
+                    adjustments.rotation_deg,
+                    adjustments.crop,
+                    request.max_edge,
+                )
+            if source_scale < 1.0:
+                # Scaling the source first keeps the composition identical to a
+                # full-canvas export while cutting render time and peak memory.
+                image = LoadedImage(
+                    rgb=resize_exact(
+                        image.rgb,
+                        max(1, round(image_width * source_scale)),
+                        max(1, round(image_height * source_scale)),
+                    )
+                )
             rendered = render_image(
                 image,
                 revision.recipe.adjustments,
                 image_sha256=record.sha256,
+                curve=revision.recipe.curve,
+                hsl=revision.recipe.hsl,
+                color_grading=revision.recipe.color_grading,
+                masks=revision.recipe.masks,
+                local_adjustments=revision.recipe.local_adjustments,
                 quality="export",
                 denoise_simplify_pixels=self.settings.export_denoise_simplify_pixels,
             )
+            canvas = rendered.rgb
+            if (canvas.shape[1], canvas.shape[0]) != (target_width, target_height):
+                # Geometry rounding can leave the canvas 1-2 px away from the
+                # requested long edge; converge instead of reporting a lie.
+                canvas = resize_exact(canvas, target_width, target_height)
             quality = request.quality if request.quality is not None else EXPORT_JPEG_QUALITY
-            data = encode_image(rendered.rgb, image_format=request.format, quality=quality)
+            try:
+                data = encode_image(canvas, image_format=request.format, quality=quality)
+            except (OSError, ValueError) as exc:
+                raise AppError(
+                    500,
+                    "encode_failed",
+                    "The rendered image could not be encoded.",
+                ) from exc
         finally:
-            self._slots.release()
+            self.admission.release(estimate_mb)
 
         _, suffix, media_type = FORMAT_INFO[request.format]
         filename = f"frame-{revision.id.hex[:8]}{suffix}"
@@ -107,8 +191,8 @@ class ExportService:
         )
         return ExportResult(
             data=data,
-            width=rendered.width,
-            height=rendered.height,
+            width=target_width,
+            height=target_height,
             filename=filename,
             media_type=media_type,
             warnings=rendered.warnings,

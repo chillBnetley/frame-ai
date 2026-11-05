@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from io import BytesIO
 from typing import Literal
@@ -9,6 +10,7 @@ from numpy.typing import NDArray
 from PIL import Image, ImageCms
 
 ImageFormat = Literal["jpeg", "png"]
+logger = logging.getLogger("frame_ai.output")
 
 FORMAT_INFO: dict[ImageFormat, tuple[str, str, str]] = {
     "jpeg": ("JPEG", ".jpg", "image/jpeg"),
@@ -18,6 +20,12 @@ JPEG_QUALITY = 90
 
 
 def to_uint8(rgb: NDArray[np.float32], *, inplace: bool = False) -> NDArray[np.uint8]:
+    if not np.isfinite(rgb).all():
+        # ``astype(uint8)`` turns NaN into 0 without a word.  Sanitize first and
+        # say so: a non-finite pixel is an upstream bug, but shipping a silently
+        # black frame hides it.
+        logger.warning("non_finite_pixels_sanitized")
+        rgb = np.nan_to_num(rgb, copy=not inplace, nan=0.0, posinf=1.0, neginf=0.0)
     scaled = rgb if inplace else rgb * np.float32(255.0)
     if inplace:
         np.multiply(scaled, np.float32(255.0), out=scaled)

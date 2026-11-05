@@ -1,18 +1,54 @@
 from __future__ import annotations
 
-ENGINE_VERSION = "frame-engine/2"
+ENGINE_VERSION = "frame-engine/10"
 
 # Tone
 HIGHLIGHTS_EV = 1.0
 SHADOWS_EV = 1.5
+WHITES_EV = 0.7
+# Lightroom/ACR convention: a positive Blacks value raises the black point and
+# darkens the shadow end, hence the negative sign where the EV is applied.
+BLACKS_EV = -1.0
+# Narrower than the old 0.30 so Blacks overlaps Shadows (0.0-0.5) less.
+BLACKS_MASK_END = 0.20
+WHITES_MASK_START = 0.70
 TONE_MASK_SIGMA_RATIO = 0.004
 WHITE_BALANCE_RED_GAIN = 0.25
 WHITE_BALANCE_BLUE_GAIN = 0.25
 WHITE_BALANCE_GREEN_TINT_GAIN = 0.12
 CONTRAST_STRENGTH = 1.0
+# Contrast keeps its luma curve but may only move chroma by this relative amount.
+CONTRAST_CHROMA_TOLERANCE = 0.05
 
 # Color
 VIBRANCE_EXPONENT = 1.5
+
+# HSL (band order matches HSL_BANDS)
+HSL_BAND_HUES = (0.0, 30.0, 60.0, 120.0, 180.0, 240.0, 285.0, 330.0)
+HSL_HUE_LUT_STEP = 0.25
+HSL_HUE_MIN_SLOPE = 0.05
+HSL_HUE_LIMIT_SWEEPS = 32
+HSL_LUMINANCE_EV = 1.0
+# Hue is undefined as chroma approaches zero, so it keeps the wide gate.
+HSL_HUE_GATE_LOW = 0.02
+HSL_HUE_GATE_HIGH = 0.10
+# Saturation/luminance stay meaningful on near-neutral pixels (skin, sky,
+# pale backgrounds); the narrow gate keeps the sliders responsive there.
+HSL_TONE_GATE_LOW = 0.005
+HSL_TONE_GATE_HIGH = 0.03
+HSL_CHUNK_PIXELS = 1_000_000
+
+# Color grading
+COLOR_GRADING_STRENGTH = 0.30
+COLOR_GRADING_BALANCE_SHIFT = 0.25
+COLOR_GRADING_SHADOW_SPLIT = 0.35
+COLOR_GRADING_HIGHLIGHT_SPLIT = 0.65
+COLOR_GRADING_BLEND_MIN = 0.08
+COLOR_GRADING_BLEND_MAX = 0.60
+COLOR_GRADING_CHUNK_PIXELS = 1_000_000
+
+# Local masks
+LOCAL_MASK_CHUNK_PIXELS = 1_000_000
 
 # Local
 CLARITY_SIGMA_RATIO = 0.015
@@ -44,7 +80,17 @@ GRAIN_SEED_SUFFIX = "|grain|v1"
 DRAFT_MAX_EDGE = 960
 FINAL_MAX_EDGE = 1600
 
-# Export memory estimate (measured on the phase 2 benchmark; leaves headroom)
+# Export memory estimate, calibrated against the review G4 peak-RSS run (single
+# process, absolute RSS of the API process tree, 1 sample per case).  Measured
+# against the pixels an export actually decodes, the worst full-recipe
+# coefficient is 131 B/px (24 MP + 3 locals, 2999 MB) after the curve LUT cut
+# the old curve stage from 4.3 GB to 1.2 GB of transient arrays; Task 8's 215
+# B/px no longer describes the pipeline.  Neutral stays at 45 B/px (24 MP
+# 1043 MB, 40 MP 1635 MB).
 EXPORT_BYTES_PER_PIXEL_NEUTRAL = 45
-EXPORT_BYTES_PER_PIXEL_FULL = 120
+EXPORT_BYTES_PER_PIXEL_FULL = 160
+# Each active local adjustment builds a full-canvas float32 weight map (4 B/px)
+# plus blend temporaries.  G4 measured the peak delta of adding 3 locals at
+# +92 MB over the 24 MP full recipe (3.8 B/px), so this stays a small reserve.
+EXPORT_BYTES_PER_PIXEL_LOCAL = 8
 EXPORT_BASELINE_MB = 150

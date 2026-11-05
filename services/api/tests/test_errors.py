@@ -37,6 +37,21 @@ def test_validation_details_include_field_and_rule(client: TestClient):
     assert "input" not in field
 
 
+def test_unknown_request_field_is_rejected(client: TestClient):
+    response = client.post(
+        "/api/v1/sessions",
+        json={"imageId": "00000000-0000-4000-8000-000000000000", "maxEge": 4096},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "validation_error"
+    fields = body["error"]["details"]["fields"]
+    assert [field["field"] for field in fields] == ["maxEge"]
+    assert fields[0]["rule"] == "extra_forbidden"
+    assert "input" not in fields[0]
+
+
 def test_unexpected_error_hides_traceback_and_keeps_request_id(tmp_path: Path, caplog):
     settings = Settings(
         data_dir=tmp_path / "data",

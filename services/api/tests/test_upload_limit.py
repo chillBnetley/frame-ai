@@ -5,10 +5,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.core.upload_limit import UploadSizeLimitMiddleware
+from app.core.upload_limit import RequestBodyLimitMiddleware
 from app.main import create_app
 from tests.conftest import make_image
 
@@ -82,14 +83,83 @@ def test_payload_one_byte_over_default_limit_is_rejected(tmp_path: Path):
     assert body["error"]["details"]["maxBytes"] == settings.max_upload_bytes
 
 
+def _json_settings(tmp_path: Path, *, max_json_body_bytes: int = 256) -> Settings:
+    return Settings(
+        data_dir=tmp_path / "data",
+        max_upload_bytes=64 * 1024,
+        max_json_body_bytes=max_json_body_bytes,
+        max_image_pixels=1_000_000,
+        content_length_allowance=0,
+        allowed_origins="http://testserver",
+        allowed_hosts="testserver",
+        log_level="WARNING",
+    )
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/v1/sessions", "/api/v1/analysis", "/api/v1/settings/providers"]
+)
+def test_declared_json_body_over_budget_is_rejected(tmp_path: Path, path: str):
+    settings = _json_settings(tmp_path)
+    payload = b'{"junk":"' + b"x" * (settings.max_json_body_bytes + 1) + b'"}'
+
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            path,
+            content=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 413
+    body = response.json()
+    assert body["error"]["code"] == "payload_too_large"
+    assert body["error"]["details"]["maxBytes"] == settings.max_json_body_bytes
+
+
+def test_streaming_json_body_over_budget_is_rejected_without_content_length(tmp_path: Path):
+    settings = _json_settings(tmp_path)
+
+    def body_chunks():
+        yield b'{"image_id":"'
+        for _ in range(8):
+            yield b"x" * 64
+        yield b'"}'
+
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            f"/api/v1/sessions/{uuid4()}/render",
+            content=body_chunks(),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert "content-length" not in response.request.headers
+    assert response.status_code == 413
+    assert response.json()["error"]["details"]["maxBytes"] == settings.max_json_body_bytes
+
+
+def test_upload_prefix_keeps_the_larger_budget(tmp_path: Path):
+    settings = _json_settings(tmp_path)
+    payload = b"x" * (settings.max_json_body_bytes * 4)
+
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/v1/images",
+            content=payload,
+            headers={"Content-Type": "application/octet-stream"},
+        )
+
+    assert response.status_code != 413
+
+
 def test_declared_oversized_content_length_rejects_without_reading(tmp_path: Path):
     async def run() -> list[dict[str, Any]]:
         async def app(scope, receive, send):
             raise AssertionError("the application must not run")
 
-        middleware = UploadSizeLimitMiddleware(
+        middleware = RequestBodyLimitMiddleware(
             app,
             max_upload_bytes=100,
+            max_json_body_bytes=100,
             allowance_bytes=10,
         )
         scope = {
@@ -129,9 +199,10 @@ def test_streaming_receive_aborts_even_without_content_length(tmp_path: Path):
             await send({"type": "http.response.start", "status": 200, "headers": []})
             await send({"type": "http.response.body", "body": b"ok"})
 
-        middleware = UploadSizeLimitMiddleware(
+        middleware = RequestBodyLimitMiddleware(
             app,
             max_upload_bytes=100,
+            max_json_body_bytes=100,
             allowance_bytes=10,
         )
         scope = {

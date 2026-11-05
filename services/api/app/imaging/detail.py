@@ -23,11 +23,27 @@ from app.imaging.params_map import (
     SHARPEN_STRENGTH,
     SHARPEN_THRESHOLD,
 )
-from app.imaging.tone import luminance_srgb
+from app.imaging.tone import luma_srgb
 from app.models.recipe import RenderQuality
 
 RgbArray = NDArray[np.float32]
 _EPSILON = np.float32(1e-6)
+# Draw the grain in row blocks so the transient float64 draw stays small.  A
+# direct float32 draw uses a different sampler and would change every rendering
+# (golden bytes, cached previews), so the sequence must stay float64.
+_GRAIN_BLOCK_ROWS = 128
+
+
+def _grain_noise(
+    rng: np.random.Generator,
+    height: int,
+    width: int,
+) -> NDArray[np.float32]:
+    noise = np.empty((height, width), dtype=np.float32)
+    for start in range(0, height, _GRAIN_BLOCK_ROWS):
+        stop = min(start + _GRAIN_BLOCK_ROWS, height)
+        noise[start:stop] = rng.standard_normal((stop - start, width))
+    return noise
 
 
 def _blur(channel: NDArray[np.float32], sigma: float) -> NDArray[np.float32]:
@@ -82,7 +98,7 @@ def apply_sharpen(rgb: RgbArray, amount: float) -> RgbArray:
 
     height, width = rgb.shape[:2]
     sigma = min(max(SHARPEN_SIGMA_RATIO * max(width, height), SHARPEN_MIN_SIGMA), SHARPEN_MAX_SIGMA)
-    luminance = luminance_srgb(rgb)
+    luminance = luma_srgb(rgb)
     detail = luminance - _blur(luminance, sigma)
     thresholded = np.sign(detail) * np.maximum(np.abs(detail) - np.float32(SHARPEN_THRESHOLD), 0.0)
     adjusted = luminance + thresholded * np.float32(SHARPEN_STRENGTH * amount / 100.0)
@@ -102,10 +118,10 @@ def apply_grain(rgb: RgbArray, amount: float, *, image_sha256: str) -> RgbArray:
         GRAIN_MAX_SIGMA,
     )
     rng = np.random.default_rng(grain_seed(image_sha256))
-    noise = _blur(rng.standard_normal((height, width)).astype(np.float32), sigma)
+    noise = _blur(_grain_noise(rng, height, width), sigma)
     noise = (noise - np.float32(noise.mean())) / max(float(noise.std()), 1e-6)
 
-    luminance = luminance_srgb(rgb)
+    luminance = luma_srgb(rgb)
     weight = np.float32(0.2) + np.float32(0.8) * (
         np.float32(1.0) - (np.float32(2.0) * luminance - np.float32(1.0)) ** 2
     )

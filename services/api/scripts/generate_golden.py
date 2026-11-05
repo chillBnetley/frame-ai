@@ -13,7 +13,7 @@ from app.imaging.loader import load_image  # noqa: E402
 from app.imaging.output import encode_image  # noqa: E402
 from app.imaging.params_map import ENGINE_VERSION  # noqa: E402
 from app.imaging.pipeline import render  # noqa: E402
-from app.models.recipe import Adjustments  # noqa: E402
+from app.models.recipe import EditRecipe  # noqa: E402
 from tests.golden_support import (  # noqa: E402
     GOLDEN_DIR,
     IMAGE_NAMES,
@@ -37,11 +37,16 @@ def main() -> None:
         digest = sha256(payload).hexdigest()
         loaded = load_image(payload)
         for recipe_name in RECIPE_NAMES:
-            adjustments = Adjustments(**RECIPES[recipe_name])
+            recipe = EditRecipe.model_validate(RECIPES[recipe_name])
             rendered = render(
                 loaded,
-                adjustments,
+                recipe.adjustments,
                 image_sha256=digest,
+                curve=recipe.curve,
+                hsl=recipe.hsl,
+                color_grading=recipe.color_grading,
+                masks=recipe.masks,
+                local_adjustments=recipe.local_adjustments,
                 quality="export",
             )
             file_name = golden_file(image_name, recipe_name)

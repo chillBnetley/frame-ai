@@ -16,6 +16,7 @@ function previewState(overrides: Partial<PreviewState> = {}): PreviewState {
     seq: 1,
     version: 1,
     error: null,
+    warnings: [],
     ...overrides,
   };
 }

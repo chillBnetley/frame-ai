@@ -87,6 +87,58 @@ describe("useExport", () => {
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:frame-export"));
   });
 
+  it("forwards maxEdge and omits it when the original size is chosen", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:unused");
+    URL.revokeObjectURL = vi.fn();
+    const posted: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/export`) && init?.method === "POST") {
+          posted.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+          return new Response(new Blob(["jpeg-bytes"]), {
+            status: 200,
+            headers: {
+              "content-type": "image/jpeg",
+              "x-export-width": "240",
+              "x-export-height": "320",
+            },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const { result } = exportHook(readyEditorState());
+
+    await act(async () => {
+      expect(
+        await result.current.exporter.exportImage({
+          revisionId: REVISION_ID,
+          format: "jpeg",
+          quality: 80,
+          maxEdge: 2400,
+        }),
+      ).toBe(true);
+    });
+    await act(async () => {
+      expect(
+        await result.current.exporter.exportImage({
+          revisionId: REVISION_ID,
+          format: "jpeg",
+          quality: 80,
+          maxEdge: null,
+        }),
+      ).toBe(true);
+    });
+
+    expect(posted).toEqual([
+      { revisionId: REVISION_ID, format: "jpeg", quality: 80, maxEdge: 2400 },
+      { revisionId: REVISION_ID, format: "jpeg", quality: 80 },
+    ]);
+  });
+
   it("reports the estimated memory for export_too_large", async () => {
     URL.createObjectURL = vi.fn(() => "blob:unused");
     URL.revokeObjectURL = vi.fn();
@@ -98,7 +150,7 @@ describe("useExport", () => {
             error: {
               code: "export_too_large",
               message: "too large",
-              details: { estimatedPeakMb: 4700, limitMb: 3072, pixels: 39_900_000 },
+              details: { estimatedPeakMb: 5643, limitMb: 3072, pixels: 24_000_000 },
             },
           }),
           { status: 413, headers: { "content-type": "application/json" } },
@@ -118,7 +170,7 @@ describe("useExport", () => {
     });
 
     expect(result.current.exporter.state.error?.message).toBe(
-      "这张图在当前调整下导出需要约 4700 MB 内存，超过上限 3072 MB。可以减少调整项，或调高 FRAME_EXPORT_MAX_RSS_MB。",
+      "这张图在当前调整下导出需要约 5643 MB 内存，超过上限 3072 MB。可以减少调整项、选择更小的导出长边，或调高 FRAME_EXPORT_MAX_RSS_MB。",
     );
   });
 
@@ -148,7 +200,7 @@ describe("useExport", () => {
 
     expect(result.current.exporter.state.status).toBe("error");
     expect(result.current.exporter.state.error?.message).toBe(
-      "正在处理另一张高清导出，请稍后几秒再试。",
+      "服务器内存不足或正在处理另一张高清导出，请稍后几秒再试。",
     );
     expect(result.current.store.state.phase).toBe("ready");
   });

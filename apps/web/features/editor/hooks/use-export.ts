@@ -19,13 +19,16 @@ export interface ExportState {
   warnings: string[];
 }
 
+export interface ExportImageOptions {
+  revisionId: string;
+  format: ExportFormat;
+  quality?: number | null;
+  maxEdge?: number | null;
+}
+
 export interface UseExportResult {
   state: ExportState;
-  exportImage: (options: {
-    revisionId: string;
-    format: ExportFormat;
-    quality?: number | null;
-  }) => Promise<boolean>;
+  exportImage: (options: ExportImageOptions) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -62,11 +65,7 @@ export function useExport(): UseExportResult {
   const exportingRef = useRef(false);
 
   const exportImage = useCallback(
-    async (options: {
-      revisionId: string;
-      format: ExportFormat;
-      quality?: number | null;
-    }): Promise<boolean> => {
+    async (options: ExportImageOptions): Promise<boolean> => {
       if (sessionId === null || exportingRef.current) {
         return false;
       }
