@@ -278,7 +278,10 @@ describe("useSessionActions history", () => {
     const { result } = actionsHook(ready);
 
     await act(async () => {
-      expect(await result.current.actions.undo()).toBe(true);
+      expect(await result.current.actions.undo()).toEqual({
+        ok: true,
+        revisionId: REVISION_ID,
+      });
     });
 
     expect(posted).toEqual([{ revisionId: NEXT_REVISION_ID }]);
@@ -324,7 +327,10 @@ describe("useSessionActions history", () => {
     dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 20 });
 
     await act(async () => {
-      expect(await result.current.actions.undo()).toBe(true);
+      expect(await result.current.actions.undo()).toEqual({
+        ok: true,
+        revisionId: REVISION_ID,
+      });
     });
 
     expect(calls.map((call) => call.path)).toEqual(["revision", "undo"]);
@@ -357,7 +363,10 @@ describe("useSessionActions history", () => {
     dispatch(result.current.store, { type: "draft-adjustment", key: "contrast", value: 20 });
 
     await act(async () => {
-      expect(await result.current.actions.undo()).toBe(false);
+      expect(await result.current.actions.undo()).toEqual({
+        ok: false,
+        revisionId: null,
+      });
     });
 
     expect(urls.some((url) => url.endsWith("/undo"))).toBe(false);
@@ -374,7 +383,10 @@ describe("useSessionActions history", () => {
     const { result } = actionsHook(ready);
 
     await act(async () => {
-      expect(await result.current.actions.undo()).toBe(false);
+      expect(await result.current.actions.undo()).toEqual({
+        ok: false,
+        revisionId: null,
+      });
     });
 
     expect(result.current.store.state.error?.code).toBe("nothing_to_undo");

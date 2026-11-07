@@ -23,6 +23,11 @@ import { LocalAdjustmentsPanel } from "@/features/editor/components/local-adjust
 import { PreviewImage } from "@/features/editor/components/preview-image";
 import { PreviewMonitor } from "@/features/editor/components/preview-monitor";
 import { HealthIndicator } from "@/features/editor/health-indicator";
+import { PhotographerPanel } from "@/features/photographer/components/photographer-panel";
+import { usePhotographer } from "@/features/photographer/hooks/use-photographer";
+import { usePhotographerChat } from "@/features/photographer/hooks/use-photographer-chat";
+import { usePhotographerCritique } from "@/features/photographer/hooks/use-photographer-critique";
+import { useStyles } from "@/features/photographer/hooks/use-styles";
 import { useExport } from "@/features/editor/hooks/use-export";
 import { usePreviewVisibility } from "@/features/editor/hooks/use-preview-visibility";
 import { useRenderPreview } from "@/features/editor/hooks/use-render-preview";
@@ -38,6 +43,7 @@ import {
   selectCanSave,
   selectCanExport,
   selectIsDirty,
+  selectProposalPreviewing,
 } from "@/features/editor/state/editor-reducer";
 import { UploadDropzone } from "@/features/editor/upload-dropzone";
 import { UploadResult } from "@/features/editor/upload-result";
@@ -54,7 +60,10 @@ import {
 } from "@/lib/api/client";
 import { renderPreview } from "@/lib/api/sessions";
 import { describeUploadError } from "@/lib/api/errors";
-import { describeEditorError, ERROR_FALLBACK_MESSAGE } from "@/lib/error-messages";
+import {
+  describeEditorError,
+  ERROR_FALLBACK_MESSAGE,
+} from "@/lib/error-messages";
 import { nextRenderSeq } from "@/lib/render-seq";
 import {
   DEFAULT_ADJUSTMENTS,
@@ -86,7 +95,10 @@ const toolButtonBase =
   "inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 text-xs text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-accent/40 aria-pressed:bg-accent/10 aria-pressed:text-accent";
 
 const CROP_BASE_MAX_AUTO_RETRIES = 1;
-const CROP_BASE_RETRYABLE_CODES = new Set(["render_superseded", "request_timeout"]);
+const CROP_BASE_RETRYABLE_CODES = new Set([
+  "render_superseded",
+  "request_timeout",
+]);
 
 function useApiHealth(): ApiStatus {
   const [status, setStatus] = useState<ApiStatus>("checking");
@@ -146,7 +158,9 @@ function useRuntimeLimits(): UploadLimits | null {
   return limits;
 }
 
-function saveStatusLabel(status: "saved" | "saving" | "unsaved" | "error"): string {
+function saveStatusLabel(
+  status: "saved" | "saving" | "unsaved" | "error",
+): string {
   switch (status) {
     case "saving":
       return "保存中…";
@@ -186,8 +200,14 @@ function EditorStage({
     usePreviewVisibility();
   const exporter = useExport();
   const analysis = useAnalysis(uploading ? null : state.imageId);
+  const photographer = usePhotographer(analysis);
+  const feedback = photographer.feedback;
+  const photographerChat = usePhotographerChat(analysis);
+  const photographerCritique = usePhotographerCritique(analysis);
 
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [photographerOpen, setPhotographerOpen] = useState(false);
+  const styles = useStyles(photographerOpen);
   const [compareOpen, setCompareOpen] = useState(false);
   const [cropMode, setCropMode] = useState(false);
   const [cropBase, setCropBase] = useState<CropBase | null>(null);
@@ -208,6 +228,10 @@ function EditorStage({
   const saving = state.save.status === "saving";
   const canSave = selectCanSave(state);
   const canExport = selectCanExport(state);
+  const panelOpen = analysisOpen || photographerOpen;
+  const proposalPreviewing = selectProposalPreviewing(state);
+  const proposalOriginal =
+    state.proposal.status === "ready" && state.proposal.view === "original";
 
   const handleCommit = useCallback(async () => {
     if (commitInFlightRef.current || state.save.status === "saving") {
@@ -230,6 +254,21 @@ function EditorStage({
     }
   }, [commit, requestFinal, state]);
 
+  // Resetting is a preference signal, so it is recorded with the revision that
+  // shows which parameters the reset moved.
+  const handleReset = useCallback(async () => {
+    const outcome = await reset();
+    if (!outcome.ok) {
+      return;
+    }
+    await feedback.record({
+      action: "reset",
+      source: null,
+      planId: null,
+      revisionId: outcome.revisionId,
+    });
+  }, [feedback, reset]);
+
   useEffect(() => {
     if (commitNonce === commitNonceRef.current) {
       return;
@@ -246,7 +285,6 @@ function EditorStage({
     void requestFinal();
   }, [requestFinal, state.activeRevisionId]);
 
-  
   const sessionId = state.sessionId;
   const rotationDeg = state.draft.adjustments.rotationDeg;
 
@@ -269,7 +307,12 @@ function EditorStage({
       warnings: [],
     });
 
-    renderPreview(sessionId, { recipe, quality: "final" }, controller.signal, nextRenderSeq())
+    renderPreview(
+      sessionId,
+      { recipe, quality: "final" },
+      controller.signal,
+      nextRenderSeq(),
+    )
       .then((result) => {
         if (!cancelled) {
           setCropBase({
@@ -347,7 +390,11 @@ function EditorStage({
   }, []);
 
   const handleExport = useCallback(
-    (format: "jpeg" | "png", quality: number | null, maxEdge: number | null) => {
+    (
+      format: "jpeg" | "png",
+      quality: number | null,
+      maxEdge: number | null,
+    ) => {
       if (state.activeRevisionId === null) {
         return;
       }
@@ -366,26 +413,29 @@ function EditorStage({
   }
 
   const previewError =
-    preview.status === "error" && preview.error?.message ? preview.error.message : null;
+    preview.status === "error" && preview.error?.message
+      ? preview.error.message
+      : null;
   const monitorVisible =
     state.phase === "ready" &&
     !previewVisible &&
     preview.url !== null &&
     !compareOpen &&
     !cropMode &&
-    !exportOpen;
+    !exportOpen &&
+    !proposalOriginal;
 
   return (
     <div
       className={
-        analysisOpen
+        panelOpen
           ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px_360px]"
           : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]"
       }
     >
       <div
         className={`editor-preview-column grid content-start gap-4 ${
-          analysisOpen ? "lg:col-start-1 lg:row-start-1" : ""
+          panelOpen ? "lg:col-start-1 lg:row-start-1" : ""
         }`}
       >
         <section
@@ -394,7 +444,10 @@ function EditorStage({
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 id="editor-preview-heading" className="text-sm font-medium text-white">
+              <h3
+                id="editor-preview-heading"
+                className="text-sm font-medium text-white"
+              >
                 编辑预览
               </h3>
               <p className="editor-preview-meta mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
@@ -404,11 +457,15 @@ function EditorStage({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="editor-preview-quality rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-white/45">
-                {preview.quality === "draft"
-                  ? "草稿预览"
-                  : preview.quality === "final"
-                    ? "终稿预览"
-                    : "等待渲染"}
+                {proposalPreviewing
+                  ? "AI 方案预览"
+                  : proposalOriginal
+                    ? "原图"
+                    : preview.quality === "draft"
+                      ? "草稿预览"
+                      : preview.quality === "final"
+                        ? "终稿预览"
+                        : "等待渲染"}
               </span>
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] ${
@@ -451,13 +508,37 @@ function EditorStage({
               aria-pressed={analysisOpen}
               aria-expanded={analysisOpen}
               aria-controls="analysis-panel"
-              onClick={() => setAnalysisOpen((value) => !value)}
+              onClick={() => {
+                setPhotographerOpen(false);
+                setAnalysisOpen((value) => !value);
+              }}
               disabled={uploading}
               className={toolButtonBase}
             >
               AI 摄影分析
               {analysis.running && (
-                <span className="font-mono text-[10px] text-accent">分析中</span>
+                <span className="font-mono text-[10px] text-accent">
+                  分析中
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              aria-pressed={photographerOpen}
+              aria-expanded={photographerOpen}
+              aria-controls="photographer-panel"
+              onClick={() => {
+                setAnalysisOpen(false);
+                setPhotographerOpen((value) => !value);
+              }}
+              disabled={uploading}
+              className={toolButtonBase}
+            >
+              AI 自动优化
+              {photographer.proposal.status === "loading" && (
+                <span className="font-mono text-[10px] text-accent">
+                  生成中
+                </span>
               )}
             </button>
             <button
@@ -507,7 +588,11 @@ function EditorStage({
                 下载原图
               </a>
             )}
-            <button type="button" onClick={onStartOver} className={toolButtonBase}>
+            <button
+              type="button"
+              onClick={onStartOver}
+              className={toolButtonBase}
+            >
               重新开始
             </button>
           </div>
@@ -585,9 +670,26 @@ function EditorStage({
                 </div>
               ) : (
                 <div className="flex min-h-64 items-center justify-center rounded-xl border border-white/8 bg-black/35">
-                  <p className="text-xs text-white/45">正在获取旋转后的裁切基准…</p>
+                  <p className="text-xs text-white/45">
+                    正在获取旋转后的裁切基准…
+                  </p>
                 </div>
               )
+            ) : proposalOriginal && state.imageId ? (
+              <div
+                data-testid="photographer-original"
+                className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-black/35 p-3 ring-1 ring-white/8 sm:min-h-64"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- the API serves the read-only original */}
+                <img
+                  src={originalImageUrl(state.imageId)}
+                  alt="原图"
+                  className="editor-preview-image w-full object-contain"
+                />
+                <span className="absolute left-3 top-3 rounded-full border border-white/20 bg-black/65 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/80">
+                  原图
+                </span>
+              </div>
             ) : (
               <>
                 <PreviewImage
@@ -606,7 +708,9 @@ function EditorStage({
                     {preview.width > 0
                       ? `${preview.width} × ${preview.height}`
                       : "等待渲染尺寸"}
-                    {preview.status === "loading" && preview.url ? " · 更新中" : ""}
+                    {preview.status === "loading" && preview.url
+                      ? " · 更新中"
+                      : ""}
                   </span>
                   <div className="flex items-center gap-2">
                     {previewError && (
@@ -635,7 +739,7 @@ function EditorStage({
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2">
               <p className="text-[11px] text-amber-100/85">
                 {state.save.status === "error"
-                  ? state.save.error?.message ?? "保存失败，请稍后重试。"
+                  ? (state.save.error?.message ?? "保存失败，请稍后重试。")
                   : "调整会自动提交；也可以手动保存当前版本。"}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -675,7 +779,7 @@ function EditorStage({
             activeRevisionId={state.activeRevisionId}
             onUndo={() => void undo()}
             onRedo={() => void redo()}
-            onReset={() => void reset()}
+            onReset={() => void handleReset()}
             onActivate={(revisionId) => void activate(revisionId)}
           />
         </div>
@@ -693,10 +797,40 @@ function EditorStage({
         }
       />
 
+      <PhotographerPanel
+        open={photographerOpen}
+        onClose={() => setPhotographerOpen(false)}
+        imageId={state.imageId ?? ""}
+        analysis={analysis}
+        proposal={photographer.proposal}
+        canAccept={photographer.canAccept}
+        dirty={dirty}
+        styles={styles}
+        chat={photographerChat}
+        critique={photographerCritique}
+        selectedStyleId={photographer.styleId}
+        styleStrength={photographer.styleStrength}
+        feedback={photographer.feedback}
+        onStart={photographer.start}
+        onRetry={photographer.retry}
+        onCancel={photographer.cancel}
+        onView={photographer.showView}
+        onAccept={() => void photographer.accept()}
+        onAbandon={photographer.abandon}
+        onSelectStyle={photographer.selectStyle}
+        onStyleStrengthChange={photographer.setStyleStrength}
+        onStyleStrengthCommit={photographer.commitStyleStrength}
+        className={
+          photographerOpen
+            ? "lg:col-start-1 lg:row-start-2 xl:col-start-2 xl:row-start-1"
+            : undefined
+        }
+      />
+
       <aside
         aria-label="参数面板"
         className={`editor-adjustment-panel min-w-0 ${
-          analysisOpen ? "lg:col-start-2 lg:row-start-1 xl:col-start-3" : ""
+          panelOpen ? "lg:col-start-2 lg:row-start-1 xl:col-start-3" : ""
         }`}
       >
         <div
@@ -706,7 +840,9 @@ function EditorStage({
           <AdjustmentPanel
             adjustments={state.draft.adjustments}
             disabled={cropMode || compareOpen}
-            onChange={(key, value) => dispatch({ type: "draft-adjustment", key, value })}
+            onChange={(key, value) =>
+              dispatch({ type: "draft-adjustment", key, value })
+            }
             onCommit={requestCommit}
             onOpenCrop={handleOpenCrop}
             onClearCrop={() => {
@@ -807,9 +943,7 @@ function EditorStage({
               }
               renderWarnings={preview.warnings}
               disabled={cropMode || compareOpen}
-              onChange={(recipe) =>
-                dispatch({ type: "draft-recipe", recipe })
-              }
+              onChange={(recipe) => dispatch({ type: "draft-recipe", recipe })}
               onCommit={requestCommit}
             />
           </div>
@@ -890,7 +1024,9 @@ function EditorWorkspaceInner() {
   );
 
   const canRetry =
-    pendingFile !== null && error !== null && !NON_RETRYABLE_CODES.has(error.code);
+    pendingFile !== null &&
+    error !== null &&
+    !NON_RETRYABLE_CODES.has(error.code);
 
   const handleCancelUpload = useCallback(() => {
     abortRef.current?.abort();
@@ -923,7 +1059,10 @@ function EditorWorkspaceInner() {
               01
             </span>
             <div>
-              <h2 id="workspace-heading" className="text-sm font-medium tracking-tight text-white">
+              <h2
+                id="workspace-heading"
+                className="text-sm font-medium tracking-tight text-white"
+              >
                 原图工作区
               </h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">
@@ -940,7 +1079,11 @@ function EditorWorkspaceInner() {
               error={error}
               stage="上传图片"
               retryLabel="重试上传"
-              onRetry={canRetry && pendingFile ? () => void handleFileSelected(pendingFile) : undefined}
+              onRetry={
+                canRetry && pendingFile
+                  ? () => void handleFileSelected(pendingFile)
+                  : undefined
+              }
               onDismiss={() => setError(null)}
             />
           )}
@@ -950,7 +1093,9 @@ function EditorWorkspaceInner() {
               error={state.error}
               stage={image ? "创建编辑会话" : undefined}
               retryLabel="重试创建会话"
-              onRetry={image ? () => void startSession(image.imageId) : undefined}
+              onRetry={
+                image ? () => void startSession(image.imageId) : undefined
+              }
               onDismiss={() => dispatch({ type: "error-cleared" })}
             />
           )}

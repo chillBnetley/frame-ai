@@ -10,6 +10,16 @@ from app.ai.contracts import (
     MeasurementSummary,
     VisionResult,
 )
+from app.models.analysis_report import AnalysisReport
+from app.models.photographer import (
+    CreativeDirection,
+    PatchDraft,
+    PhotographerPreferences,
+    PlannerDraft,
+    PlannerMode,
+    StyleDefinition,
+)
+from app.models.recipe import EditRecipe
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +45,25 @@ class DecisionRequest:
     options: AnalysisOptions
 
 
+@dataclass(frozen=True, slots=True)
+class PlannerRequest:
+    analysis: AnalysisReport
+    recipe: EditRecipe
+    preferences: PhotographerPreferences
+    mode: PlannerMode = PlannerMode.AUTO
+    style: StyleDefinition | None = None
+    style_strength: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PatchRequest:
+    analysis: AnalysisReport
+    recipe: EditRecipe
+    instruction: str
+    preferences: PhotographerPreferences
+    direction: CreativeDirection | None = None
+
+
 class VisionProvider(Protocol):
     name: str
     model: str
@@ -56,6 +85,25 @@ class PhotographyDecisionProvider(Protocol):
 
     def diagnose(self, request: DecisionRequest) -> DecisionResult:
         """Select grounded issues and produce actionable recommendations."""
+        ...
+
+    def check_connection(self, *, timeout: float | None = None) -> int:
+        """Return latency in milliseconds after a text-only connectivity check."""
+        ...
+
+
+class PhotographyPlannerProvider(Protocol):
+    name: str
+    model: str
+    is_mock: bool
+    prompt_version: str
+
+    def plan(self, request: PlannerRequest) -> PlannerDraft:
+        """Return a structured planning draft; never perform pixel operations."""
+        ...
+
+    def adjust(self, request: PatchRequest) -> PatchDraft:
+        """Return a minimal structured patch draft for a natural-language instruction."""
         ...
 
     def check_connection(self, *, timeout: float | None = None) -> int:

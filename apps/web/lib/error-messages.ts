@@ -27,6 +27,17 @@ const EDITOR_MESSAGES: Record<string, string> = {
   storage_error: "服务保存数据失败，请稍后重试。",
   internal_error: "服务出现未预期错误，请稍后重试。",
   http_error: "请求失败，请稍后重试。",
+  analysis_required: "需要先完成照片分析，才能生成自动优化方案。",
+  analysis_failed: "照片分析失败，请稍后重试。",
+  image_analysis_mismatch: "分析结果与当前照片不匹配，请重新分析。",
+  photographer_recipe_invalid: "生成的方案未通过参数校验，请重试。",
+  photographer_invalid_output: "模型输出无法解析，请稍后重试。",
+  photographer_timeout: "生成方案超时，请稍后重试。",
+  photographer_unavailable: "AI 摄影师暂时不可用，请稍后重试。",
+  photographer_provider_error: "AI 服务返回错误，请检查 Provider 设置。",
+  photographer_busy: "AI 摄影师正在处理其他请求，请稍后重试。",
+  style_required: "请先选择摄影风格。",
+  style_not_found: "找不到所选风格，请重新选择。",
 };
 
 export function validationFields(details: Record<string, unknown>): string[] {

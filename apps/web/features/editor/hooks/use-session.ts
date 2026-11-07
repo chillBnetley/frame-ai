@@ -17,7 +17,7 @@ import {
 } from "@/lib/api/sessions";
 import { describeEditorError } from "@/lib/error-messages";
 import { normalizeRecipe, recipeFingerprint } from "@/lib/recipe";
-import type { SessionState } from "@/types/session";
+import type { EditRecipe, SessionState } from "@/types/session";
 
 const NON_RETRYABLE_SAVE_CODES = new Set([
   "validation_error",
@@ -121,13 +121,20 @@ async function applyConflictState(
   }
 }
 
+/** Whether a write happened, and where the session head landed. */
+export interface RevisionOutcome {
+  ok: boolean;
+  revisionId: string | null;
+}
+
 export interface SessionActions {
   startSession: (imageId: string) => Promise<boolean>;
   commit: () => Promise<boolean>;
-  undo: () => Promise<boolean>;
-  redo: () => Promise<boolean>;
-  reset: () => Promise<boolean>;
-  activate: (revisionId: string) => Promise<boolean>;
+  undo: () => Promise<RevisionOutcome>;
+  redo: () => Promise<RevisionOutcome>;
+  reset: () => Promise<RevisionOutcome>;
+  activate: (revisionId: string) => Promise<RevisionOutcome>;
+  acceptProposal: (recipe: EditRecipe) => Promise<RevisionOutcome>;
   refresh: () => Promise<boolean>;
 }
 
@@ -254,9 +261,9 @@ export function useSessionActions(): SessionActions {
         targetSessionId: string,
         expectedRevisionId: string | null,
       ) => Promise<SessionState>,
-    ): Promise<boolean> => {
+    ): Promise<RevisionOutcome> => {
       if (phase !== "ready" || sessionId === null || save.status === "saving") {
-        return false;
+        return { ok: false, revisionId: null };
       }
 
       let expectedRevisionId = activeRevisionId;
@@ -264,7 +271,7 @@ export function useSessionActions(): SessionActions {
       if (dirty) {
         const saved = await saveDraft();
         if (!saved.ok) {
-          return false;
+          return { ok: false, revisionId: null };
         }
         if (saved.state !== null) {
           expectedRevisionId = saved.state.activeRevisionId;
@@ -275,14 +282,14 @@ export function useSessionActions(): SessionActions {
         const next = await operation(sessionId, expectedRevisionId);
         dispatch({ type: "session-replaced", state: next });
         void loadHistory(sessionId);
-        return true;
+        return { ok: true, revisionId: next.activeRevisionId };
       } catch (error) {
         if (error instanceof ApiClientError && error.code === "revision_conflict") {
           await applyConflictState(sessionId, dispatch);
         } else {
           dispatch({ type: "error", error: describeEditorError(error) });
         }
-        return false;
+        return { ok: false, revisionId: null };
       }
     },
     [
@@ -322,6 +329,57 @@ export function useSessionActions(): SessionActions {
     [runHistoryAction],
   );
 
+  const acceptProposal = useCallback(
+    async (recipe: EditRecipe): Promise<RevisionOutcome> => {
+      if (
+        phase !== "ready" ||
+        sessionId === null ||
+        activeRevisionId === null ||
+        save.status === "saving" ||
+        recipeFingerprint(draft) !== recipeFingerprint(committed)
+      ) {
+        return { ok: false, revisionId: null };
+      }
+
+      dispatch({ type: "proposal-accepting" });
+      try {
+        const result = await createRevision(
+          sessionId,
+          {
+            recipe,
+            parentRevisionId: activeRevisionId,
+            source: "ai",
+          },
+          createIdempotencyKey(),
+        );
+        dispatch({ type: "proposal-accepted", state: result.state });
+        void loadHistory(sessionId);
+        return { ok: true, revisionId: result.state.activeRevisionId };
+      } catch (error) {
+        if (error instanceof ApiClientError && error.code === "revision_conflict") {
+          await applyConflictState(sessionId, dispatch);
+          void loadHistory(sessionId);
+          return { ok: false, revisionId: null };
+        }
+        dispatch({
+          type: "proposal-accept-failed",
+          error: describeEditorError(error),
+        });
+        return { ok: false, revisionId: null };
+      }
+    },
+    [
+      activeRevisionId,
+      committed,
+      dispatch,
+      draft,
+      loadHistory,
+      phase,
+      save.status,
+      sessionId,
+    ],
+  );
+
   const refresh = useCallback(async (): Promise<boolean> => {
     if (sessionId === null) {
       return false;
@@ -337,5 +395,14 @@ export function useSessionActions(): SessionActions {
     }
   }, [dispatch, loadHistory, sessionId]);
 
-  return { startSession, commit, undo, redo, reset, activate, refresh };
+  return {
+    startSession,
+    commit,
+    undo,
+    redo,
+    reset,
+    activate,
+    acceptProposal,
+    refresh,
+  };
 }

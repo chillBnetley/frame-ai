@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     analysis_timeout_seconds: float = Field(default=600.0, gt=0)
     analysis_queue_max: int = Field(default=16, ge=1)
 
+    photographer_max_concurrency: int = Field(default=2, ge=1, le=8)
+
     @field_validator("data_dir")
     @classmethod
     def _absolute_data_dir(cls, value: Path) -> Path:

@@ -1,10 +1,29 @@
-# FRAME AI 性能测量（阶段 2 / 阶段 3 / 阶段 4）
+# FRAME AI 性能测量（阶段 2 / 阶段 3 / 阶段 4 / 阶段 5）
 
-更新日期：2026-11-05（复审整改 G4 复测）。本文件按运行轮次分节，每节自带该轮的日期、commit、方法与原始表格；表格是 `scripts/bench_render.py`、`scripts/bench_analysis.py` 与 `scripts/bench_cache.py` 的直接输出，未做四舍五入以外的加工。
+更新日期：2026-11-06（阶段 5 Task 9 复核）。本文件按运行轮次分节，每节自带该轮的日期、commit、方法与原始表格；表格是 `scripts/bench_render.py`、`scripts/bench_analysis.py` 与 `scripts/bench_cache.py` 的直接输出，未做四舍五入以外的加工。
 
 - 本机测量环境（以下所有轮次共用同一台机器）：Windows-11-10.0.26200-SP0，Intel64 Family 6 Model 198 Stepping 2（14 逻辑核），内存 15.4 GiB；Python 3.14.7、Pillow 12.3.0、NumPy 2.5.4、OpenCV 4.14.0.94、psutil 7.2.2。
 - 所有基准都用脚本自启的**隔离单进程 uvicorn + 临时数据目录**测量，不复用开发服务器；测量期间用户的常驻 :3000/:8000 仍在运行，因此是真实桌面环境下的数字。
 - 峰值 RSS 统计 API 进程树（venv 启动器及其子进程），10 ms 间隔采样，是包含进程基线的**绝对工作集**而不是增量。
+
+## 阶段 5 Planner 与点评（2026-11-06）
+
+- 日期：2026-11-06T11:59+08:00，未提交工作区（阶段 5 Task 0–9）。**方法**：`fastapi.testclient.TestClient` 进程内调用真实路由 + 真实 SQLite（临时数据目录），不是独立 uvicorn，也不是浏览器端到端耗时。
+- 数据：96×64 PNG、`FRAME_MOCK_SCENARIO=backlit`、先完成一次 Mock 分析；每项连续 10 次，无额外热身，p95 取第 95 百分位（`round` 到序号）。
+- Planner 使用 `MockPlannerProvider`，只测规划/校验/落库链路；真实 Provider 的网络与 token 耗时**未测量**。
+
+| 请求 | p50 | p95 | 最小 | 最大 | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| `POST /ai/photographer/plan`（mode=auto） | 63.7 ms | 75.0 ms | 52.4 ms | 75.0 ms | 5 项参数改动 |
+| `POST /ai/photographer/plan`（mode=style，portrait，0.6） | 53.3 ms | 70.6 ms | 48.4 ms | 70.6 ms | 6 项参数改动 |
+| `POST /ai/photographer/chat`（“提高对比度，并稍微加一点清晰度”） | 66.4 ms | 81.1 ms | 47.3 ms | 81.1 ms | 2 项补丁，落库为新方案行 |
+| `POST /ai/photographer/critique`（确定性规则，不调用模型） | 17.4 ms | 20.8 ms | 10.7 ms | 20.8 ms | 21 条要点、3 条建议 |
+
+**不额外解码原图**：阶段 5 的 plan/chat/critique 只通过 `ImageService.get_original()` 取 `image_asset` 记录与路径，用于校验 sha256 与尺寸；`app/photographer/` 与 Planner Provider 不导入 Pillow 或 `app.imaging`。因此这些请求不产生全图解码、不写预览，也不触发代理缓存。以上是代码路径结论，不是 RSS 实测。
+
+**Provider 超时/重试**：沿用现有 transport，行为由单元测试覆盖（`test_retries_transient_status_with_exponential_backoff`、`test_retry_budget_is_bounded_and_reports_unavailable`、`test_planner_repairs_invalid_json_once`、`test_planner_timeout_is_prefixed_and_retryable`），本轮没有真实网络延迟数据。
+
+**预览缓存（阶段 5 未改渲染）**：2026-11-06 复跑 `scripts/bench_cache.py --iterations 5`（50.5 s）得到代理 6 MP 冷解码 252.74 ms → 内存命中 13.39 ms（24 MP 554.03 → 11.47 ms），蒙版权重 1 蒙版预览画布 113.66 ms → 0.01 ms；24 MP 蒙版权重 91.55 MB 超过单条上限，仍按未缓存速度执行。三条路径像素差 0.000000。完整表格见下方“阶段 4 Task 8”的缓存小节与原始输出。
 
 ## 复审整改 G4 复测（2026-11-05）
 

@@ -82,7 +82,7 @@ def test_migration_creates_analysis_tables(tmp_path: Path):
         connection.close()
 
     assert {"analysis_task", "analysis_result"} <= names
-    assert versions == [1, 2]
+    assert versions == [1, 2, 3, 4]
 
 
 def test_create_get_and_dedupe_roundtrip(tmp_path: Path):
@@ -100,6 +100,37 @@ def test_create_get_and_dedupe_roundtrip(tmp_path: Path):
 
     with pytest.raises(DuplicateAnalysisTaskError, match="duplicate analysis task"):
         repository.create(_task(image, dedupe_key="dedupe-1"))
+
+
+def test_latest_completed_for_image_returns_the_newest_report(tmp_path: Path):
+    database, image, repository = _setup(tmp_path)
+    older = _task(image, dedupe_key="older")
+    newer = _task(image, dedupe_key="newer")
+    repository.create(older)
+    repository.create(newer)
+    connection = connect(database)
+    try:
+        for task, completed_at in (
+            (older, "2026-11-03T12:00:00Z"),
+            (newer, "2026-11-03T13:00:00Z"),
+        ):
+            connection.execute(
+                "UPDATE analysis_task SET status = ?, stage = ?, completed_at = ? WHERE id = ?",
+                (TaskStatus.COMPLETED.value, TaskStage.COMPLETED.value, completed_at, task.id),
+            )
+            connection.execute(
+                "INSERT INTO analysis_result "
+                "(id, task_id, schema_version, is_mock, report_json, created_at) "
+                "VALUES (?, ?, 'stage3/1', 1, '{}', ?)",
+                (str(uuid4()), task.id, completed_at),
+            )
+    finally:
+        connection.close()
+
+    stored = repository.latest_completed_for_image(image.id)
+
+    assert stored is not None
+    assert stored.task_id == newer.id
 
 
 def test_claim_is_granted_to_exactly_one_worker(tmp_path: Path):

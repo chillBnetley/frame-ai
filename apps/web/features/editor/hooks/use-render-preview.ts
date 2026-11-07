@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { useEditorDispatch, useEditorState } from "@/features/editor/state/editor-context";
-import type { PreviewState } from "@/features/editor/state/editor-reducer";
+import {
+  selectProposalRecipe,
+  type PreviewState,
+} from "@/features/editor/state/editor-reducer";
 import { renderPreview } from "@/lib/api/sessions";
 import { describeEditorError, isSilentEditorError } from "@/lib/error-messages";
 import { recipeFingerprint } from "@/lib/recipe";
@@ -41,7 +44,8 @@ export function useRenderPreview(
   const dispatch = useEditorDispatch();
   const { sessionId, draft, phase } = state;
   const ready = phase === "ready";
-  const fingerprint = recipeFingerprint(draft);
+  const activeRecipe = selectProposalRecipe(state) ?? draft;
+  const fingerprint = recipeFingerprint(activeRecipe);
 
   const seqRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
@@ -52,12 +56,14 @@ export function useRenderPreview(
   const inflightRef = useRef<InflightRender | null>(null);
   const renderedSessionRef = useRef<string | null>(null);
   const draftRef = useRef(draft);
+  const activeRecipeRef = useRef(activeRecipe);
   const fingerprintRef = useRef(fingerprint);
 
   useEffect(() => {
     draftRef.current = draft;
+    activeRecipeRef.current = activeRecipe;
     fingerprintRef.current = fingerprint;
-  }, [draft, fingerprint]);
+  }, [activeRecipe, draft, fingerprint]);
 
   const clearDraftTimers = useCallback(() => {
     if (debounceTimerRef.current !== null) {
@@ -151,7 +157,7 @@ export function useRenderPreview(
       return;
     }
     renderedFingerprintRef.current = nextFingerprint;
-    void perform("draft", draftRef.current);
+    void perform("draft", activeRecipeRef.current);
   }, [clearDraftTimers, perform]);
 
   const scheduleDraft = useCallback(() => {
@@ -189,7 +195,7 @@ export function useRenderPreview(
     const isFirstRender = renderedFingerprintRef.current === null;
     if (isFirstRender) {
       renderedFingerprintRef.current = fingerprint;
-      void perform("final", draftRef.current);
+      void perform("final", activeRecipeRef.current);
       return;
     }
 
@@ -214,9 +220,9 @@ export function useRenderPreview(
 
   const requestFinal = useCallback(async (): Promise<void> => {
     clearDraftTimers();
-    const nextFingerprint = fingerprintRef.current;
-    renderedFingerprintRef.current = nextFingerprint;
-    if (completedFinalFingerprintRef.current === nextFingerprint) {
+    const draftFingerprint = recipeFingerprint(draftRef.current);
+    renderedFingerprintRef.current = draftFingerprint;
+    if (completedFinalFingerprintRef.current === draftFingerprint) {
       return;
     }
     await perform("final", draftRef.current);
@@ -226,7 +232,7 @@ export function useRenderPreview(
     clearDraftTimers();
     renderedFingerprintRef.current = fingerprintRef.current;
     completedFinalFingerprintRef.current = null;
-    await perform("final", draftRef.current);
+    await perform("final", activeRecipeRef.current);
   }, [clearDraftTimers, perform]);
 
   const cancel = useCallback(() => {

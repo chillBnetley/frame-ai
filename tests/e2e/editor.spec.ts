@@ -4,7 +4,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { ARTIFACTS, FIXTURE_JSON, requirePython } from "./support";
+import {
+  ARTIFACTS,
+  FIXTURE_JSON,
+  openApp,
+  requirePython,
+  uploadFixture,
+} from "./support";
 
 interface Fixture {
   path: string;
@@ -15,20 +21,6 @@ interface Fixture {
 }
 
 const fixture: Fixture = JSON.parse(fs.readFileSync(FIXTURE_JSON, "utf8"));
-
-async function uploadFixture(page: Page): Promise<void> {
-  await page.goto("/");
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/images" &&
-      response.status() === 201,
-  );
-  await page.getByTestId("file-input").setInputFiles(fixture.path);
-  await responsePromise;
-  await expect(page.getByRole("heading", { name: "编辑预览" })).toBeVisible();
-  await expect(page.getByAltText("编辑后的预览")).toBeVisible({ timeout: 60_000 });
-}
 
 async function setAdjustment(page: Page, name: string, value: string): Promise<void> {
   const input = page.getByRole("spinbutton", { name, exact: true });
@@ -41,6 +33,7 @@ async function setAdjustment(page: Page, name: string, value: string): Promise<v
 test("keyboard slider adjustments keep focus and merge into one revision", async ({
   page,
 }) => {
+  await openApp(page);
   await uploadFixture(page);
 
   const slider = page.getByRole("slider", { name: "曝光", exact: true });
@@ -65,6 +58,7 @@ test("keyboard slider adjustments keep focus and merge into one revision", async
 test("upload, adjust, compare, undo/redo/reset, and export JPEG", async ({
   page,
 }, testInfo) => {
+  await openApp(page);
   await uploadFixture(page);
 
   const toolbar = ["前后对比", "裁切", "导出", "更换照片", "重新开始"];
@@ -112,6 +106,14 @@ test("upload, adjust, compare, undo/redo/reset, and export JPEG", async ({
   await page.getByRole("button", { name: "导出", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "导出图像" });
   await expect(dialog).toBeVisible();
+  // The dialog is portalled to <body>. A backdrop-filter ancestor would become
+  // its containing block and push it off screen while toBeVisible still passes.
+  const viewport = page.viewportSize()!;
+  const dialogBox = (await dialog.boundingBox())!;
+  expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBox.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width);
+  expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
 
   const exportPath = path.join(ARTIFACTS, `${testInfo.project.name}.jpg`);
   const downloadPromise = page.waitForEvent("download");

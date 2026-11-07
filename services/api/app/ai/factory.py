@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from app.ai.base import PhotographyDecisionProvider, VisionProvider
+from app.ai.base import (
+    PhotographyDecisionProvider,
+    PhotographyPlannerProvider,
+    VisionProvider,
+)
 from app.ai.errors import ProviderConfigurationError
-from app.ai.providers.mock import MockDecisionProvider, MockVisionProvider
+from app.ai.providers.mock import (
+    MockDecisionProvider,
+    MockPlannerProvider,
+    MockVisionProvider,
+)
 from app.ai.providers.openai_compatible import (
     OpenAICompatibleDecisionProvider,
+    OpenAICompatiblePlannerProvider,
     OpenAICompatibleVisionProvider,
 )
 from app.ai.transport import JsonHttpClient, UrllibJsonTransport
@@ -18,6 +27,7 @@ class ProviderBundle:
     vision: VisionProvider
     decision: PhotographyDecisionProvider
     mock_reasons: tuple[str, ...]
+    planner: PhotographyPlannerProvider = field(default_factory=MockPlannerProvider)
 
     @property
     def is_mock(self) -> bool:
@@ -86,15 +96,50 @@ def build_decision_provider(
     )
 
 
+def build_planner_provider(
+    settings: Settings | None = None,
+    *,
+    client: JsonHttpClient | None = None,
+) -> PhotographyPlannerProvider:
+    resolved = settings or get_settings()
+    if resolved.decision_provider == "mock":
+        return MockPlannerProvider()
+
+    missing = _missing_fields(
+        api_key=resolved.decision_api_key.get_secret_value(),
+        model=resolved.decision_model,
+        base_url=resolved.decision_api_base_url,
+        env_names=(
+            "FRAME_DECISION_API_KEY",
+            "FRAME_DECISION_MODEL",
+            "FRAME_DECISION_API_BASE_URL",
+        ),
+    )
+    if missing:
+        raise ProviderConfigurationError(_missing_message("planner", missing))
+
+    return OpenAICompatiblePlannerProvider(
+        client or _default_client(),
+        base_url=resolved.decision_api_base_url,
+        api_key=resolved.decision_api_key.get_secret_value(),
+        model=resolved.decision_model,
+        timeout=resolved.decision_timeout,
+        max_retries=resolved.decision_max_retries,
+        repair_attempts=resolved.decision_repair_attempts,
+    )
+
+
 def build_provider_bundle(
     settings: Settings | None = None,
     *,
     vision_client: JsonHttpClient | None = None,
     decision_client: JsonHttpClient | None = None,
+    planner_client: JsonHttpClient | None = None,
 ) -> ProviderBundle:
     resolved = settings or get_settings()
     vision = build_vision_provider(resolved, client=vision_client)
     decision = build_decision_provider(resolved, client=decision_client)
+    planner = build_planner_provider(resolved, client=planner_client)
 
     reasons: list[str] = []
     if vision.is_mock:
@@ -106,6 +151,7 @@ def build_provider_bundle(
         vision=vision,
         decision=decision,
         mock_reasons=tuple(reasons),
+        planner=planner,
     )
 
 
@@ -134,6 +180,7 @@ def _missing_message(kind: str, missing: list[str]) -> str:
 __all__ = [
     "ProviderBundle",
     "build_decision_provider",
+    "build_planner_provider",
     "build_provider_bundle",
     "build_vision_provider",
 ]

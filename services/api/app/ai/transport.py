@@ -4,6 +4,7 @@ import json
 import random
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -13,6 +14,56 @@ from app.ai.errors import ProviderError
 
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_BACKOFF_SECONDS = 8.0
+
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _origin(url: str) -> tuple[str, str, int]:
+    parts = urllib.parse.urlsplit(url)
+    scheme = parts.scheme.lower()
+    host = (parts.hostname or "").lower()
+    if scheme not in _DEFAULT_PORTS or not host:
+        raise ValueError("url must be absolute http(s) with a host")
+    return scheme, host, parts.port or _DEFAULT_PORTS[scheme]
+
+
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow redirects only while scheme, host and port stay unchanged.
+
+    ``urllib`` keeps the ``Authorization`` header on redirects, so a third-party
+    endpoint could otherwise collect the provider key. Cross-origin hops and
+    https-to-http downgrades are refused before the redirected request is built.
+    """
+
+    def __init__(self, origin: tuple[str, str, int]) -> None:
+        super().__init__()
+        self._origin = origin
+
+    def redirect_request(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> Any:
+        target = urllib.parse.urljoin(req.full_url, newurl)
+        try:
+            target_origin = _origin(target)
+        except ValueError as exc:
+            raise ProviderError(
+                "provider_endpoint_error",
+                "The model provider redirected the request to an invalid URL.",
+                retryable=False,
+            ) from exc
+        if target_origin != self._origin:
+            raise ProviderError(
+                "provider_endpoint_error",
+                "The model provider redirected the request to an untrusted origin.",
+                retryable=False,
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +102,16 @@ class UrllibJsonTransport:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            origin = _origin(url)
+        except ValueError as exc:
+            raise ProviderError(
+                "provider_endpoint_error",
+                "The configured model provider URL is invalid.",
+                retryable=False,
+            ) from exc
+        opener = urllib.request.build_opener(_SameOriginRedirectHandler(origin))
+        try:
+            with opener.open(request, timeout=timeout) as response:
                 return HttpResponse(
                     status=int(getattr(response, "status", 200)),
                     body=_read_limited(response),

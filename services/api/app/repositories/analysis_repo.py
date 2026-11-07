@@ -19,6 +19,11 @@ _TASK_COLUMNS = (
     "attempts, error_code, error_message, created_at, updated_at, started_at, completed_at"
 )
 _RESULT_COLUMNS = "id, task_id, schema_version, is_mock, report_json, created_at"
+_QUALIFIED_RESULT_COLUMNS = (
+    "analysis_result.id AS id, analysis_result.task_id AS task_id, "
+    "analysis_result.schema_version AS schema_version, analysis_result.is_mock AS is_mock, "
+    "analysis_result.report_json AS report_json, analysis_result.created_at AS created_at"
+)
 _INTERRUPTED_MESSAGE = "The analysis was interrupted before it completed."
 _UNIQUE_ERROR_NAMES = frozenset(
     {
@@ -229,6 +234,21 @@ class SqliteAnalysisRepository:
             row = connection.execute(
                 f"SELECT {_RESULT_COLUMNS} FROM analysis_result WHERE task_id = ?",
                 (task_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+        return _to_result(row) if row is not None else None
+
+    def latest_completed_for_image(self, image_id: str) -> AnalysisResultRecord | None:
+        connection = connect(self._path)
+        try:
+            row = connection.execute(
+                f"SELECT {_QUALIFIED_RESULT_COLUMNS} FROM analysis_result "
+                "JOIN analysis_task ON analysis_task.id = analysis_result.task_id "
+                "WHERE analysis_task.image_id = ? AND analysis_task.status = ? "
+                "ORDER BY analysis_task.completed_at DESC, analysis_task.created_at DESC "
+                "LIMIT 1",
+                (image_id.lower(), TaskStatus.COMPLETED.value),
             ).fetchone()
         finally:
             connection.close()

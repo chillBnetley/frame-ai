@@ -6,12 +6,18 @@ from pydantic import ValidationError
 from app.ai.errors import ProviderConfigurationError
 from app.ai.factory import (
     build_decision_provider,
+    build_planner_provider,
     build_provider_bundle,
     build_vision_provider,
 )
-from app.ai.providers.mock import MockDecisionProvider, MockVisionProvider
+from app.ai.providers.mock import (
+    MockDecisionProvider,
+    MockPlannerProvider,
+    MockVisionProvider,
+)
 from app.ai.providers.openai_compatible import (
     OpenAICompatibleDecisionProvider,
+    OpenAICompatiblePlannerProvider,
     OpenAICompatibleVisionProvider,
 )
 from app.core.config import Settings
@@ -41,10 +47,12 @@ def test_defaults_build_mock_providers_and_mark_the_bundle():
 
     assert isinstance(bundle.vision, MockVisionProvider)
     assert isinstance(bundle.decision, MockDecisionProvider)
+    assert isinstance(bundle.planner, MockPlannerProvider)
     assert bundle.is_mock is True
     assert bundle.mock_reasons == ("vision_provider=mock", "decision_provider=mock")
     assert bundle.vision.model == "mock-vision"
     assert bundle.decision.model == "mock-decision"
+    assert bundle.planner.model == "mock-planner"
 
 
 def test_mock_scenario_flows_from_settings_and_unknown_falls_back():
@@ -189,3 +197,49 @@ def test_invalid_provider_settings_are_rejected(overrides):
 def test_analysis_max_edge_accepts_the_documented_range():
     assert make_settings(analysis_max_edge=512).analysis_max_edge == 512
     assert make_settings(analysis_max_edge=2048).analysis_max_edge == 2048
+
+
+def test_planner_reuses_the_decision_provider_settings():
+    assert isinstance(build_planner_provider(make_settings()), MockPlannerProvider)
+
+    settings = make_settings(
+        decision_provider="openai",
+        decision_api_key="sk-decision-secret",
+        decision_model="decision-model",
+        decision_api_base_url="https://decision.test/v1",
+    )
+
+    planner = build_planner_provider(settings)
+
+    assert isinstance(planner, OpenAICompatiblePlannerProvider)
+    assert planner.model == "decision-model"
+    assert planner.is_mock is False
+    assert "sk-decision-secret" not in repr(planner)
+
+
+def test_openai_planner_reports_each_missing_decision_setting():
+    with pytest.raises(ProviderConfigurationError) as error:
+        build_planner_provider(make_settings(decision_provider="openai"))
+
+    message = str(error.value)
+    assert message.index("FRAME_DECISION_API_KEY") < message.index("FRAME_DECISION_MODEL")
+    assert message.index("FRAME_DECISION_MODEL") < message.index("FRAME_DECISION_API_BASE_URL")
+
+
+def test_bundle_constructs_a_matching_planner():
+    settings = make_settings(
+        vision_provider="openai",
+        vision_api_key="sk-vision-secret",
+        vision_model="vision-model",
+        vision_api_base_url="https://vision.test/v1",
+        decision_provider="openai",
+        decision_api_key="sk-decision-secret",
+        decision_model="decision-model",
+        decision_api_base_url="https://decision.test/v1",
+    )
+
+    bundle = build_provider_bundle(settings)
+
+    assert isinstance(bundle.planner, OpenAICompatiblePlannerProvider)
+    assert bundle.planner.model == "decision-model"
+    assert bundle.is_mock is False

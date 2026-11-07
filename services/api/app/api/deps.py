@@ -4,6 +4,7 @@ from fastapi import Request
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.photographer.service import PhotographerService
 from app.services.analysis_task_service import AnalysisTaskService
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
@@ -57,5 +58,12 @@ def get_render_service(request: Request) -> RenderService:
 def get_export_service(request: Request) -> ExportService:
     service = getattr(request.app.state, "export_service", None)
     if not isinstance(service, ExportService):
+        raise AppError(503, "service_unavailable", "The service is not ready.")
+    return service
+
+
+def get_photographer_service(request: Request) -> PhotographerService:
+    service = getattr(request.app.state, "photographer_service", None)
+    if not isinstance(service, PhotographerService):
         raise AppError(503, "service_unavailable", "The service is not ready.")
     return service

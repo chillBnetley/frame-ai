@@ -1851,6 +1851,1015 @@
           }
         }
       }
+    },
+    "/api/v1/ai/photographer/styles": {
+      "get": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "List Styles",
+        "operationId": "list_styles_api_v1_ai_photographer_styles_get",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StyleCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by style category.",
+              "title": "Category"
+            },
+            "description": "Filter by style category."
+          },
+          {
+            "name": "scene",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SceneLabel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by supported scene.",
+              "title": "Scene"
+            },
+            "description": "Filter by supported scene."
+          },
+          {
+            "name": "include_disabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include styles that are switched off.",
+              "default": false,
+              "title": "Include Disabled"
+            },
+            "description": "Include styles that are switched off."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/photographer/styles/{style_id}": {
+      "get": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Read Style",
+        "operationId": "read_style_api_v1_ai_photographer_styles__style_id__get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "description": "Style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleDefinition"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/photographer/plan": {
+      "post": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Create Plan",
+        "operationId": "create_plan_api_v1_ai_photographer_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotographerPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotographerPlanResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/photographer/chat": {
+      "post": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Create Patch",
+        "operationId": "create_patch_api_v1_ai_photographer_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotographerPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Always a full patch result. Requests the engine cannot satisfy return supported=false with the recipe unchanged, not an error code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotographerPatchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/photographer/critique": {
+      "post": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Create Critique",
+        "operationId": "create_critique_api_v1_ai_photographer_critique_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotographerCritiqueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CritiqueResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/photographer/critique/apply": {
+      "post": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Apply Critique",
+        "operationId": "apply_critique_api_v1_ai_photographer_critique_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CritiqueApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CritiqueApplyResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/photographer/feedback": {
+      "post": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Create Feedback",
+        "operationId": "create_feedback_api_v1_ai_photographer_feedback_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotographerFeedbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One stored user decision. 'modified' is derived by the server when the referenced revision no longer matches the plan it came from.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotographerFeedbackResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Read Feedback",
+        "operationId": "read_feedback_api_v1_ai_photographer_feedback_get",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this session's records.",
+              "title": "Sessionid"
+            },
+            "description": "Only this session's records."
+          },
+          {
+            "name": "imageId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this image's records.",
+              "title": "Imageid"
+            },
+            "description": "Only this image's records."
+          },
+          {
+            "name": "planId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only records about this plan.",
+              "title": "Planid"
+            },
+            "description": "Only records about this plan."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotographerFeedbackListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/photographer/feedback/{feedback_id}": {
+      "delete": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Remove Feedback",
+        "operationId": "remove_feedback_api_v1_ai_photographer_feedback__feedback_id__delete",
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Feedback record identifier.",
+              "title": "Feedback Id"
+            },
+            "description": "Feedback record identifier."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1869,6 +2878,209 @@
           "revisionId"
         ],
         "title": "ActivateRevisionRequest"
+      },
+      "AdjustmentIntent": {
+        "properties": {
+          "exposureEv": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5.0,
+                "minimum": -5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposureev"
+          },
+          "contrast": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contrast"
+          },
+          "highlights": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Highlights"
+          },
+          "shadows": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadows"
+          },
+          "whites": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whites"
+          },
+          "blacks": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blacks"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "tint": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tint"
+          },
+          "saturation": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saturation"
+          },
+          "vibrance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vibrance"
+          },
+          "clarity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity"
+          },
+          "sharpen": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharpen"
+          },
+          "denoise": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Denoise"
+          },
+          "vignette": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vignette"
+          },
+          "grain": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grain"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AdjustmentIntent",
+        "description": "Untrusted model intent; the generator clamps and rounds these values."
       },
       "Adjustments": {
         "properties": {
@@ -2832,6 +4044,396 @@
         ],
         "title": "CreateSessionRequest"
       },
+      "CreativeChoice": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/CreativeChoiceType"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "description",
+          "evidenceRefs"
+        ],
+        "title": "CreativeChoice"
+      },
+      "CreativeChoiceType": {
+        "type": "string",
+        "enum": [
+          "low_key_intent",
+          "high_key_intent",
+          "warm_ambient",
+          "cool_ambient",
+          "low_saturation_intent",
+          "high_saturation_intent",
+          "high_contrast_intent",
+          "flat_light_intent",
+          "shallow_depth_of_field",
+          "already_edited"
+        ],
+        "title": "CreativeChoiceType"
+      },
+      "CreativeDirection": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "category": {
+            "$ref": "#/components/schemas/StyleCategory"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "strength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Strength",
+            "default": 0.5
+          },
+          "constraints": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionConstraint"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Constraints",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "description"
+        ],
+        "title": "CreativeDirection"
+      },
+      "CritiqueApplyRequest": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "patch": {
+            "$ref": "#/components/schemas/AdjustmentIntent"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/PhotographerPreferences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "patch"
+        ],
+        "title": "CritiqueApplyRequest",
+        "description": "Apply one critique suggestion's parameter patch to the session's current recipe."
+      },
+      "CritiqueApplyResponse": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "stage5/1",
+            "title": "Schemaversion",
+            "default": "stage5/1"
+          },
+          "patchId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Patchid"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/EditRecipe"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterChange"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Changes",
+            "default": []
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Warnings",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Limitations",
+            "default": []
+          },
+          "unsupported": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Unsupported",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "patchId",
+          "recipe",
+          "reason"
+        ],
+        "title": "CritiqueApplyResponse",
+        "description": "The same validated patch shape the chat flow returns, without a plan anchor."
+      },
+      "CritiqueCreative": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          },
+          "subjective": {
+            "type": "boolean",
+            "title": "Subjective",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "evidenceRefs"
+        ],
+        "title": "CritiqueCreative"
+      },
+      "CritiquePoint": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "evidenceRefs"
+        ],
+        "title": "CritiquePoint"
+      },
+      "CritiqueResponse": {
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "generatedBy": {
+            "type": "string",
+            "const": "deterministic-rules",
+            "title": "Generatedby",
+            "default": "deterministic-rules"
+          },
+          "strengths": {
+            "items": {
+              "$ref": "#/components/schemas/CritiquePoint"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Strengths",
+            "default": []
+          },
+          "technical": {
+            "$ref": "#/components/schemas/CritiqueTechnical"
+          },
+          "creative": {
+            "items": {
+              "$ref": "#/components/schemas/CritiqueCreative"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Creative",
+            "default": []
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/CritiqueSuggestion"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Suggestions",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Limitations",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "analysisId",
+          "isMock"
+        ],
+        "title": "CritiqueResponse"
+      },
+      "CritiqueSuggestion": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "category": {
+            "$ref": "#/components/schemas/RecommendationCategory"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          },
+          "recipePatch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdjustmentIntent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "category",
+          "evidenceRefs"
+        ],
+        "title": "CritiqueSuggestion"
+      },
+      "CritiqueTechnical": {
+        "properties": {
+          "objective": {
+            "items": {
+              "$ref": "#/components/schemas/CritiquePoint"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Objective",
+            "default": []
+          },
+          "possibleIssues": {
+            "items": {
+              "$ref": "#/components/schemas/CritiquePoint"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Possibleissues",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CritiqueTechnical"
+      },
       "Crop": {
         "properties": {
           "x": {
@@ -2963,6 +4565,121 @@
           "noiseEstimate"
         ],
         "title": "DetailMeasurement"
+      },
+      "DiagnosisItem": {
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Issueid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/IssueType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Evidence"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "issueId",
+          "type",
+          "severity",
+          "confidence",
+          "evidence",
+          "evidenceRefs"
+        ],
+        "title": "DiagnosisItem"
+      },
+      "DiagnosisResult": {
+        "properties": {
+          "confirmed": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosisItem"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Confirmed",
+            "default": []
+          },
+          "possible": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosisItem"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Possible",
+            "default": []
+          },
+          "creativeChoices": {
+            "items": {
+              "$ref": "#/components/schemas/CreativeChoice"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Creativechoices",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.5
+          },
+          "confidenceNote": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Confidencenote",
+            "default": "启发式置信度，不是校准概率。"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiagnosisResult"
+      },
+      "DirectionConstraint": {
+        "type": "string",
+        "enum": [
+          "preserve_skin_tone",
+          "preserve_highlight_detail",
+          "preserve_shadow_detail",
+          "avoid_extreme_saturation",
+          "avoid_extreme_contrast",
+          "keep_ambient_color",
+          "natural_look",
+          "avoid_color_cast",
+          "maintain_neutrality",
+          "keep_low_key",
+          "keep_warm_tones"
+        ],
+        "title": "DirectionConstraint"
       },
       "EditRecipe": {
         "properties": {
@@ -3208,6 +4925,344 @@
         ],
         "title": "ExposureQuality"
       },
+      "FeedbackAction": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "rejected",
+          "modified",
+          "reset"
+        ],
+        "title": "FeedbackAction"
+      },
+      "FeedbackChangeFrequency": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9_.\\[\\]]*$",
+            "title": "Path"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "count"
+        ],
+        "title": "FeedbackChangeFrequency"
+      },
+      "FeedbackDimension": {
+        "type": "string",
+        "enum": [
+          "exposure",
+          "color",
+          "skin_tone",
+          "highlights",
+          "shadows",
+          "subject",
+          "local_adjustment",
+          "style",
+          "naturalness",
+          "creative_intent"
+        ],
+        "title": "FeedbackDimension"
+      },
+      "FeedbackDimensionAverage": {
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/FeedbackDimension"
+          },
+          "average": {
+            "type": "number",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Average"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dimension",
+          "average",
+          "count"
+        ],
+        "title": "FeedbackDimensionAverage"
+      },
+      "FeedbackRubric": {
+        "properties": {
+          "exposure": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "skinTone": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skintone"
+          },
+          "highlights": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Highlights"
+          },
+          "shadows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadows"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "localAdjustment": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Localadjustment"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style"
+          },
+          "naturalness": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Naturalness"
+          },
+          "creativeIntent": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creativeintent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FeedbackRubric"
+      },
+      "FeedbackSource": {
+        "type": "string",
+        "enum": [
+          "plan",
+          "chat",
+          "critique"
+        ],
+        "title": "FeedbackSource",
+        "description": "Which flow the user was reacting to."
+      },
+      "FeedbackSourceCounts": {
+        "properties": {
+          "plan": {
+            "type": "integer",
+            "title": "Plan"
+          },
+          "chat": {
+            "type": "integer",
+            "title": "Chat"
+          },
+          "critique": {
+            "type": "integer",
+            "title": "Critique"
+          },
+          "unset": {
+            "type": "integer",
+            "title": "Unset"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plan",
+          "chat",
+          "critique",
+          "unset"
+        ],
+        "title": "FeedbackSourceCounts"
+      },
+      "FeedbackSummary": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected"
+          },
+          "modified": {
+            "type": "integer",
+            "title": "Modified"
+          },
+          "reset": {
+            "type": "integer",
+            "title": "Reset"
+          },
+          "bySource": {
+            "$ref": "#/components/schemas/FeedbackSourceCounts"
+          },
+          "mockCount": {
+            "type": "integer",
+            "title": "Mockcount"
+          },
+          "realCount": {
+            "type": "integer",
+            "title": "Realcount"
+          },
+          "degradedCount": {
+            "type": "integer",
+            "title": "Degradedcount"
+          },
+          "ratedCount": {
+            "type": "integer",
+            "title": "Ratedcount"
+          },
+          "changeFrequency": {
+            "items": {
+              "$ref": "#/components/schemas/FeedbackChangeFrequency"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Changefrequency",
+            "default": []
+          },
+          "rubricAverages": {
+            "items": {
+              "$ref": "#/components/schemas/FeedbackDimensionAverage"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Rubricaverages",
+            "default": []
+          },
+          "disclaimers": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Disclaimers",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "accepted",
+          "rejected",
+          "modified",
+          "reset",
+          "bySource",
+          "mockCount",
+          "realCount",
+          "degradedCount",
+          "ratedCount"
+        ],
+        "title": "FeedbackSummary",
+        "description": "Counts of what users did. Nothing here may read as a claim of quality improvement."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3397,6 +5452,7 @@
         ],
         "title": "IssueType"
       },
+      "JsonValue": {},
       "LightingDirection": {
         "type": "string",
         "enum": [
@@ -3749,6 +5805,621 @@
         "type": "object",
         "title": "OutputSettings"
       },
+      "ParameterChange": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9_.\\[\\]]*$",
+            "title": "Path"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "proposed": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "reason",
+          "evidenceRefs"
+        ],
+        "title": "ParameterChange"
+      },
+      "PhotographerCritiqueRequest": {
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/PhotographerPreferences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "analysisId"
+        ],
+        "title": "PhotographerCritiqueRequest"
+      },
+      "PhotographerFeedbackListResponse": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "stage5/1",
+            "title": "Schemaversion",
+            "default": "stage5/1"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PhotographerFeedbackResponse"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Items",
+            "default": []
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FeedbackSummary"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "summary"
+        ],
+        "title": "PhotographerFeedbackListResponse"
+      },
+      "PhotographerFeedbackRequest": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "action": {
+            "$ref": "#/components/schemas/FeedbackAction"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "planId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planid"
+          },
+          "revisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revisionid"
+          },
+          "rubric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackRubric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "action"
+        ],
+        "title": "PhotographerFeedbackRequest",
+        "description": "One user decision. There is no field for prose: instructions and images stay out."
+      },
+      "PhotographerFeedbackResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "planId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planid"
+          },
+          "revisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revisionid"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action": {
+            "$ref": "#/components/schemas/FeedbackAction"
+          },
+          "changedPaths": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1,
+              "pattern": "^[A-Za-z][A-Za-z0-9_.\\[\\]]*$"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Changedpaths",
+            "default": []
+          },
+          "rubric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackRubric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "degraded": {
+            "type": "boolean",
+            "title": "Degraded"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "imageId",
+          "action",
+          "isMock",
+          "degraded",
+          "createdAt"
+        ],
+        "title": "PhotographerFeedbackResponse"
+      },
+      "PhotographerPatchRequest": {
+        "properties": {
+          "planId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Planid"
+          },
+          "instruction": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Instruction"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/PhotographerPreferences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "planId",
+          "instruction"
+        ],
+        "title": "PhotographerPatchRequest"
+      },
+      "PhotographerPatchResponse": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "stage5/1",
+            "title": "Schemaversion",
+            "default": "stage5/1"
+          },
+          "patchId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Patchid"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Planid"
+          },
+          "supported": {
+            "type": "boolean",
+            "title": "Supported"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/EditRecipe"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterChange"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Changes",
+            "default": []
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Warnings",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Limitations",
+            "default": []
+          },
+          "unsupported": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Unsupported",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "patchId",
+          "planId",
+          "supported",
+          "recipe",
+          "reason"
+        ],
+        "title": "PhotographerPatchResponse"
+      },
+      "PhotographerPlanRequest": {
+        "properties": {
+          "analysisId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysisid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/PlannerMode",
+            "default": "auto"
+          },
+          "styleId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleid"
+          },
+          "styleStrength": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stylestrength"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/PhotographerPreferences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId"
+        ],
+        "title": "PhotographerPlanRequest"
+      },
+      "PhotographerPlanResponse": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "stage5/1",
+            "title": "Schemaversion",
+            "default": "stage5/1"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Planid"
+          },
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/PlannerMode"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "degraded": {
+            "type": "boolean",
+            "title": "Degraded",
+            "default": false
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ProviderInfo"
+          },
+          "diagnosis": {
+            "$ref": "#/components/schemas/DiagnosisResult"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/CreativeDirection"
+          },
+          "styleId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleid"
+          },
+          "styleVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleversion"
+          },
+          "styleStrength": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stylestrength"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/EditRecipe"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterChange"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Changes",
+            "default": []
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Warnings",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Limitations",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.5
+          },
+          "confidenceNote": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Confidencenote",
+            "default": "启发式置信度，不是校准概率。"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "planId",
+          "analysisId",
+          "sessionId",
+          "imageId",
+          "mode",
+          "isMock",
+          "provider",
+          "diagnosis",
+          "direction",
+          "recipe"
+        ],
+        "title": "PhotographerPlanResponse"
+      },
+      "PhotographerPreferences": {
+        "properties": {
+          "naturalness": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Naturalness",
+            "default": 0.7
+          },
+          "adjustmentStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Adjustmentstrength",
+            "default": 0.5
+          },
+          "allowStylization": {
+            "type": "boolean",
+            "title": "Allowstylization",
+            "default": false
+          },
+          "preserveOriginalColor": {
+            "type": "boolean",
+            "title": "Preserveoriginalcolor",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PhotographerPreferences"
+      },
+      "PlannerMode": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "style"
+        ],
+        "title": "PlannerMode"
+      },
       "Priority": {
         "type": "string",
         "enum": [
@@ -3865,6 +6536,36 @@
           "apiKeySource"
         ],
         "title": "ProviderEntryView"
+      },
+      "ProviderInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Model"
+          },
+          "promptVersion": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Promptversion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "model",
+          "promptVersion"
+        ],
+        "title": "ProviderInfo"
       },
       "ProviderSettingsUpdate": {
         "properties": {
@@ -4507,6 +7208,224 @@
           "writable"
         ],
         "title": "StorageHealth"
+      },
+      "StyleCategory": {
+        "type": "string",
+        "enum": [
+          "scene",
+          "creative"
+        ],
+        "title": "StyleCategory"
+      },
+      "StyleDefinition": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Id"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version",
+            "default": "1.0"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "category": {
+            "$ref": "#/components/schemas/StyleCategory"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "supportedScenes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "minItems": 1,
+            "title": "Supportedscenes"
+          },
+          "defaultStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Defaultstrength",
+            "default": 0.5
+          },
+          "envelope": {
+            "$ref": "#/components/schemas/StyleEnvelope"
+          },
+          "constraints": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionConstraint"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Constraints",
+            "default": []
+          },
+          "engineStyle": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "portrait",
+              "landscape",
+              "street",
+              "documentary",
+              "film",
+              "cinematic"
+            ],
+            "title": "Enginestyle",
+            "default": "natural"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "description",
+          "supportedScenes"
+        ],
+        "title": "StyleDefinition",
+        "description": "A parameterized style. The catalog is independent of the render engine."
+      },
+      "StyleEnvelope": {
+        "properties": {
+          "exposureEv": {
+            "type": "number",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Exposureev",
+            "default": 1.0
+          },
+          "contrast": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Contrast",
+            "default": 25.0
+          },
+          "highlights": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Highlights",
+            "default": 25.0
+          },
+          "shadows": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Shadows",
+            "default": 25.0
+          },
+          "whites": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Whites",
+            "default": 20.0
+          },
+          "blacks": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Blacks",
+            "default": 20.0
+          },
+          "temperature": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Temperature",
+            "default": 15.0
+          },
+          "tint": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Tint",
+            "default": 10.0
+          },
+          "saturation": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Saturation",
+            "default": 15.0
+          },
+          "vibrance": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Vibrance",
+            "default": 15.0
+          },
+          "clarity": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Clarity",
+            "default": 20.0
+          },
+          "denoise": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Denoise",
+            "default": 25.0
+          },
+          "vignette": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Vignette",
+            "default": 20.0
+          },
+          "grain": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Grain",
+            "default": 15.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StyleEnvelope",
+        "description": "Per-parameter magnitude limits used when a style is realized as parameters."
+      },
+      "StyleListResponse": {
+        "properties": {
+          "styles": {
+            "items": {
+              "$ref": "#/components/schemas/StyleDefinition"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Styles",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StyleListResponse"
       },
       "SubjectInfo": {
         "properties": {

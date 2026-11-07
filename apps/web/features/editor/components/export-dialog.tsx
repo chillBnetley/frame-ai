@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { DownloadIcon } from "@/components/icons";
 import type { ExportState } from "@/features/editor/hooks/use-export";
@@ -155,8 +156,10 @@ export function ExportDialog({
     return null;
   })();
 
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
+  // Portalled: the stage that opens this dialog sits inside a backdrop-blur
+  // card, and a filtered ancestor becomes the containing block of `fixed`.
+  return createPortal(
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(241,243,242,0.72)] p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -358,6 +361,7 @@ export function ExportDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

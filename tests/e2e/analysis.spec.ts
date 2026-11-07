@@ -7,7 +7,7 @@ import {
 } from "@playwright/test";
 import fs from "node:fs";
 
-import { analysisFixtureJson } from "./support";
+import { analysisFixtureJson, uploadFixture } from "./support";
 
 interface Fixture {
   path: string;
@@ -28,19 +28,10 @@ function fixtureFor(testInfo: TestInfo): Fixture {
 }
 
 async function upload(page: Page, fixture: Fixture, inputTestId: string): Promise<void> {
-  const uploaded = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/images" &&
-      response.status() === 201,
-  );
-  if (inputTestId === "file-input") {
-    await page.getByTestId(inputTestId).setInputFiles(fixture.path);
-  } else {
-    await page.locator(`input[aria-label="${inputTestId}"]`).setInputFiles(fixture.path);
-  }
-  await uploaded;
-  await expect(page.getByRole("heading", { name: "编辑预览" })).toBeVisible();
+  await uploadFixture(page, {
+    fixturePath: fixture.path,
+    ...(inputTestId === "file-input" ? {} : { inputLabel: inputTestId }),
+  });
 }
 
 async function waitForTask(

@@ -7,8 +7,10 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.factory import ProviderBundle
 from app.api.errors import register_exception_handlers
 from app.api.routes import analysis, config, health, images, previews, sessions
+from app.api.routes import photographer as photographer_routes
 from app.api.routes import settings as settings_routes
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -19,7 +21,12 @@ from app.core.middleware import (
 )
 from app.core.upload_limit import RequestBodyLimitMiddleware
 from app.imaging.local_masks import configure_mask_cache
+from app.photographer.service import PhotographerService
 from app.repositories.analysis_repo import SqliteAnalysisRepository
+from app.repositories.photographer_repo import (
+    SqlitePhotographerFeedbackRepository,
+    SqlitePhotographerPlanRepository,
+)
 from app.services.analysis_task_service import AnalysisTaskService
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
@@ -68,10 +75,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             providers.bundle,
             SqliteAnalysisRepository(resolved_settings.database_path),
         )
-        providers.set_on_change(analysis_tasks.update_providers)
+        photographer_service = PhotographerService(
+            providers.bundle.planner,
+            max_concurrency=resolved_settings.photographer_max_concurrency,
+            analysis=analysis_tasks,
+            sessions=session_service,
+            images=service,
+            plans=SqlitePhotographerPlanRepository(resolved_settings.database_path),
+            feedback=SqlitePhotographerFeedbackRepository(resolved_settings.database_path),
+        )
+
+        def on_providers_changed(bundle: ProviderBundle) -> None:
+            analysis_tasks.update_providers(bundle)
+            photographer_service.update_planner(bundle.planner)
+
+        providers.set_on_change(on_providers_changed)
         app.state.provider_settings_service = providers
         analysis_tasks.recover()
         app.state.analysis_task_service = analysis_tasks
+        app.state.photographer_service = photographer_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,
@@ -135,6 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(analysis.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     app.include_router(previews.router, prefix=API_PREFIX)
+    app.include_router(photographer_routes.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict[str, str]:

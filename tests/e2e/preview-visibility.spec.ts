@@ -1,27 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 
-import { FIXTURE_JSON } from "./support";
-
-interface Fixture {
-  path: string;
-}
-
-const fixture: Fixture = JSON.parse(fs.readFileSync(FIXTURE_JSON, "utf8"));
-
-async function uploadFixture(page: Page): Promise<void> {
-  await page.goto("/");
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/images" &&
-      response.status() === 201,
-  );
-  await page.getByTestId("file-input").setInputFiles(fixture.path);
-  await responsePromise;
-  await expect(page.getByRole("heading", { name: "编辑预览" })).toBeVisible();
-  await expect(page.getByAltText("编辑后的预览")).toBeVisible({ timeout: 60_000 });
-}
+import { openApp, uploadFixture } from "./support";
 
 async function scrollPanelToBottom(page: Page): Promise<void> {
   await page.getByTestId("adjustment-panel-scroll").evaluate((node) => {
@@ -50,6 +29,7 @@ test.describe("desktop preview visibility", () => {
   }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop-1280x800", "desktop viewport only");
 
+    await openApp(page);
     await uploadFixture(page);
     await page.getByTestId("adjustment-panel-scroll").scrollIntoViewIfNeeded();
     await scrollPanelToBottom(page);
@@ -78,6 +58,7 @@ test.describe("short desktop preview visibility", () => {
   }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop-1280x800", "desktop viewport only");
 
+    await openApp(page);
     await uploadFixture(page);
     await page.getByTestId("adjustment-panel-scroll").scrollIntoViewIfNeeded();
     await scrollPanelToBottom(page);
@@ -106,6 +87,7 @@ test.describe("mobile preview monitor", () => {
       }
     });
 
+    await openApp(page);
     await uploadFixture(page);
     await page.getByAltText("编辑后的预览").scrollIntoViewIfNeeded();
     await expect(page.getByTestId("preview-monitor")).toHaveCount(0);
@@ -134,6 +116,7 @@ test.describe("mobile preview monitor", () => {
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile-390x844", "mobile viewport only");
 
+    await openApp(page);
     await uploadFixture(page);
 
     await page.getByRole("button", { name: "前后对比", exact: true }).click();
@@ -164,6 +147,7 @@ test.describe("narrow mobile preview monitor", () => {
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile-390x844", "mobile viewport only");
 
+    await openApp(page);
     await uploadFixture(page);
     const rotation = page.getByRole("spinbutton", { name: "旋转", exact: true });
     await rotation.scrollIntoViewIfNeeded();

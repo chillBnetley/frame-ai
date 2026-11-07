@@ -1,29 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 
-import { FIXTURE_JSON } from "./support";
-
-interface Fixture {
-  path: string;
-  width: number;
-  height: number;
-}
-
-const fixture: Fixture = JSON.parse(fs.readFileSync(FIXTURE_JSON, "utf8"));
-
-async function uploadFixture(page: Page): Promise<void> {
-  await page.goto("/");
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/images" &&
-      response.status() === 201,
-  );
-  await page.getByTestId("file-input").setInputFiles(fixture.path);
-  await responsePromise;
-  await expect(page.getByRole("heading", { name: "编辑预览" })).toBeVisible();
-  await expect(page.getByAltText("编辑后的预览")).toBeVisible({ timeout: 60_000 });
-}
+import { openApp, uploadFixture } from "./support";
 
 async function commitAdjustment(page: Page, name: string, value: string): Promise<void> {
   const input = page.getByRole("spinbutton", { name, exact: true });
@@ -48,6 +25,7 @@ test("curve, HSL, colour grading, and local mask workflow", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name.startsWith("mobile"), "desktop interaction coverage");
+  await openApp(page);
   await uploadFixture(page);
 
   const surface = page.getByTestId("curve-surface");
@@ -159,6 +137,7 @@ test("curve, HSL, colour grading, and local mask workflow", async ({
 
 test("local mask controls remain usable on a phone viewport", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith("mobile"), "mobile interaction coverage");
+  await openApp(page);
   await uploadFixture(page);
 
   await page.getByRole("button", { name: "添加椭圆区域", exact: true }).click();

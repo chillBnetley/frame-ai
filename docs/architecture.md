@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-仓库处于阶段 3 完成状态：在阶段 2 的安全上传、SQLite 持久化、非破坏编辑会话、确定性渲染、内容寻址预览、前后对比与全分辨率导出之上，新增异步 AI 分析任务、预处理与 CV 测量、可替换的视觉/决策 Provider、主体与区域引用、摄影诊断与五区前端。AI 只读取原图并输出结构化诊断，不自动修改配方或原图。
+仓库处于阶段 5 完成状态：在阶段 2 的安全上传、SQLite 持久化、非破坏编辑会话、确定性渲染、内容寻址预览、前后对比与全分辨率导出，以及阶段 3 的异步 AI 分析、可替换 Provider、摄影诊断之上，新增 AI 摄影师——方案生成、风格库、对话调整、确定性点评与用户反馈。AI 只输出意图，配方一律由服务端校验、夹紧与取整；预览不写历史，接受仍走普通 revision；反馈只记录行为与评分，不代表质量结论。
 
 ## 总体结构
 
@@ -26,6 +26,10 @@ FastAPI (127.0.0.1 only, D-13)
   ├─ AnalysisTaskService            任务队列、去重、启动恢复、重试、结果入库
   ├─ AnalysisOrchestrator           预处理 → 视觉 → CV 特征 → 诊断 → 报告
   ├─ ProviderBundle                 vision/decision Provider（mock 或 OpenAI 兼容）
+  ├─ PhotographerService            方案/对话/点评/反馈编排与响应组装
+  ├─ StyleCatalog                   参数化风格定义（与渲染引擎 styleId 解耦）
+  ├─ PhotographerPlanner            方案与补丁生成（mock 或 OpenAI 兼容），只收结构化摘要
+  ├─ CritiqueGenerator              确定性规则点评，证据引用闭合校验
   └─ PreviewStore                   TTL 清理、原子写入、Windows 占用兜底
 ```
 
@@ -276,6 +280,34 @@ POST /api/v1/settings/providers/reset → 删除覆盖文件 → 按环境变量
 - 覆盖文件包含明文 API Key，Unix 上尽力 `chmod 0600`；GET、错误、日志与测试结果均不含密钥或上游响应正文。测试连接只发送文本提示，不发送图片。
 - 本机覆盖文件与 `.env` 都是服务端配置，前端只持有脱敏视图；修改后无需重启 API。
 
+### AI 摄影师（阶段 5）
+
+```text
+POST /api/v1/ai/photographer/plan
+  → 读取会话活动 revision 与已完成的分析报告 → 校验 analysisId 归属该会话/图片
+  → 组装结构化诊断摘要 + 风格定义（参数化，无 LUT）→ Planner Provider
+  → 意图（AdjustmentIntent + 方向 + changes）→ 服务端校验范围/蒙版/冲突 → 完整配方
+  → photographer_plan 入库（provider/model/prompt_version/is_mock/degraded/confidence）
+  → 返回预览；不写 revision、不改原图
+POST /api/v1/ai/photographer/chat
+  → 当前配方 + 指令原文（只在该次请求内使用）→ 最小补丁：只写 adjustments.<field>
+    与已有蒙版的 localAdjustments.<maskId>.<field>，曲线/HSL/分级/蒙版/裁剪/旋转/输出保持不变
+  → 越界能力返回 200 + supported:false（配方逐字段不变）；无法映射返回 supported:true + 空 changes + warnings
+POST /api/v1/ai/photographer/critique
+  → 只读分析报告 → 确定性规则（不调用语言模型）→ strengths / technical / creative / suggestions
+  → 每条结论带 evidenceRefs；离开服务端前校验引用闭合，越界即 500 critique_invalid
+POST /api/v1/ai/photographer/feedback
+  → 用户行为（accepted/rejected/reset）+ 可选 10 维 1–5 评分 → 服务端派生 modified 与 changedPaths
+  → 同一 (planId, action) 幂等；不保存指令原文、照片或文件名
+GET  /api/v1/ai/photographer/feedback  → items + summary（计数、来源、mock/真实、均分、固定 disclaimer）
+```
+
+- Provider 分工：分析阶段的视觉 Provider 收到内存 JPEG 副本；摄影师的 Planner 只收到结构化诊断摘要与风格参数，**不接收图片**。`isMock` 与 `degraded` 随方案、点评与反馈如实返回。
+- 方案与补丁都只是预览：接受由前端显式提交 `POST /sessions/{id}/revisions`（`source:"ai"`），历史、撤销/重做与幂等仍由阶段 2 的 revision 事务保证。
+- 风格全部以配方参数表达，不依赖 LUT 或滤镜文件；风格 id 是开放命名空间，与渲染引擎的 7 个 `styleId` 解耦。
+- 点评是确定性的：同一份报告必然得到同一份点评（e2e 断言两次响应逐字节相同）；技术问题按置信度分档，创作建议全部 `subjective:true`。
+- 反馈不参与渲染与方案生成：只写入 `photographer_feedback`，可单条删除或随图片/会话级联；汇总不输出“质量提升”类结论。
+
 ## 数据模型
 
 ```text
@@ -293,7 +325,9 @@ data/
 - `UNIQUE(session_id, revision_no)` 与 `UNIQUE(session_id, idempotency_key)`。
 - `analysis_task`：`image_id`、`image_sha256`、选项、`config_key`、唯一 `dedupe_key`、状态/阶段/尝试次数、错误码与时间。
 - `analysis_result`：`task_id`、报告 Schema 版本、`is_mock`、报告 JSON 与时间。
-- 迁移：`app/repositories/migrations/`，`schema_migrations` 记录版本与 checksum；已应用迁移不可修改；`0002_analysis.sql` 新增分析两表。
+- `photographer_plan`：`image_id`/`session_id`/`analysis_id`（均级联删除）、`mode`（`auto`/`style`/`chat`）、风格 id/版本/强度、`provider`/`model`/`prompt_version`、`is_mock`/`degraded`、`confidence`、方案 JSON、结果配方 JSON/哈希与时间。
+- `photographer_feedback`：`image_id`/`session_id` 级联删除，`plan_id`/`revision_id` 可空并随父行级联；`action`、`source`、`changed_paths_json`、`rubric_json`、`is_mock`/`degraded` 与时间；`UNIQUE(plan_id, action)` 保证决策幂等（`plan_id` 为 NULL 的 `reset` 行不受约束，各自独立）。
+- 迁移：`app/repositories/migrations/`，`schema_migrations` 记录版本与 checksum；已应用迁移不可修改；`0002_analysis.sql` 新增分析两表，`0003_photographer_plan.sql`、`0004_photographer_feedback.sql` 新增阶段五两表。
 - 阶段 1 的 `image_registry.json` 在启动时幂等导入，之后备份为 `*.imported.bak`。
 
 `FRAME_DATA_DIR` 若为相对路径，一律相对**仓库根目录**解析，与启动时的工作目录无关。
@@ -316,9 +350,10 @@ data/
 - 用户文件名只用于展示与下载头；磁盘文件名始终是 UUID。
 - 原图只读：没有覆盖或改写接口；导出从原图重算。
 - 导出剥离全部元数据并嵌入 sRGB ICC；原图下载保留原始 EXIF/GPS，界面提示。
-- 日志不记录图片字节、Base64、原始文件名、配方内容、分析报告正文或密钥。
-- 默认 Mock Provider 完全离线；只有显式选择 `openai` 时才会把 1024 px JPEG 副本发给视觉服务，决策服务只收结构化数据。
+- 日志不记录图片字节、Base64、原始文件名、配方内容、分析报告正文或密钥；阶段五另加：不记录对话指令原文（只记录长度）、不记录反馈评分明细。
+- 默认 Mock Provider 完全离线；只有显式选择 `openai` 时才会把 1024 px JPEG 副本发给视觉服务，决策服务只收结构化数据；摄影师的 Planner 任何模式下都不接收图片。
 - Provider 错误统一包装为安全错误码与文案；响应/任务错误不包含密钥、原始模型响应、图片字节或绝对路径。
+- 反馈表结构上没有自由文本字段，照片、指令与文件名无法写入；用户可单条删除，图片/会话删除时级联清除。
 - API 无鉴权，只绑定 `127.0.0.1`（D-13）。
 
 ## 测试布局（对任务书 §3 的有记录偏离）

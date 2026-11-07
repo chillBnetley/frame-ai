@@ -215,6 +215,15 @@ class AnalysisTaskService:
             raise AppError(500, "analysis_failed", ANALYSIS_UNAVAILABLE)
         return report
 
+    def latest_completed(self, image_id: str) -> AnalysisReport | None:
+        stored = self.repository.latest_completed_for_image(image_id)
+        if stored is None:
+            return None
+        report = self._report_from(stored)
+        if report is None or str(report.image.id).lower() != image_id.lower():
+            return None
+        return report
+
     def delete(self, task_id: str) -> None:
         outcome = self.repository.delete_if_not_processing(task_id)
         if outcome == "missing":

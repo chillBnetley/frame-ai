@@ -364,6 +364,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/photographer/styles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Styles */
+        get: operations["list_styles_api_v1_ai_photographer_styles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/photographer/styles/{style_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Style */
+        get: operations["read_style_api_v1_ai_photographer_styles__style_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/photographer/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Plan */
+        post: operations["create_plan_api_v1_ai_photographer_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/photographer/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Patch */
+        post: operations["create_patch_api_v1_ai_photographer_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/photographer/critique": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Critique */
+        post: operations["create_critique_api_v1_ai_photographer_critique_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/photographer/critique/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Critique */
+        post: operations["apply_critique_api_v1_ai_photographer_critique_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/photographer/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Feedback */
+        get: operations["read_feedback_api_v1_ai_photographer_feedback_get"];
+        put?: never;
+        /** Create Feedback */
+        post: operations["create_feedback_api_v1_ai_photographer_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/photographer/feedback/{feedback_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Feedback */
+        delete: operations["remove_feedback_api_v1_ai_photographer_feedback__feedback_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -375,6 +512,42 @@ export interface components {
              * Format: uuid
              */
             revisionId: string;
+        };
+        /**
+         * AdjustmentIntent
+         * @description Untrusted model intent; the generator clamps and rounds these values.
+         */
+        AdjustmentIntent: {
+            /** Exposureev */
+            exposureEv?: number | null;
+            /** Contrast */
+            contrast?: number | null;
+            /** Highlights */
+            highlights?: number | null;
+            /** Shadows */
+            shadows?: number | null;
+            /** Whites */
+            whites?: number | null;
+            /** Blacks */
+            blacks?: number | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Tint */
+            tint?: number | null;
+            /** Saturation */
+            saturation?: number | null;
+            /** Vibrance */
+            vibrance?: number | null;
+            /** Clarity */
+            clarity?: number | null;
+            /** Sharpen */
+            sharpen?: number | null;
+            /** Denoise */
+            denoise?: number | null;
+            /** Vignette */
+            vignette?: number | null;
+            /** Grain */
+            grain?: number | null;
         };
         /** Adjustments */
         Adjustments: {
@@ -814,6 +987,170 @@ export interface components {
              */
             imageId: string;
         };
+        /** CreativeChoice */
+        CreativeChoice: {
+            type: components["schemas"]["CreativeChoiceType"];
+            /** Description */
+            description: string;
+            /** Evidencerefs */
+            evidenceRefs: string[];
+        };
+        /**
+         * CreativeChoiceType
+         * @enum {string}
+         */
+        CreativeChoiceType: "low_key_intent" | "high_key_intent" | "warm_ambient" | "cool_ambient" | "low_saturation_intent" | "high_saturation_intent" | "high_contrast_intent" | "flat_light_intent" | "shallow_depth_of_field" | "already_edited";
+        /** CreativeDirection */
+        CreativeDirection: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            category: components["schemas"]["StyleCategory"];
+            /** Description */
+            description: string;
+            /**
+             * Strength
+             * @default 0.5
+             */
+            strength: number;
+            /**
+             * Constraints
+             * @default []
+             */
+            constraints: components["schemas"]["DirectionConstraint"][];
+        };
+        /**
+         * CritiqueApplyRequest
+         * @description Apply one critique suggestion's parameter patch to the session's current recipe.
+         */
+        CritiqueApplyRequest: {
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+            patch: components["schemas"]["AdjustmentIntent"];
+            preferences?: components["schemas"]["PhotographerPreferences"];
+        };
+        /**
+         * CritiqueApplyResponse
+         * @description The same validated patch shape the chat flow returns, without a plan anchor.
+         */
+        CritiqueApplyResponse: {
+            /**
+             * Schemaversion
+             * @default stage5/1
+             * @constant
+             */
+            schemaVersion: "stage5/1";
+            /**
+             * Patchid
+             * Format: uuid
+             */
+            patchId: string;
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["ParameterChange"][];
+            /** Reason */
+            reason: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /**
+             * Unsupported
+             * @default []
+             */
+            unsupported: string[];
+        };
+        /** CritiqueCreative */
+        CritiqueCreative: {
+            /** Text */
+            text: string;
+            /** Evidencerefs */
+            evidenceRefs: string[];
+            /**
+             * Subjective
+             * @default true
+             */
+            subjective: boolean;
+        };
+        /** CritiquePoint */
+        CritiquePoint: {
+            /** Text */
+            text: string;
+            /** Evidencerefs */
+            evidenceRefs: string[];
+        };
+        /** CritiqueResponse */
+        CritiqueResponse: {
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            /** Ismock */
+            isMock: boolean;
+            /**
+             * Generatedby
+             * @default deterministic-rules
+             * @constant
+             */
+            generatedBy: "deterministic-rules";
+            /**
+             * Strengths
+             * @default []
+             */
+            strengths: components["schemas"]["CritiquePoint"][];
+            technical?: components["schemas"]["CritiqueTechnical"];
+            /**
+             * Creative
+             * @default []
+             */
+            creative: components["schemas"]["CritiqueCreative"][];
+            /**
+             * Suggestions
+             * @default []
+             */
+            suggestions: components["schemas"]["CritiqueSuggestion"][];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+        };
+        /** CritiqueSuggestion */
+        CritiqueSuggestion: {
+            /** Text */
+            text: string;
+            category: components["schemas"]["RecommendationCategory"];
+            /** Evidencerefs */
+            evidenceRefs: string[];
+            recipePatch?: components["schemas"]["AdjustmentIntent"] | null;
+        };
+        /** CritiqueTechnical */
+        CritiqueTechnical: {
+            /**
+             * Objective
+             * @default []
+             */
+            objective: components["schemas"]["CritiquePoint"][];
+            /**
+             * Possibleissues
+             * @default []
+             */
+            possibleIssues: components["schemas"]["CritiquePoint"][];
+        };
         /** Crop */
         Crop: {
             /** X */
@@ -867,6 +1204,52 @@ export interface components {
              */
             gradientAnisotropy: number;
         };
+        /** DiagnosisItem */
+        DiagnosisItem: {
+            /** Issueid */
+            issueId: string;
+            type: components["schemas"]["IssueType"];
+            severity: components["schemas"]["Severity"];
+            /** Confidence */
+            confidence: number;
+            /** Evidence */
+            evidence: string;
+            /** Evidencerefs */
+            evidenceRefs: string[];
+        };
+        /** DiagnosisResult */
+        DiagnosisResult: {
+            /**
+             * Confirmed
+             * @default []
+             */
+            confirmed: components["schemas"]["DiagnosisItem"][];
+            /**
+             * Possible
+             * @default []
+             */
+            possible: components["schemas"]["DiagnosisItem"][];
+            /**
+             * Creativechoices
+             * @default []
+             */
+            creativeChoices: components["schemas"]["CreativeChoice"][];
+            /**
+             * Confidence
+             * @default 0.5
+             */
+            confidence: number;
+            /**
+             * Confidencenote
+             * @default 启发式置信度，不是校准概率。
+             */
+            confidenceNote: string;
+        };
+        /**
+         * DirectionConstraint
+         * @enum {string}
+         */
+        DirectionConstraint: "preserve_skin_tone" | "preserve_highlight_detail" | "preserve_shadow_detail" | "avoid_extreme_saturation" | "avoid_extreme_contrast" | "keep_ambient_color" | "natural_look" | "avoid_color_cast" | "maintain_neutrality" | "keep_low_key" | "keep_warm_tones";
         /** EditRecipe */
         EditRecipe: {
             /**
@@ -966,6 +1349,111 @@ export interface components {
          * @enum {string}
          */
         ExposureQuality: "underexposed" | "slightly_underexposed" | "balanced" | "slightly_overexposed" | "overexposed" | "unknown";
+        /**
+         * FeedbackAction
+         * @enum {string}
+         */
+        FeedbackAction: "accepted" | "rejected" | "modified" | "reset";
+        /** FeedbackChangeFrequency */
+        FeedbackChangeFrequency: {
+            /** Path */
+            path: string;
+            /** Count */
+            count: number;
+        };
+        /**
+         * FeedbackDimension
+         * @enum {string}
+         */
+        FeedbackDimension: "exposure" | "color" | "skin_tone" | "highlights" | "shadows" | "subject" | "local_adjustment" | "style" | "naturalness" | "creative_intent";
+        /** FeedbackDimensionAverage */
+        FeedbackDimensionAverage: {
+            dimension: components["schemas"]["FeedbackDimension"];
+            /** Average */
+            average: number;
+            /** Count */
+            count: number;
+        };
+        /** FeedbackRubric */
+        FeedbackRubric: {
+            /** Exposure */
+            exposure?: number | null;
+            /** Color */
+            color?: number | null;
+            /** Skintone */
+            skinTone?: number | null;
+            /** Highlights */
+            highlights?: number | null;
+            /** Shadows */
+            shadows?: number | null;
+            /** Subject */
+            subject?: number | null;
+            /** Localadjustment */
+            localAdjustment?: number | null;
+            /** Style */
+            style?: number | null;
+            /** Naturalness */
+            naturalness?: number | null;
+            /** Creativeintent */
+            creativeIntent?: number | null;
+        };
+        /**
+         * FeedbackSource
+         * @description Which flow the user was reacting to.
+         * @enum {string}
+         */
+        FeedbackSource: "plan" | "chat" | "critique";
+        /** FeedbackSourceCounts */
+        FeedbackSourceCounts: {
+            /** Plan */
+            plan: number;
+            /** Chat */
+            chat: number;
+            /** Critique */
+            critique: number;
+            /** Unset */
+            unset: number;
+        };
+        /**
+         * FeedbackSummary
+         * @description Counts of what users did. Nothing here may read as a claim of quality improvement.
+         */
+        FeedbackSummary: {
+            /** Total */
+            total: number;
+            /** Accepted */
+            accepted: number;
+            /** Rejected */
+            rejected: number;
+            /** Modified */
+            modified: number;
+            /** Reset */
+            reset: number;
+            bySource: components["schemas"]["FeedbackSourceCounts"];
+            /** Mockcount */
+            mockCount: number;
+            /** Realcount */
+            realCount: number;
+            /** Degradedcount */
+            degradedCount: number;
+            /** Ratedcount */
+            ratedCount: number;
+            /**
+             * Changefrequency
+             * @default []
+             */
+            changeFrequency: components["schemas"]["FeedbackChangeFrequency"][];
+            /**
+             * Rubricaverages
+             * @default []
+             */
+            rubricAverages: components["schemas"]["FeedbackDimensionAverage"][];
+            /**
+             * Disclaimers
+             * @default []
+             */
+            disclaimers: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1036,6 +1524,7 @@ export interface components {
          * @enum {string}
          */
         IssueType: "overexposure" | "underexposure" | "highlight_clipping" | "shadow_clipping" | "subject_underexposure" | "background_overexposure" | "color_cast" | "temperature_mismatch" | "saturation_issue" | "color_hierarchy_issue" | "subject_placement" | "balance_issue" | "negative_space_issue" | "horizon_tilt" | "focus_issue" | "motion_blur" | "high_noise" | "low_detail" | "harsh_contrast" | "flat_lighting";
+        JsonValue: unknown;
         /**
          * LightingDirection
          * @enum {string}
@@ -1210,6 +1699,270 @@ export interface components {
              */
             colorSpace: "sRGB";
         };
+        /** ParameterChange */
+        ParameterChange: {
+            /** Path */
+            path: string;
+            previous?: components["schemas"]["JsonValue"];
+            proposed?: components["schemas"]["JsonValue"];
+            /** Reason */
+            reason: string;
+            /** Evidencerefs */
+            evidenceRefs: string[];
+        };
+        /** PhotographerCritiqueRequest */
+        PhotographerCritiqueRequest: {
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            preferences?: components["schemas"]["PhotographerPreferences"];
+        };
+        /** PhotographerFeedbackListResponse */
+        PhotographerFeedbackListResponse: {
+            /**
+             * Schemaversion
+             * @default stage5/1
+             * @constant
+             */
+            schemaVersion: "stage5/1";
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["PhotographerFeedbackResponse"][];
+            summary: components["schemas"]["FeedbackSummary"];
+        };
+        /**
+         * PhotographerFeedbackRequest
+         * @description One user decision. There is no field for prose: instructions and images stay out.
+         */
+        PhotographerFeedbackRequest: {
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+            action: components["schemas"]["FeedbackAction"];
+            source?: components["schemas"]["FeedbackSource"] | null;
+            /** Planid */
+            planId?: string | null;
+            /** Revisionid */
+            revisionId?: string | null;
+            rubric?: components["schemas"]["FeedbackRubric"] | null;
+        };
+        /** PhotographerFeedbackResponse */
+        PhotographerFeedbackResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            /** Planid */
+            planId?: string | null;
+            /** Revisionid */
+            revisionId?: string | null;
+            source?: components["schemas"]["FeedbackSource"] | null;
+            action: components["schemas"]["FeedbackAction"];
+            /**
+             * Changedpaths
+             * @default []
+             */
+            changedPaths: string[];
+            rubric?: components["schemas"]["FeedbackRubric"] | null;
+            /** Ismock */
+            isMock: boolean;
+            /** Degraded */
+            degraded: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
+        /** PhotographerPatchRequest */
+        PhotographerPatchRequest: {
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+            /** Instruction */
+            instruction: string;
+            preferences?: components["schemas"]["PhotographerPreferences"];
+        };
+        /** PhotographerPatchResponse */
+        PhotographerPatchResponse: {
+            /**
+             * Schemaversion
+             * @default stage5/1
+             * @constant
+             */
+            schemaVersion: "stage5/1";
+            /**
+             * Patchid
+             * Format: uuid
+             */
+            patchId: string;
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+            /** Supported */
+            supported: boolean;
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["ParameterChange"][];
+            /** Reason */
+            reason: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /**
+             * Unsupported
+             * @default []
+             */
+            unsupported: string[];
+        };
+        /** PhotographerPlanRequest */
+        PhotographerPlanRequest: {
+            /** Analysisid */
+            analysisId?: string | null;
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+            /** @default auto */
+            mode: components["schemas"]["PlannerMode"];
+            /** Styleid */
+            styleId?: string | null;
+            /** Stylestrength */
+            styleStrength?: number | null;
+            preferences?: components["schemas"]["PhotographerPreferences"];
+        };
+        /** PhotographerPlanResponse */
+        PhotographerPlanResponse: {
+            /**
+             * Schemaversion
+             * @default stage5/1
+             * @constant
+             */
+            schemaVersion: "stage5/1";
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            mode: components["schemas"]["PlannerMode"];
+            /** Ismock */
+            isMock: boolean;
+            /**
+             * Degraded
+             * @default false
+             */
+            degraded: boolean;
+            provider: components["schemas"]["ProviderInfo"];
+            diagnosis: components["schemas"]["DiagnosisResult"];
+            direction: components["schemas"]["CreativeDirection"];
+            /** Styleid */
+            styleId?: string | null;
+            /** Styleversion */
+            styleVersion?: string | null;
+            /** Stylestrength */
+            styleStrength?: number | null;
+            recipe: components["schemas"]["EditRecipe"];
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["ParameterChange"][];
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /**
+             * Confidence
+             * @default 0.5
+             */
+            confidence: number;
+            /**
+             * Confidencenote
+             * @default 启发式置信度，不是校准概率。
+             */
+            confidenceNote: string;
+        };
+        /** PhotographerPreferences */
+        PhotographerPreferences: {
+            /**
+             * Naturalness
+             * @default 0.7
+             */
+            naturalness: number;
+            /**
+             * Adjustmentstrength
+             * @default 0.5
+             */
+            adjustmentStrength: number;
+            /**
+             * Allowstylization
+             * @default false
+             */
+            allowStylization: boolean;
+            /**
+             * Preserveoriginalcolor
+             * @default true
+             */
+            preserveOriginalColor: boolean;
+        };
+        /**
+         * PlannerMode
+         * @enum {string}
+         */
+        PlannerMode: "auto" | "style";
         /**
          * Priority
          * @enum {string}
@@ -1249,6 +2002,15 @@ export interface components {
              * @enum {string}
              */
             apiKeySource: "saved" | "environment" | "none";
+        };
+        /** ProviderInfo */
+        ProviderInfo: {
+            /** Name */
+            name: string;
+            /** Model */
+            model: string;
+            /** Promptversion */
+            promptVersion: string;
         };
         /** ProviderSettingsUpdate */
         ProviderSettingsUpdate: {
@@ -1496,6 +2258,137 @@ export interface components {
             ok: boolean;
             /** Writable */
             writable: boolean;
+        };
+        /**
+         * StyleCategory
+         * @enum {string}
+         */
+        StyleCategory: "scene" | "creative";
+        /**
+         * StyleDefinition
+         * @description A parameterized style. The catalog is independent of the render engine.
+         */
+        StyleDefinition: {
+            /** Id */
+            id: string;
+            /**
+             * Version
+             * @default 1.0
+             */
+            version: string;
+            /** Name */
+            name: string;
+            category: components["schemas"]["StyleCategory"];
+            /** Description */
+            description: string;
+            /** Supportedscenes */
+            supportedScenes: components["schemas"]["SceneLabel"][];
+            /**
+             * Defaultstrength
+             * @default 0.5
+             */
+            defaultStrength: number;
+            envelope?: components["schemas"]["StyleEnvelope"];
+            /**
+             * Constraints
+             * @default []
+             */
+            constraints: components["schemas"]["DirectionConstraint"][];
+            /**
+             * Enginestyle
+             * @default natural
+             * @enum {string}
+             */
+            engineStyle: "natural" | "portrait" | "landscape" | "street" | "documentary" | "film" | "cinematic";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /**
+         * StyleEnvelope
+         * @description Per-parameter magnitude limits used when a style is realized as parameters.
+         */
+        StyleEnvelope: {
+            /**
+             * Exposureev
+             * @default 1
+             */
+            exposureEv: number;
+            /**
+             * Contrast
+             * @default 25
+             */
+            contrast: number;
+            /**
+             * Highlights
+             * @default 25
+             */
+            highlights: number;
+            /**
+             * Shadows
+             * @default 25
+             */
+            shadows: number;
+            /**
+             * Whites
+             * @default 20
+             */
+            whites: number;
+            /**
+             * Blacks
+             * @default 20
+             */
+            blacks: number;
+            /**
+             * Temperature
+             * @default 15
+             */
+            temperature: number;
+            /**
+             * Tint
+             * @default 10
+             */
+            tint: number;
+            /**
+             * Saturation
+             * @default 15
+             */
+            saturation: number;
+            /**
+             * Vibrance
+             * @default 15
+             */
+            vibrance: number;
+            /**
+             * Clarity
+             * @default 20
+             */
+            clarity: number;
+            /**
+             * Denoise
+             * @default 25
+             */
+            denoise: number;
+            /**
+             * Vignette
+             * @default 20
+             */
+            vignette: number;
+            /**
+             * Grain
+             * @default 15
+             */
+            grain: number;
+        };
+        /** StyleListResponse */
+        StyleListResponse: {
+            /**
+             * Styles
+             * @default []
+             */
+            styles: components["schemas"]["StyleDefinition"][];
         };
         /** SubjectInfo */
         SubjectInfo: {
@@ -3080,6 +3973,792 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_styles_api_v1_ai_photographer_styles_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by style category. */
+                category?: components["schemas"]["StyleCategory"] | null;
+                /** @description Filter by supported scene. */
+                scene?: components["schemas"]["SceneLabel"] | null;
+                /** @description Include styles that are switched off. */
+                include_disabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleListResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_style_api_v1_ai_photographer_styles__style_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleDefinition"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_plan_api_v1_ai_photographer_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotographerPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotographerPlanResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_patch_api_v1_ai_photographer_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotographerPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Always a full patch result. Requests the engine cannot satisfy return supported=false with the recipe unchanged, not an error code. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotographerPatchResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_critique_api_v1_ai_photographer_critique_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotographerCritiqueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CritiqueResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_critique_api_v1_ai_photographer_critique_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CritiqueApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CritiqueApplyResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_feedback_api_v1_ai_photographer_feedback_get: {
+        parameters: {
+            query?: {
+                /** @description Only this session's records. */
+                sessionId?: string | null;
+                /** @description Only this image's records. */
+                imageId?: string | null;
+                /** @description Only records about this plan. */
+                planId?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotographerFeedbackListResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_feedback_api_v1_ai_photographer_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotographerFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description One stored user decision. 'modified' is derived by the server when the referenced revision no longer matches the plan it came from. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotographerFeedbackResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_feedback_api_v1_ai_photographer_feedback__feedback_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Feedback record identifier. */
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

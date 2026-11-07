@@ -9,17 +9,21 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from app.ai.base import DecisionRequest, VisionRequest
+from app.ai.base import DecisionRequest, PatchRequest, PlannerRequest, VisionRequest
 from app.ai.contracts import DecisionResult, UsageInfo, VisionResult
 from app.ai.errors import ProviderError
 from app.ai.prompts import (
     DECISION_PROMPT_VERSION,
+    PLANNER_PROMPT_VERSION,
     VISION_PROMPT_VERSION,
     build_decision_messages,
+    build_patch_messages,
+    build_planner_messages,
     build_repair_messages,
     build_vision_messages,
 )
 from app.ai.transport import JsonHttpClient
+from app.models.photographer import PatchDraft, PlannerDraft
 
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
@@ -235,6 +239,38 @@ class OpenAICompatibleDecisionProvider(_OpenAICompatibleBase):
         return self._run(messages, DecisionResult, "decision")
 
 
+class OpenAICompatiblePlannerProvider(_OpenAICompatibleBase):
+    def __init__(
+        self,
+        client: JsonHttpClient,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout: float,
+        max_retries: int,
+        repair_attempts: int,
+    ) -> None:
+        super().__init__(
+            client,
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            timeout=timeout,
+            max_retries=max_retries,
+            repair_attempts=repair_attempts,
+            prompt_version=PLANNER_PROMPT_VERSION,
+        )
+
+    def plan(self, request: PlannerRequest) -> PlannerDraft:
+        messages = build_planner_messages(request)
+        return self._run(messages, PlannerDraft, "planner")
+
+    def adjust(self, request: PatchRequest) -> PatchDraft:
+        messages = build_patch_messages(request)
+        return self._run(messages, PatchDraft, "patch")
+
+
 def _extract_content(response: dict[str, Any], prefix: str) -> str:
     choices = response.get("choices")
     if not isinstance(choices, list) or not choices:
@@ -309,5 +345,6 @@ def _extract_usage(response: dict[str, Any]) -> UsageInfo | None:
 
 __all__ = [
     "OpenAICompatibleDecisionProvider",
+    "OpenAICompatiblePlannerProvider",
     "OpenAICompatibleVisionProvider",
 ]

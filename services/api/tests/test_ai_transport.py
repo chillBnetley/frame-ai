@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
+import urllib.request
 from collections.abc import Iterator, Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -14,6 +16,7 @@ from app.ai.transport import (
     HttpResponse,
     JsonHttpClient,
     UrllibJsonTransport,
+    _SameOriginRedirectHandler,
 )
 
 URL = "https://provider.test/v1/chat/completions"
@@ -208,3 +211,97 @@ def test_urllib_transport_round_trip_against_local_server(stub_server):
     result = client.post_json(stub_server, {"ping": True}, {}, timeout=5, max_retries=0)
 
     assert result == {"ok": True}
+
+
+@contextlib.contextmanager
+def redirect_server(
+    location: str,
+) -> Iterator[tuple[str, list[str]]]:
+    """A server whose POST redirects to ``location`` and whose GET returns JSON."""
+    hits: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def _record(self) -> None:
+            hits.append(self.path)
+
+        def _reply(self, status: int, payload: bytes, location: str | None = None) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            if location is not None:
+                self.send_header("Location", location)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length", "0"))
+            self.rfile.read(length)
+            self._record()
+            self._reply(302, b"", location=location)
+
+        def do_GET(self) -> None:  # noqa: N802
+            self._record()
+            self._reply(200, b'{"ok":true}')
+
+        def log_message(self, *args: Any) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/chat/completions", hits
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_same_origin_redirect_is_followed():
+    with redirect_server("/final") as (url, hits):
+        result = JsonHttpClient(UrllibJsonTransport()).post_json(
+            url, {"ping": True}, HEADERS, timeout=5, max_retries=0
+        )
+
+    assert result == {"ok": True}
+    assert hits == ["/chat/completions", "/final"]
+
+
+def test_cross_origin_redirect_is_rejected_without_forwarding_credentials():
+    with redirect_server("") as (victim_url, victim_hits):
+        with redirect_server(victim_url) as (attacker_url, attacker_hits):
+            with pytest.raises(ProviderError) as excinfo:
+                JsonHttpClient(UrllibJsonTransport()).post_json(
+                    attacker_url, {}, HEADERS, timeout=5, max_retries=0
+                )
+
+        assert victim_hits == []
+
+    assert attacker_hits == ["/chat/completions"]
+    assert excinfo.value.code == "provider_endpoint_error"
+    assert excinfo.value.retryable is False
+    assert "test-key" not in str(excinfo.value)
+    assert "127.0.0.1" not in str(excinfo.value)
+
+
+def test_https_to_http_downgrade_is_rejected_before_following():
+    handler = _SameOriginRedirectHandler(("https", "provider.test", 443))
+    request = urllib.request.Request(
+        "https://provider.test/v1/chat/completions",
+        data=b"{}",
+        method="POST",
+    )
+
+    with pytest.raises(ProviderError) as excinfo:
+        handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "http://provider.test/v1/chat/completions",
+        )
+
+    assert excinfo.value.code == "provider_endpoint_error"
+    assert excinfo.value.retryable is False
+    assert "provider.test" not in str(excinfo.value)

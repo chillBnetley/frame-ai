@@ -1,7 +1,7 @@
-# FRAME AI API 契约（阶段 2 / 阶段 3 / 阶段 4）
+# FRAME AI API 契约（阶段 2 / 阶段 3 / 阶段 4 / 阶段 5）
 
-- 状态：已实现并同步至阶段 4 Task 7，2026-11-04
-- 适用：开发阶段 2（图像管线、非破坏编辑、会话与导出）、阶段 3（AI 分析任务、诊断报告）与阶段 4（曲线、HSL、颜色分级、局部蒙版）
+- 状态：已实现并同步至阶段 5 Task 9，2026-11-06
+- 适用：开发阶段 2（图像管线、非破坏编辑、会话与导出）、阶段 3（AI 分析任务、诊断报告）、阶段 4（曲线、HSL、颜色分级、局部蒙版）与阶段 5（AI 摄影师方案、风格、自然语言调整）
 - 机器可读契约：[`shared/contracts/openapi.json`](../shared/contracts/openapi.json)
 - 前端类型：[`apps/web/types/api.d.ts`](../apps/web/types/api.d.ts)
 - 决策依据：[ADR-0002](decisions/ADR-0002-phase-2-decisions.md)、[ADR-0003](decisions/ADR-0003-compare-geometry-alignment.md)、[ADR-0004](decisions/ADR-0004-color-management.md)（色彩管理策略与依赖边界）
@@ -548,6 +548,53 @@ POST /api/v1/sessions/{sessionId}/export
 - `test` 使用“当前生效配置 + 请求内临时修改”，不写入文件。真实 Provider 只发送一条纯文本 Chat Completions 提示，不发送用户图片；每项返回 `{ok, provider, model, latencyMs, code, message}`，失败码为安全的 `provider_*`/`provider_test_failed`，不返回上游响应正文。
 - `reset` 删除覆盖文件并恢复环境变量配置；没有覆盖文件时同样返回 200。
 
+### 4.8 AI 摄影师（阶段 5）
+
+前缀 `/api/v1/ai/photographer`，`schemaVersion` 为 `stage5/1`。所有响应中的 `isMock` 与 `degraded` 如实反映
+Provider 与回退状态；模型输出只是“意图”，最终配方一律由服务端校验、夹紧与取整。
+
+| 方法与路径 | 请求 | 响应 | 主要错误 |
+| --- | --- | --- | --- |
+| `GET /styles` | 查询参数 `category`、`scene`、`include_disabled` | `{styles:[StyleDefinition]}`，默认只列启用项 | — |
+| `GET /styles/{styleId}` | — | 单个 `StyleDefinition` | 404 `style_not_found` |
+| `POST /plan` | `{sessionId, analysisId?, mode:"auto"\|"style", styleId?, styleStrength?, preferences?}` | `PhotographerPlanResponse`（诊断、方向、配方、`changes`、置信度） | 404 `style_not_found`；409 `analysis_required`/`image_analysis_mismatch`；422 `style_required`/`photographer_recipe_invalid`；500 `storage_error`；502 `photographer_invalid_output`；503 `photographer_busy`/`photographer_unavailable`；504 `photographer_timeout` |
+| `POST /chat` | `{planId, instruction, preferences?}` | `PhotographerPatchResponse`（`supported`、完整配方、`changes`、`reason`、`warnings`、`limitations`、`unsupported`） | 404 `plan_not_found`；409 `analysis_required`/`image_analysis_mismatch`；422 `photographer_recipe_invalid`；500 `storage_error`；502/503/504 同上 |
+| `POST /critique` | `{analysisId, preferences?}` | `CritiqueResponse`（`strengths`、`technical.objective`、`technical.possibleIssues`、`creative`、`suggestions`、`limitations`，每条带 `evidenceRefs`） | 404 `analysis_not_found`；409 `analysis_required`/`image_analysis_mismatch`；500 `critique_invalid` |
+| `POST /critique/apply` | `{sessionId, patch, preferences?}` | `CritiqueApplyResponse`（`patchId`、完整配方、`changes`、`reason`、`warnings`、`limitations`、`unsupported`） | 404 `session_not_found`；409 `analysis_required`；422 `photographer_recipe_invalid` |
+| `POST /feedback` | `{sessionId, action:"accepted"\|"rejected"\|"reset", source?, planId?, revisionId?, rubric?}` | `PhotographerFeedbackResponse`（落库后的那一行，含服务端派生的 `modified` 与 `changedPaths`） | 404 `plan_not_found`；422 `validation_error`；500 `storage_error` |
+| `GET /feedback` | 查询 `sessionId` / `imageId` / `planId` / `limit`（1–200，默认 50） | `{schemaVersion, items:[PhotographerFeedbackResponse], summary:FeedbackSummary}` | 422 `validation_error` |
+| `DELETE /feedback/{feedbackId}` | — | `204`，无响应体 | 404 `feedback_not_found` |
+
+- `mode:"style"` 必须带 `styleId`，`mode:"auto"` 携带 `styleId` 或 `styleStrength` 返回 422；`styleStrength` 缺省时取风格的 `defaultStrength`，为 0 时不叠加风格参数并在 `warnings` 中说明。
+- 风格 id 是开放命名空间（`^[a-z][a-z0-9_]{1,63}$`），与渲染引擎的 7 个 `styleId` 解耦；风格全部以参数实现，不依赖 LUT 或滤镜文件。
+- `POST /chat` 走“当前配方 + 指令 → 最小补丁”：只允许写 `adjustments.<field>` 与已有蒙版上的 `localAdjustments.<maskId>.<field>`；
+  曲线、HSL、色彩分级、蒙版、裁剪、旋转与输出设置保持不变，因此对话调整不会重置用户已有编辑。
+- **能力边界用 200 + `supported:false` 表达**，不是错误码：删除/擦除物体、扩图、换背景、换天空、面部或身体重塑、皮肤美颜会返回
+  `supported:false`、`unsupported` 说明边界，且 `recipe` 与请求方当前配方完全一致、`changes` 为空。
+  只有请求结构非法才是 422。指令无法映射到允许参数时返回 `supported:true` 且 `changes` 为空，并在 `warnings` 说明。
+- 指令原文只在当次请求内使用：不写入数据库行、不写入日志（日志只记录长度），补丁行以 `mode='chat'` 保存结果配方与响应。
+  连续对话以最新配方为基准：接受补丁后再次 `POST /chat`，可用上一轮的 `patchId` 作为 `planId`。
+- 预览方案不写历史；接受由前端显式提交 `POST /sessions/{id}/revisions`，`source:"ai"`。
+- `POST /critique` 是确定性的规则点评，`generatedBy` 恒为 `deterministic-rules`，不调用任何语言模型：每条结论都带
+  `evidenceRefs`，取值只可能是报告里真实存在的 `issueId`/`regionId`/`subjectId` 或报告字段的叶子路径
+  （`measurement.*`、`color.*`、`lighting.*`、`composition.*`、`scene.*`、`technicalQuality.*`）；响应离开服务端前会再
+  经过一次引用闭合校验，出现报告之外的引用即 500 `critique_invalid`。物体名词只在报告检测到对应主体类型时才出现，
+  因此点评不可能编造画面里没有的人、天空或建筑。
+- 技术问题按置信度分档：全部报告问题进入 `technical.possibleIssues` 并写明严重程度与置信度，高置信度项说明“测量值支持
+  该判断”，低置信度项标注“仅供参考”，可能是刻意创作选择的项提示“先确认意图再处理”；`technical.objective` 只列测量事实。
+  `creative` 全部 `subjective:true`，不当作客观质量结论。`isMock` 与报告一致，模拟视觉引擎的点评会额外声明只用于流程验证。
+- `suggestions[].recipePatch` 可选：只有涉及可调全局参数的问题才带补丁（构图类建议只给文字），补丁就是 `AdjustmentIntent`
+  的增量意图，未涉及的字段为 `null`。`POST /critique/apply` 用与对话补丁完全相同的 `apply_patch` + 配方校验流程把它
+  应用到会话当前配方，只写 `adjustments.<field>`，曲线、HSL、色彩分级、蒙版、裁剪、旋转与输出保持不变；它是预览，
+  不写 revision、不落库，接受仍由前端提交 `POST /sessions/{id}/revisions`。
+- 反馈只记录用户行为：`modified` 由服务端比较“落库 revision 的配方”与“该方案配方”派生，客户端提交 `modified` 会 422；
+  `rejected` 不允许携带 `revisionId`。`changedPaths` 的基线：带 `planId` 用方案配方，否则用该 revision 的父 revision。
+- 同一 `(planId, action)` 只有一行：补写评分（例如接受后再提交 `rubric`）更新原行并返回**原行 id**，不新增记录；
+  `reset` 不带 `planId`，因此每次重置各自一行。`rubric` 的 10 个维度均为可选 1–5。
+- 请求体没有自由文本字段：指令原文、照片字节与文件名都不会进入反馈表；删除单条用 `DELETE`，删除图片/会话时级联清除。
+- `GET /feedback` 的 `summary` 对本次扫描窗口（上限 500 条）给出动作计数、`bySource`、`mockCount`/`realCount`/`degradedCount`、
+  `ratedCount`、`changeFrequency`、`rubricAverages` 与固定三条 disclaimer；不含也不推断任何“质量提升”结论。
+
 ## 5. 相对任务书 §7 的契约扩展
 
 | 扩展 | 说明 |
@@ -573,6 +620,11 @@ POST /api/v1/sessions/{sessionId}/export
 | ⊕ `status/stage/error` 任务模型 | 失败任务保留供重试；只返回安全错误码与文案 |
 | ⊕ `stage3/1` 报告 | 场景/主体/区域/光线/色彩/构图/测量/问题/建议/局限；`bbox` 归一化，`mask` 为 `null` |
 | ⊕ `GET|POST /settings/providers`、`/test`、`/reset` | 应用内 Provider 配置；脱敏读取、热替换、纯文本连接测试与环境变量恢复 |
+| ⊕ `/ai/photographer/*` | 阶段 5 的 8 个端点（风格、方案、对话、点评、反馈），`schemaVersion` 为 `stage5/1` |
+| ⊕ 能力边界用 200 + `supported:false` | 越界指令不是错误码；返回的配方与请求方当前配方逐字段一致、`changes` 为空 |
+| ⊕ 确定性点评 `/critique` | 不调用语言模型，`generatedBy:"deterministic-rules"`；离开服务端前校验 `evidenceRefs` 引用闭合，越界即 500 `critique_invalid` |
+| ⊕ 反馈幂等 | 同一 `(planId, action)` 唯一；补写评分更新原行并返回原行 id，计数不因反复评分虚高 |
+| ⊕ `isMock` / `degraded` | 方案、点评与反馈如实标注 Mock 与回退链；Mock 分组只用于流程验证 |
 
 ## 6. 错误码
 
@@ -609,6 +661,20 @@ POST /api/v1/sessions/{sessionId}/export
 | `invalid_provider_settings` | 422 | Provider 配置缺字段或字段非法；`details.fields` 为 `{field, rule, limit, message}` 对象数组 |
 | `provider_settings_write_failed` | 500 | 本机覆盖文件写入/删除失败；运行时配置保持不变 |
 | `provider_settings_unavailable` | 503 | 设置服务尚未就绪 |
+| `style_not_found` | 404 | 风格 id 不存在或未启用 |
+| `style_required` | 422 | `mode:"style"` 未提供 `styleId`，或 `mode:"auto"` 误带风格字段 |
+| `analysis_required` | 409 | 方案/对话/点评要求已完成的分析报告 |
+| `image_analysis_mismatch` | 409 | 分析报告不属于该会话或该图片 |
+| `plan_not_found` | 404 | 引用的方案或补丁不存在 |
+| `plan_session_mismatch` | 409 | 引用的方案属于其他会话 |
+| `photographer_recipe_invalid` | 422 | 模型意图经校验后仍不满足配方约束 |
+| `photographer_invalid_output` | 502 | Provider 输出不符合严格 schema |
+| `photographer_provider_error` | 502 | Provider 调用失败的安全包装（不含密钥与图片） |
+| `photographer_timeout` | 504 | Provider 调用超时 |
+| `photographer_unavailable` | 503 | Provider 不可用或未配置 |
+| `photographer_busy` | 503 | 方案/对话的 Planner 并发已满；立即返回，不排队，也不带 `Retry-After` |
+| `critique_invalid` | 500 | 点评出现报告之外的证据引用（引用闭合校验失败） |
+| `feedback_not_found` | 404 | 反馈记录不存在 |
 | `unsupported_media_type` | 415 | 声明 MIME 不在允许列表 |
 | `invalid_image` | 415 | 内容无法解码或尺寸非法 |
 | `mime_mismatch` | 415 | 声明 MIME 与真实格式不符 |
@@ -665,6 +731,38 @@ curl -sS http://127.0.0.1:8000/api/v1/analysis/ANALYSIS_ID
 
 # 获取完整报告（仅 completed）
 curl -sS http://127.0.0.1:8000/api/v1/analysis/ANALYSIS_ID/result
+
+# 风格库与单个风格
+curl -sS "http://127.0.0.1:8000/api/v1/ai/photographer/styles?category=scene"
+curl -sS http://127.0.0.1:8000/api/v1/ai/photographer/styles/portrait
+
+# 生成方案（把 SESSION_ID / ANALYSIS_ID 换成真实 id；默认 mock Provider）
+curl -sS -X POST http://127.0.0.1:8000/api/v1/ai/photographer/plan \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"SESSION_ID","analysisId":"ANALYSIS_ID","mode":"style","styleId":"portrait","styleStrength":0.6}'
+
+# 对话调整（PLAN_ID 来自方案响应的 planId；接受补丁后可继续把 patchId 当作 planId）
+curl -sS -X POST http://127.0.0.1:8000/api/v1/ai/photographer/chat \
+  -H "Content-Type: application/json" \
+  -d '{"planId":"PLAN_ID","instruction":"让天空更蓝一点"}'
+
+# 确定性点评与套用
+curl -sS -X POST http://127.0.0.1:8000/api/v1/ai/photographer/critique \
+  -H "Content-Type: application/json" -d '{"analysisId":"ANALYSIS_ID"}'
+curl -sS -X POST http://127.0.0.1:8000/api/v1/ai/photographer/critique/apply \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"SESSION_ID","patch":{"exposureEv":0.3}}'
+
+# 反馈：记录接受、补写评分（同一行）、查询与删除
+curl -sS -X POST http://127.0.0.1:8000/api/v1/ai/photographer/feedback \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"SESSION_ID","action":"accepted","source":"plan","planId":"PLAN_ID","revisionId":"REVISION_ID"}'
+curl -sS -X POST http://127.0.0.1:8000/api/v1/ai/photographer/feedback \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"SESSION_ID","action":"accepted","source":"plan","planId":"PLAN_ID","revisionId":"REVISION_ID","rubric":{"exposure":4}}'
+curl -sS "http://127.0.0.1:8000/api/v1/ai/photographer/feedback?sessionId=SESSION_ID"
+curl -sS -X DELETE http://127.0.0.1:8000/api/v1/ai/photographer/feedback/FEEDBACK_ID
 ```
 
-端到端自动化见 [tests/e2e/editor.spec.ts](../tests/e2e/editor.spec.ts)、[tests/e2e/analysis.spec.ts](../tests/e2e/analysis.spec.ts) 与 [tests/e2e/README.md](../tests/e2e/README.md)。
+端到端自动化见 [tests/e2e/editor.spec.ts](../tests/e2e/editor.spec.ts)、[tests/e2e/analysis.spec.ts](../tests/e2e/analysis.spec.ts)、
+`tests/e2e/photographer-*.spec.ts`（方案/风格/对话/点评/反馈）与 [tests/e2e/README.md](../tests/e2e/README.md)。
