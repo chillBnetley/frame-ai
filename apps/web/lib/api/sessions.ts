@@ -1,4 +1,4 @@
-import { apiJson, apiRequest } from "@/lib/api/client";
+import { ApiClientError, apiJson, apiRequest } from "@/lib/api/client";
 import type {
   CompareResponse,
   EditRecipe,
@@ -254,6 +254,112 @@ export async function exportSession(
     height: parseDimension(response.headers.get("x-export-height")),
     warnings: parseWarnings(response.headers.get("x-export-warning")),
   };
+}
+
+export type ExportJobStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export interface ExportJobError {
+  code: string;
+  message: string;
+  details: Record<string, unknown>;
+}
+
+export interface ExportJob {
+  jobId: string;
+  status: ExportJobStatus;
+  filename: string | null;
+  width: number | null;
+  height: number | null;
+  warnings: string[];
+  error: ExportJobError | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function createExportJob(
+  sessionId: string,
+  request: {
+    revisionId: string;
+    format: ExportFormat;
+    quality?: number | null;
+    maxEdge?: number | null;
+  },
+  signal?: AbortSignal,
+): Promise<ExportJob> {
+  return apiJson<ExportJob>(
+    "/api/v1/exports",
+    {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        sessionId,
+        revisionId: request.revisionId,
+        format: request.format,
+        ...(request.quality === undefined || request.quality === null
+          ? {}
+          : { quality: request.quality }),
+        ...(request.maxEdge === undefined || request.maxEdge === null
+          ? {}
+          : { maxEdge: request.maxEdge }),
+      }),
+    },
+    { signal, timeoutMs: SESSION_TIMEOUT_MS },
+  );
+}
+
+export async function getExportJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ExportJob> {
+  return apiJson<ExportJob>(
+    `/api/v1/exports/${encodeURIComponent(jobId)}`,
+    { cache: "no-store" },
+    { signal, timeoutMs: SESSION_TIMEOUT_MS },
+  );
+}
+
+export async function cancelExportJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await apiRequest(
+    `/api/v1/exports/${encodeURIComponent(jobId)}`,
+    { method: "DELETE" },
+    { signal, timeoutMs: SESSION_TIMEOUT_MS },
+  );
+}
+
+export async function downloadExportResult(
+  jobId: string,
+  format: ExportFormat,
+  signal?: AbortSignal,
+): Promise<ExportResult> {
+  const response = await apiRequest(
+    `/api/v1/exports/${encodeURIComponent(jobId)}/result`,
+    { cache: "no-store" },
+    { signal, timeoutMs: EXPORT_TIMEOUT_MS },
+  );
+  return {
+    blob: await response.blob(),
+    filename: parseFilename(response.headers.get("content-disposition"), format),
+    width: parseDimension(response.headers.get("x-export-width")),
+    height: parseDimension(response.headers.get("x-export-height")),
+    warnings: parseWarnings(response.headers.get("x-export-warning")),
+  };
+}
+
+export function exportJobError(job: ExportJob): ApiClientError {
+  return new ApiClientError(
+    job.error?.code ?? "export_failed",
+    job.error?.message ?? "The export job failed.",
+    409,
+    job.error?.details ?? {},
+  );
 }
 
 export function createIdempotencyKey(): string {

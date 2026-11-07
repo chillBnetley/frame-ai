@@ -85,6 +85,16 @@ class DecodedProxyCache:
             self._entries.clear()
             self._bytes_used = 0
 
+    def drop_original(self, original_sha256: str) -> int:
+        """Forget every decoded proxy of a source image that is being deleted."""
+        prefix = original_sha256.lower()
+        with self._lock:
+            keys = [key for key in self._entries if key[0] == prefix]
+            for key in keys:
+                evicted = self._entries.pop(key)
+                self._bytes_used -= evicted.nbytes
+        return len(keys)
+
     def stats(self) -> ProxyCacheStats:
         with self._lock:
             return ProxyCacheStats(

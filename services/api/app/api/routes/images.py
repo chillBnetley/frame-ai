@@ -5,13 +5,14 @@ from unicodedata import normalize
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import get_image_service
+from app.api.deps import get_deletion_service, get_image_service
 from app.core.errors import AppError
 from app.models.schemas import ErrorResponse, UploadImageResponse
 from app.repositories.image_registry import ImageAssetRecord
+from app.services.deletion_service import DeletionService
 from app.services.image_service import ImageService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -19,6 +20,7 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     for code, description in {
         400: "Invalid or empty upload",
         404: "Image not found",
+        409: "Image is being analyzed or exported",
         413: "Upload or pixel limit exceeded",
         415: "Unsupported or invalid image",
         500: "Storage failure",
@@ -77,3 +79,12 @@ def get_original_image(
         "X-Content-Type-Options": "nosniff",
     }
     return FileResponse(path, media_type=record.mime_type, headers=headers)
+
+
+@router.delete("/{image_id}", status_code=204)
+def delete_image(
+    image_id: str,
+    service: Annotated[DeletionService, Depends(get_deletion_service)],
+) -> Response:
+    service.delete_image(image_id)
+    return Response(status_code=204)

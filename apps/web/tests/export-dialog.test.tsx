@@ -18,6 +18,7 @@ const IDLE: ExportState = {
 function renderDialog(overrides: Partial<Parameters<typeof ExportDialog>[0]> = {}) {
   const onClose = vi.fn();
   const onExport = vi.fn();
+  const onCancel = vi.fn();
   const { unmount } = render(
     <ExportDialog
       open
@@ -25,10 +26,11 @@ function renderDialog(overrides: Partial<Parameters<typeof ExportDialog>[0]> = {
       state={IDLE}
       dirty={false}
       onExport={onExport}
+      onCancel={onCancel}
       {...overrides}
     />,
   );
-  return { onClose, onExport, unmount };
+  return { onClose, onExport, onCancel, unmount };
 }
 
 describe("ExportDialog", () => {
@@ -179,6 +181,33 @@ describe("ExportDialog", () => {
       screen.getByText(/降噪已简化（导出尺寸超过 12 MP）/),
     ).toBeInTheDocument();
     expect(screen.getByText(/改用更小的长边/)).toBeInTheDocument();
+  });
+
+  it("offers cancellation while a job is running and announces the cancelled state", async () => {
+    const running = {
+      status: "exporting" as const,
+      error: null,
+      filename: null,
+      width: null,
+      height: null,
+      bytes: null,
+      warnings: [],
+    };
+    const { onCancel, unmount } = renderDialog({ state: running });
+
+    await userEvent.click(screen.getByRole("button", { name: "取消导出" }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    unmount();
+
+    renderDialog({
+      state: {
+        ...running,
+        status: "cancelled",
+      },
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "导出已取消，可以重新开始。",
+    );
   });
 
   it("announces export failures", () => {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 import numpy as np
@@ -30,6 +31,15 @@ from app.models.recipe import (
     RenderQuality,
     UserMask,
 )
+
+
+class RenderCancelled(Exception):
+    """Raised when an export job's cancel token is set between render stages."""
+
+
+def raise_if_cancelled(cancel: threading.Event | None) -> None:
+    if cancel is not None and cancel.is_set():
+        raise RenderCancelled
 
 
 @dataclass(frozen=True)
@@ -78,7 +88,9 @@ def render(
     quality: RenderQuality = "final",
     max_edge: int | None = None,
     denoise_simplify_pixels: int = EXPORT_DENOISE_SIMPLIFY_PIXELS,
+    cancel: threading.Event | None = None,
 ) -> RenderedImage:
+    raise_if_cancelled(cancel)
     source = image
     edge = _resolve_edge(quality, max_edge)
     if edge is not None:
@@ -90,10 +102,12 @@ def render(
         and source.width * source.height > denoise_simplify_pixels
     )
 
+    raise_if_cancelled(cancel)
     rotated = rotate_inscribed(source.rgb, adjustments.rotation_deg, quality=quality)
     canvas_height, canvas_width = rotated.shape[:2]
     cropped = crop_pixels(rotated, adjustments.crop)
 
+    raise_if_cancelled(cancel)
     linear = srgb_to_linear(cropped)
     linear = apply_tone_linear(
         linear,
@@ -118,6 +132,7 @@ def render(
     )
     if color_grading is not None:
         perceptual = apply_color_grading(perceptual, color_grading)
+    raise_if_cancelled(cancel)
     render_warnings: list[str] = []
     if local_adjustments:
         perceptual, local_warnings = apply_local_adjustments(
@@ -135,6 +150,7 @@ def render(
         clarity=adjustments.clarity,
         vignette=adjustments.vignette,
     )
+    raise_if_cancelled(cancel)
     perceptual = apply_detail(
         perceptual,
         denoise=adjustments.denoise,
@@ -147,6 +163,7 @@ def render(
 
     if denoise_simplified:
         render_warnings.append("denoise_simplified")
+    raise_if_cancelled(cancel)
     return RenderedImage(
         rgb=to_uint8(perceptual, inplace=True),
         canvas_width=canvas_width,

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from pydantic import SecretStr
+
 from app.ai.base import (
     PhotographyDecisionProvider,
     PhotographyPlannerProvider,
@@ -102,30 +104,51 @@ def build_planner_provider(
     client: JsonHttpClient | None = None,
 ) -> PhotographyPlannerProvider:
     resolved = settings or get_settings()
-    if resolved.decision_provider == "mock":
+    planner_provider = resolved.planner_provider
+    provider = planner_provider or resolved.decision_provider
+    if provider == "mock":
         return MockPlannerProvider()
 
+    planner_api_key = _secret_value(resolved.planner_api_key)
+    decision_api_key = _secret_value(resolved.decision_api_key)
+    api_key = planner_api_key or decision_api_key
+    model = resolved.planner_model or resolved.decision_model
+    base_url = resolved.planner_api_base_url or resolved.decision_api_base_url
+    env_names = (
+        ("FRAME_PLANNER_API_KEY", "FRAME_PLANNER_MODEL", "FRAME_PLANNER_API_BASE_URL")
+        if planner_provider is not None
+        else ("FRAME_DECISION_API_KEY", "FRAME_DECISION_MODEL", "FRAME_DECISION_API_BASE_URL")
+    )
+
     missing = _missing_fields(
-        api_key=resolved.decision_api_key.get_secret_value(),
-        model=resolved.decision_model,
-        base_url=resolved.decision_api_base_url,
-        env_names=(
-            "FRAME_DECISION_API_KEY",
-            "FRAME_DECISION_MODEL",
-            "FRAME_DECISION_API_BASE_URL",
-        ),
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        env_names=env_names,
     )
     if missing:
         raise ProviderConfigurationError(_missing_message("planner", missing))
 
     return OpenAICompatiblePlannerProvider(
         client or _default_client(),
-        base_url=resolved.decision_api_base_url,
-        api_key=resolved.decision_api_key.get_secret_value(),
-        model=resolved.decision_model,
-        timeout=resolved.decision_timeout,
-        max_retries=resolved.decision_max_retries,
-        repair_attempts=resolved.decision_repair_attempts,
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        timeout=(
+            resolved.planner_timeout
+            if resolved.planner_timeout is not None
+            else resolved.decision_timeout
+        ),
+        max_retries=(
+            resolved.planner_max_retries
+            if resolved.planner_max_retries is not None
+            else resolved.decision_max_retries
+        ),
+        repair_attempts=(
+            resolved.planner_repair_attempts
+            if resolved.planner_repair_attempts is not None
+            else resolved.decision_repair_attempts
+        ),
     )
 
 
@@ -157,6 +180,10 @@ def build_provider_bundle(
 
 def _default_client() -> JsonHttpClient:
     return JsonHttpClient(UrllibJsonTransport())
+
+
+def _secret_value(secret: SecretStr | None) -> str:
+    return secret.get_secret_value() if secret is not None else ""
 
 
 def _missing_fields(

@@ -289,6 +289,26 @@ class SqliteAnalysisRepository:
             connection.close()
         return self.get(task_id)
 
+    def has_active_for_image(self, image_id: str) -> bool:
+        """True while an analysis for this image is queued or running.
+
+        Deleting the image would cascade the task away mid-run, so callers must
+        treat this as a busy resource instead.
+        """
+        connection = connect(self._path)
+        try:
+            row = connection.execute(
+                "SELECT 1 FROM analysis_task WHERE image_id = ? AND status IN (?, ?) LIMIT 1",
+                (
+                    image_id.lower(),
+                    TaskStatus.PENDING.value,
+                    TaskStatus.PROCESSING.value,
+                ),
+            ).fetchone()
+        finally:
+            connection.close()
+        return row is not None
+
     def count_queued(self) -> int:
         connection = connect(self._path)
         try:

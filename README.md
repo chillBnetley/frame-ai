@@ -47,8 +47,8 @@
 - 预览可见性：桌面端左列预览与历史栏固定在视口内、参数面板独立滚动；窄屏在主预览离屏时显示固定迷你预览（对比/裁切/导出时隐藏）。
 - AI 分析任务：`POST /analysis` 异步创建，`pending/processing/completed/failed` 状态与真实阶段（预处理/视觉/特征/诊断）；失败任务保留供重试，`force=true` 重新分析，按图片内容与配置去重。
 - 预处理与 CV 测量：从只读原图生成内存 JPEG 副本（最长边 `FRAME_ANALYSIS_MAX_EDGE`，默认 1024），透明通道按白底合成并记录限制；亮度分位、直方图、截断、色偏、饱和度分布、RGB/HSV 直方图、主色集中度、清晰度、噪声、梯度各向异性、地平线倾斜与主色。
-- 可替换 Provider：视觉与决策两个独立接口；`mock`（默认，离线）与 OpenAI 兼容实现；API Key 只保存在服务端，可来自环境变量或页面内“模型设置”写入的本机覆盖文件，GET 只返回是否已配置；决策模型只接收结构化测量与语义，不接收图片；模型调用日志记录 provider/model/阶段/重试/token/延迟，不记录图片或 Base64。
-- 应用内模型设置：顶栏入口可分别配置视觉/决策 Provider、模型名、Base URL 与 API Key；保存后原子写入 `<FRAME_DATA_DIR>/provider-settings.json` 并热替换 Provider，新任务立即生效；“测试连接”只发送文本提示，不发送用户图片。
+- 可替换 Provider：视觉、决策与规划三个独立接口（规划未单独配置时逐字段跟随决策）；`mock`（默认，离线）与 OpenAI 兼容实现；API Key 只保存在服务端，可来自环境变量或页面内“模型设置”写入的本机覆盖文件，GET 只返回是否已配置；决策模型只接收结构化测量与语义，不接收图片；模型调用日志记录 provider/model/阶段/重试/token/延迟，不记录图片或 Base64。
+- 应用内模型设置：顶栏入口可分别配置视觉/决策/规划（可选）Provider、模型名、Base URL 与 API Key；规划留空的字段逐项跟随决策；保存后原子写入 `<FRAME_DATA_DIR>/provider-settings.json` 并热替换 Provider，新任务立即生效；“测试连接”只发送文本提示，不发送用户图片。
 - 主体与区域：视觉输出主体类型、归一化边界框、置信度与区域 ID；只提供边界框与区域引用，**没有像素级蒙版**；为后续局部调色预留统一区域接口。
 - 摄影诊断：曝光、色彩、构图、清晰度（含动态模糊/细节不足）、光线候选问题均带测量证据、严重度、置信度、关联区域与逐条建议；色彩协调/构图遮挡/主体占比进入结果；决策结果经后端校验，`unknown` 不会被包装成事实；场景/主体/光线/色彩/构图/质量诊断可按 `AnalysisOptions` 关闭并在局限中说明。
 - 前端分析界面：工具栏入口、五区结果、Mock 徽标、局限说明、真实阶段状态、主体框叠加、构图与遮挡摘要、可展开证据、逐条建议、重新分析、失败重试、切换图片清空状态。
@@ -82,7 +82,7 @@
 - 几何编辑（裁剪/旋转/扩图/删除物体/换背景）不由 AI 发起；方案不生成裁切或旋转。
 - 真实视觉/规划模型的准确率、成本与稳定性评估；本机没有授权标注集与真实密钥，默认 Mock Provider 未调用第三方。评估框架与冒烟脚本已提供，但正式指标仍为未测量。
 - 导出 PNG 的 alpha 通道（当前 loader 统一合成到白底；见 [known-issues.md](docs/known-issues.md)）。
-- 删除会话/图片、过期数据清理、配额与多用户。
+- 删除后的回收站/撤销、跨进程一致性与配额、多用户。
 - 鉴权、限流、公网部署加固；API 仅限本机（D-13）。
 - 真实 iOS Safari / Android Chrome 真机回归。
 
@@ -91,7 +91,8 @@
 ```text
 Browser (Next.js 16 / React 19)
   │  POST /api/v1/images (multipart)
-  │  POST /api/v1/sessions/{id}/render | revisions | undo | redo | export ...
+  │  POST /api/v1/sessions/{id}/render | revisions | undo | redo ...
+  │  POST /api/v1/exports → GET/DELETE /api/v1/exports/{jobId} → GET .../result
   ▼
 Next.js rewrite: /api/v1/* → API_INTERNAL_URL (default 127.0.0.1:8000)
   │
@@ -105,6 +106,7 @@ FastAPI
   ├─ SessionService               revision 事务、undo/redo/activate/reset、幂等
   ├─ RenderService                渲染序号 → 代理缓存 → pipeline → previews/<hash>
   ├─ ExportService                串行槽位 → 内存预算 → 全分辨率重渲染 → 文件流
+  ├─ ExportJobManager             异步导出作业、队列上限、取消、结果文件与 TTL
   ├─ AnalysisService              阶段 2 启发式特征（进程内 LRU，保留兼容）
   ├─ AnalysisTaskService          分析任务队列、去重、恢复、重试、结果入库
   ├─ AnalysisOrchestrator         预处理 → 视觉 → CV 特征 → 诊断 → 报告
@@ -252,7 +254,7 @@ cd services/api
 .venv/Scripts/python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-首次启动会自动创建 `data/`、SQLite 表与预览目录；若存在阶段 1 的 `data/image_registry.json`，会幂等导入并备份该文件。
+首次启动会自动创建 `data/`、SQLite 表、预览目录与导出结果目录 `data/tmp/exports/`；若存在阶段 1 的 `data/image_registry.json`，会幂等导入并备份该文件。导出结果文件只在作业存活期间保留，启动时会清空上次进程的遗留文件。
 
 ### 2. 前端
 
@@ -278,7 +280,7 @@ npm run dev                  # Turbopack
 6. 打开“AI 摄影师”面板：选择风格与强度或直接生成方案，查看参数改动、理由与证据；可在预览中确认，接受后写入普通历史，也可拒绝、重置或提交评分。对话输入用于自然语言修改，点评区显示确定性优点/问题/建议。
 7. 导出 JPEG/PNG：从原图全分辨率重渲染，自动剥离元数据并嵌入 sRGB。
 
-使用真实 OpenAI 兼容视觉/决策服务时，可直接在页面顶栏打开“模型设置”，填写 Provider、模型名、Base URL 与 API Key 后“保存并应用”；也可以继续用 `.env` 设置 `FRAME_VISION_PROVIDER=openai`、`FRAME_DECISION_PROVIDER=openai` 及对应 `*_API_KEY`、`*_MODEL`、`*_API_BASE_URL`。本地保存的字段优先于环境变量，点击“恢复环境变量配置”会删除覆盖文件。缺少必需配置时启动或保存失败，不会静默回退到 Mock。密钥只留在服务端的本机覆盖文件或环境变量中，不会回显到页面、日志或前端构建产物，禁止提交到版本库。
+使用真实 OpenAI 兼容视觉/决策/规划服务时，可直接在页面顶栏打开“模型设置”，填写 Provider、模型名、Base URL 与 API Key 后“保存并应用”；规划模型留空的字段逐项跟随决策模型。也可以继续用 `.env` 设置 `FRAME_VISION_PROVIDER=openai`、`FRAME_DECISION_PROVIDER=openai`（可选 `FRAME_PLANNER_PROVIDER=openai`）及对应 `*_API_KEY`、`*_MODEL`、`*_API_BASE_URL`。本地保存的字段优先于环境变量，点击“恢复环境变量配置”会删除覆盖文件（包括规划覆盖）。缺少必需配置时启动或保存失败，不会静默回退到 Mock。密钥只留在服务端的本机覆盖文件或环境变量中，不会回显到页面、日志或前端构建产物，禁止提交到版本库。
 
 ## 环境变量
 
@@ -300,6 +302,8 @@ npm run dev                  # Turbopack
 | `FRAME_EXPORT_MAX_CONCURRENCY` | `1` | 同时准入的导出数量（1…4）；准入还要求"在跑导出估算之和"不超过下面的预算 |
 | `FRAME_EXPORT_MAX_RSS_MB` | `3072` | 导出预估峰值内存上限；超限返回 413 `export_too_large`，性能脚本也据此断言实测 RSS。系数在阶段四 Task 8 按 11 个实测峰值标定（45/240/8 B/px + 150 MB 基线 + 原图解码地板），默认值会拒绝 24 MP 满配方的全尺寸导出 |
 | `FRAME_EXPORT_DENOISE_SIMPLIFY_PIXELS` | `12000000` | 本次实际参与渲染的像素（应用 `maxEdge` 之后）超过该值且启用降噪时，导出使用简化降噪并返回 `X-Export-Warning` |
+| `FRAME_EXPORT_QUEUE_MAX` | `8` | 异步导出作业的等待队列上限（只计 `queued`，运行中的作业不计入）；达到上限后新作业返回 503 `server_busy` 并带 `Retry-After: 2` |
+| `FRAME_EXPORT_JOB_TTL_SECONDS` | `3600` | 已结束导出作业的状态与结果文件保留秒数；过期后查询返回 404 `export_not_found`，结果文件在启动时也会清空 |
 | `FRAME_MAX_UPLOAD_BYTES` | `20971520` | 单文件最大字节数（20 MiB） |
 | `FRAME_MAX_JSON_BODY_BYTES` | `2097152` | 除 `/api/v1/images` 上传前缀外，所有 `POST/PUT/PATCH` 的请求体上限（2 MiB），超限返回 413 `payload_too_large` |
 | `FRAME_MAX_IMAGE_PIXELS` | `40000000` | 最大像素数（40 MP） |
@@ -320,6 +324,13 @@ npm run dev                  # Turbopack
 | `FRAME_DECISION_TIMEOUT` | `60` | 单次决策请求超时秒数 |
 | `FRAME_DECISION_MAX_RETRIES` | `2` | 网络错误/408/429/5xx 最大重试次数 |
 | `FRAME_DECISION_REPAIR_ATTEMPTS` | `1` | 决策 JSON 校验失败后的修复尝试次数 |
+| `FRAME_PLANNER_PROVIDER` | 空 | 规划 Provider：`mock` 或 `openai`；空 = 跟随 `FRAME_DECISION_PROVIDER` |
+| `FRAME_PLANNER_API_KEY` | 空 | 规划 Provider 密钥；空 = 跟随 `FRAME_DECISION_API_KEY`；仅服务端读取，禁止提交 |
+| `FRAME_PLANNER_MODEL` | 空 | 规划模型名；空 = 跟随 `FRAME_DECISION_MODEL` |
+| `FRAME_PLANNER_API_BASE_URL` | 空 | OpenAI 兼容 API 根地址；空 = 跟随 `FRAME_DECISION_API_BASE_URL` |
+| `FRAME_PLANNER_TIMEOUT` | 空 | 单次规划请求超时秒数；空 = 跟随 `FRAME_DECISION_TIMEOUT` |
+| `FRAME_PLANNER_MAX_RETRIES` | 空 | 规划请求最大重试次数；空 = 跟随 `FRAME_DECISION_MAX_RETRIES` |
+| `FRAME_PLANNER_REPAIR_ATTEMPTS` | 空 | 规划 JSON 校验失败后的修复尝试次数；空 = 跟随 `FRAME_DECISION_REPAIR_ATTEMPTS` |
 | `FRAME_MOCK_SCENARIO` | `generic` | Mock 场景：`generic/portrait/landscape/low_light/backlit` |
 | `FRAME_ANALYSIS_MAX_EDGE` | `1024` | 发送给视觉 Provider 的内存副本最长边；范围 512–2048 |
 | `FRAME_ANALYSIS_MAX_CONCURRENCY` | `2` | 后台分析线程池大小 |
@@ -329,7 +340,7 @@ npm run dev                  # Turbopack
 | `FRAME_ANALYSIS_QUEUE_MAX` | `16` | `pending` 任务数上限；超限的新分析请求返回 503 `server_busy` + `Retry-After`，而不是无界排队 |
 | `FRAME_PHOTOGRAPHER_MAX_CONCURRENCY` | `2` | 同时执行的 Planner 调用（方案与对话）上限（1…8）；满时立即 503 `photographer_busy`，不排队 |
 
-页面内“模型设置”保存的字段写入 `<FRAME_DATA_DIR>/provider-settings.json`（已被 `.gitignore`），优先级高于上表中的同名字段；未保存的字段继续使用环境变量。该文件以明文保存 API Key（Unix 上尽力 `chmod 0600`），不是密钥保险箱，本机其他进程/用户仍可能读取。文件损坏或选择了 `openai` 但缺少必需字段时，API 启动失败而不是静默回退。
+页面内“模型设置”保存的字段写入 `<FRAME_DATA_DIR>/provider-settings.json`（已被 `.gitignore`），优先级高于上表中的同名字段；未保存的字段继续使用环境变量。规划分组中未保存的字段逐项跟随当前生效的决策配置（含已保存的 decision 覆盖），而不是先回退到默认值；旧版覆盖文件没有规划分组时按“未配置”读取。该文件以明文保存 API Key（Unix 上尽力 `chmod 0600`），不是密钥保险箱，本机其他进程/用户仍可能读取。文件损坏或选择了 `openai` 但缺少必需字段时，API 启动失败而不是静默回退。
 
 前端读取（放在 `apps/web/.env.local` 或 shell 环境）：
 
@@ -373,11 +384,13 @@ data/
   - `analysis_result`：任务 ID、报告 Schema 版本、`is_mock` 与完整报告 JSON；报告内嵌本次分析的图片 ID。
   - `photographer_plan`：会话/图片/分析、`mode`、风格与版本/强度、Provider/模型/提示词版本、`is_mock`/`degraded`、置信度、方案 JSON、配方 JSON 与哈希。
   - `photographer_feedback`：图片、会话、方案、revision、来源（`plan/chat/critique`）、动作（`accepted/rejected/modified/reset`）、参数差异、可选评分 JSON、`is_mock`/`degraded` 与时间；`UNIQUE(plan_id, action)` 保证同一方案同一决策只有一行。
-- 阶段 3 迁移 `0002_analysis.sql`、阶段 5 迁移 `0003_photographer_plan.sql` 与 `0004_photographer_feedback.sql` 可在新库与既有库上应用；已应用的迁移不可修改。
+- 阶段 3 迁移 `0002_analysis.sql`、阶段 5 迁移 `0003_photographer_plan.sql` 与 `0004_photographer_feedback.sql`、删除墓碑迁移 `0005_deleted_resource.sql` 可在新库与既有库上应用；已应用的迁移不可修改。
 - revision 不复制像素，只保存配方；渲染与导出始终读取不可变原图。分析结果只保存结构化报告，不复制原图；方案只保存方案/配方 JSON，不保存图片或指令原文。
 - 预览与 `previews/proxies/` 代理图都是可丢弃的 JPEG 缓存；SQLite 与原图是权威数据。代理图按 64 px 边长分桶复用，缓存写失败不影响渲染。
 - 阶段 1 的 `image_registry.json` 在首次启动时导入后备份为 `image_registry.json.imported.bak`（重复导入时带时间戳），之后不再写入。
-- 删除整个 `data/` 会清空所有图片、会话、revision 与缓存；当前没有删除接口或保护性清理脚本。
+- **删除能力**：`DELETE /api/v1/images/{id}` 与 `DELETE /api/v1/sessions/{id}` 硬删除并返回 204；重复删除仍是 204（`deleted_resource` 墓碑），未知/非法 id 返回 404，分析或导出进行中返回 409 `resource_busy`。删除图片会级联清除其会话、revision、分析、方案与反馈，并在提交后删除原图、无共享引用的代理与预览缓存；已成功的导出作业与结果文件随删除清除，之后 `GET /exports/{jobId}` 与 `/result` 均返回 404。删除会话保留原图。没有回收站，编辑器提供二次确认。
+- **异步导出**：前端通过 `POST /api/v1/exports` 提交作业，轮询 `GET /exports/{jobId}`，成功后下载 `GET /exports/{jobId}/result`；对话框可在导出中取消（`DELETE /exports/{jobId}`）。排队中的作业立即取消，运行中的作业在下一个渲染阶段边界停止并释放并发槽位与内存准入。作业状态保存在进程内，服务重启即丢失；结果文件位于 `data/tmp/exports/`，启动时清空上次进程遗留，访问/提交时惰性清理超过 `FRAME_EXPORT_JOB_TTL_SECONDS` 的文件，删除会话/图片时同步清除。删除与导出并发时，已通过删除前忙碌检查的作业会被取消并从作业表移除，晚到的结果不落盘或立即丢弃。旧同步端点 `POST /sessions/{id}/export` 仍保留但已标记 deprecated。
+- 进程崩溃或 Windows 文件占用可能留下孤儿文件或“登记存在、原图缺失”的记录；`services/api/scripts/purge_orphans.py` 默认 dry-run，`--apply` 才删除孤儿原图/代理并清理缺失原图的登记行。删除整个 `data/` 仍会清空全部数据。
 
 ## 编辑语义
 
@@ -437,6 +450,7 @@ data/
 | `POST /sessions/{id}/undo|redo|activate|reset` | 历史操作 |
 | `GET /sessions/{id}/compare` | 原图侧仅应用旋转/裁切，与当前 revision 同尺寸对比 |
 | `POST /sessions/{id}/export` | 全分辨率导出 JPEG/PNG，带内存预算与简化降噪提示 |
+| `DELETE /images/{id}`, `DELETE /sessions/{id}` | 硬删除图片/会话（204）；重复删除幂等，忙碌 409 |
 | `GET /previews/{previewId}` | 内容寻址预览缓存 |
 | `POST /analysis` | 创建异步分析任务；`force=true` 强制重新分析，去重命中返回 200 |
 | `GET /analysis/{id}` | 查询状态/阶段/mock 标记；完成时内嵌报告 |
@@ -453,7 +467,7 @@ data/
 | `POST /ai/photographer/critique/apply` | 把单条点评建议转成配方补丁并校验 |
 | `POST /ai/photographer/feedback`, `GET /ai/photographer/feedback`, `DELETE /ai/photographer/feedback/{id}` | 记录/查询/删除用户决策与可选评分；汇总含固定 disclaimer |
 
-所有响应包含 `X-Request-ID`。除任务书状态码外，还使用 `400 invalid_host`/`400 invalid_analysis_options`（本机 Host 防护、分析选项全关）、`403 origin_not_allowed`/`cors_origin_denied`（本机来源防护）、`405 cors_method_denied`（CORS 预检请求了未允许的方法）、`409`（revision/幂等冲突、无可撤销/重做步骤、过期渲染、分析未完成或分析仍在运行）、`413 export_too_large`/`analysis_input_too_large`（内存预算）/`payload_too_large`（请求体分档上限）、`500 storage_error`（任务写入失败）、`503 server_busy`（导出/渲染槽位耗尽，或待分析队列达到 `FRAME_ANALYSIS_QUEUE_MAX`）。请求体中的未知字段一律返回 422 `validation_error`（不做静默忽略）。分析任务不存在返回 `404 analysis_not_found`；任务执行失败时 HTTP 查询仍为 200，`status=failed`，`error.code` 为 `analysis_failed`、`analysis_timeout`、`analysis_invalid_output` 或 `provider_*`（如 `provider_timeout`、`provider_unavailable`）。阶段 5 另用 `style_not_found`/`plan_not_found`/`feedback_not_found`（404）、`style_required`/`photographer_recipe_invalid`（422）、`analysis_required`/`image_analysis_mismatch`/`plan_session_mismatch`（409）、`photographer_busy`/`photographer_unavailable`（503）、`photographer_timeout`（504）、`photographer_invalid_output`/`photographer_provider_error`（502）与 `critique_invalid`（500）；完整清单见 [docs/api-contract.md](docs/api-contract.md)。
+所有响应包含 `X-Request-ID`。除任务书状态码外，还使用 `400 invalid_host`/`400 invalid_analysis_options`（本机 Host 防护、分析选项全关）、`403 origin_not_allowed`/`cors_origin_denied`（本机来源防护）、`405 cors_method_denied`（CORS 预检请求了未允许的方法）、`409`（revision/幂等冲突、无可撤销/重做步骤、过期渲染、分析未完成或分析仍在运行、删除目标正在分析/导出 `resource_busy`、导出作业未就绪/已取消/已失败）、`413 export_too_large`/`analysis_input_too_large`（内存预算）/`payload_too_large`（请求体分档上限）、`500 storage_error`（任务写入失败）、`503 server_busy`（导出/渲染槽位耗尽、异步导出队列已满，或待分析队列达到 `FRAME_ANALYSIS_QUEUE_MAX`）。导出作业另有 `404 export_not_found`/`export_result_missing`、`409 export_not_ready`/`export_cancelled`/`export_failed`、`500 export_storage_error`。请求体中的未知字段一律返回 422 `validation_error`（不做静默忽略）。分析任务不存在返回 `404 analysis_not_found`；任务执行失败时 HTTP 查询仍为 200，`status=failed`，`error.code` 为 `analysis_failed`、`analysis_timeout`、`analysis_invalid_output` 或 `provider_*`（如 `provider_timeout`、`provider_unavailable`）。阶段 5 另用 `style_not_found`/`plan_not_found`/`feedback_not_found`（404）、`style_required`/`photographer_recipe_invalid`（422）、`analysis_required`/`image_analysis_mismatch`/`plan_session_mismatch`（409）、`photographer_busy`/`photographer_unavailable`（503）、`photographer_timeout`（504）、`photographer_invalid_output`/`photographer_provider_error`（502）与 `critique_invalid`（500）；完整清单见 [docs/api-contract.md](docs/api-contract.md)。
 
 ## 隐私与安全边界
 
@@ -461,7 +475,7 @@ data/
 - **Host/Origin 防护**：校验 `FRAME_ALLOWED_HOSTS`，并拒绝不在 `FRAME_ALLOWED_ORIGINS` 的写入 Origin 与 `Sec-Fetch-Site: cross-site`，降低 DNS 重绑定和浏览器跨站写入风险；这不是鉴权。
 - 原图、SQLite 与预览只保存在本机数据目录，不上传第三方存储。
 - 默认 Mock Provider 完全离线，不调用任何外部服务；仅当显式选择 `openai` Provider 时，才会把最长边 1024 px 的 JPEG 副本发送到配置的服务端，并把结构化测量/语义/候选问题发送给决策 Provider（**不发送图片**）。
-- **阶段 5 的 Planner 不接收图片**：方案、对话与点评只读取已完成的分析报告、图片尺寸、当前配方与用户偏好；Planner 复用决策 Provider 配置，收到的是结构化摘要，因此不会产生第二次图片外传。点评完全由本地确定性规则生成，不调用模型。
+- **阶段 5 的 Planner 不接收图片**：方案、对话与点评只读取已完成的分析报告、图片尺寸、当前配方与用户偏好；Planner 默认逐字段跟随决策 Provider 配置（也可在“模型设置”中独立配置），收到的是结构化摘要，因此不会产生第二次图片外传。点评完全由本地确定性规则生成，不调用模型。
 - **对话指令不落库**：`POST /chat` 的指令原文只在请求内使用，日志只记录 `instruction_chars` 长度；方案表保存方案/配方 JSON 与元数据，不保存指令、提示词或模型原始响应。
 - **反馈不含自由文本或图片**：反馈表只有动作、来源、参数差异、可选 1–5 评分与时间；不保存原图、指令或点评正文。单条可删除，图片/会话删除时级联清除。
 - **第三方数据留存**：发送到外部 Provider 的图片副本与结构化数据受该 Provider 自身的留存、日志与训练政策约束，本项目无法控制；接入前应确认服务条款与所在地区的合规要求。本项目不替用户开启训练授权，也不会把 Provider 返回的原始响应持久化。
@@ -498,6 +512,14 @@ npm run typecheck
 npm test
 npm run check:api
 npm run build
+```
+
+清理删除/崩溃遗留的孤儿文件（默认只报告，不删除）：
+
+```bash
+cd services/api
+.\.venv\Scripts\python.exe scripts/purge_orphans.py            # dry-run，打印计数
+.\.venv\Scripts\python.exe scripts/purge_orphans.py --apply    # 实际删除
 ```
 
 端到端（根目录；默认自启隔离 API 与 Next，桌面 + 窄屏各一遍）：
@@ -710,7 +732,7 @@ SQLite 记录仍存在但文件被移动/删除时，预览接口返回 `404 ima
 12. **点评是确定性证据驱动**：v1 不调用自由文本模型，避免编造；优点是稳定可复现，局限是表达模板化、无法评价证据之外的美学细节。
 13. **AI 不做几何编辑**：不支持裁剪、旋转、扩图、删除物体或换背景；构图问题只作为诊断与建议呈现。
 14. **阶段 5 的质量评估未完成**：14 类真实照片 × 10 维评分、A/B/C/D 对照、真实 Provider 稳定性与失败案例计数均**未评估（待用户照片与授权）**；自动化回归只证明流程、结构与边界，不证明摄影质量提升。
-15. **Planner 复用决策 Provider 配置**：本阶段没有独立的 Planner 模型设置 UI；并发槽位是进程内机制，多 worker 不在当前范围。
+15. **Planner 独立配置没有专用清除入口**：Planner 已支持在“模型设置”中独立配置，未填写的字段逐项回退决策 Provider；但清除 planner 覆盖只能清空对应字段，或使用“恢复环境变量配置”（会同时删除 vision/decision 覆盖），没有“只清除 planner”的按钮。并发槽位是进程内机制，多 worker 不在当前范围。
 
 ## 阶段 4 交接
 
@@ -756,4 +778,4 @@ npm run dev
 
 打开 <http://127.0.0.1:3000>，上传图片并完成一次 AI 分析后，打开“AI 摄影师”面板：选择风格或直接生成方案，查看参数与理由，接受后在普通历史中撤销/重做；也可用对话修改、查看点评并提交评分。
 
-**下一阶段建议：** 先用用户授权的真实照片补齐 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md) §4–§7（14 类评分、A/B/C/D、真实 Provider 稳定性与失败计数）；在那之前不应宣称任何摄影质量提升。若要扩展能力，语义蒙版、独立 Planner 模型设置、自由文本点评与几何编辑都需要单独决策与 ADR，并继续保持“AI 只提案、原图字节不可变、用户显式接受才写 revision”的约束。**阶段 5 到此停止，未获确认不进入下一阶段。**
+**下一阶段建议：** 先用用户授权的真实照片补齐 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md) §4–§7（14 类评分、A/B/C/D、真实 Provider 稳定性与失败计数）；在那之前不应宣称任何摄影质量提升。若要扩展能力，语义蒙版、自由文本点评与几何编辑都需要单独决策与 ADR，并继续保持“AI 只提案、原图字节不可变、用户显式接受才写 revision”的约束。**阶段 5 到此停止，未获确认不进入下一阶段。**

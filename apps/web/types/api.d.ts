@@ -124,6 +124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Image */
+        delete: operations["delete_image_api_v1_images__image_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analysis": {
         parameters: {
             query?: never;
@@ -204,7 +221,8 @@ export interface paths {
         get: operations["get_session_api_v1_sessions__session_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Session */
+        delete: operations["delete_session_api_v1_sessions__session_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -339,8 +357,63 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Export Revision */
+        /**
+         * Export Revision
+         * @deprecated
+         */
         post: operations["export_revision_api_v1_sessions__session_id__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Export Job */
+        post: operations["create_export_job_api_v1_exports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Export Job */
+        get: operations["get_export_job_api_v1_exports__job_id__get"];
+        put?: never;
+        post?: never;
+        /** Cancel Export Job */
+        delete: operations["cancel_export_job_api_v1_exports__job_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{job_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Export Result */
+        get: operations["download_export_result_api_v1_exports__job_id__result_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1321,6 +1394,74 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /** ExportJobError */
+        ExportJobError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** ExportJobRequest */
+        ExportJobRequest: {
+            /**
+             * Revisionid
+             * Format: uuid
+             */
+            revisionId: string;
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "jpeg" | "png";
+            /** Quality */
+            quality?: number | null;
+            /** Maxedge */
+            maxEdge?: number | null;
+            /**
+             * Colorspace
+             * @default sRGB
+             * @constant
+             */
+            colorSpace: "sRGB";
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+        };
+        /** ExportJobResponse */
+        ExportJobResponse: {
+            /** Jobid */
+            jobId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Filename */
+            filename?: string | null;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Warnings */
+            warnings?: string[];
+            error?: components["schemas"]["ExportJobError"] | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
         /** ExportRequest */
         ExportRequest: {
             /**
@@ -1964,6 +2105,47 @@ export interface components {
          */
         PlannerMode: "auto" | "style";
         /**
+         * PlannerProviderSettingsUpdate
+         * @description Optional planner overrides; omitted or empty fields follow the decision provider.
+         */
+        PlannerProviderSettingsUpdate: {
+            /** Provider */
+            provider?: ("mock" | "openai") | null;
+            /** Model */
+            model?: string | null;
+            /** Baseurl */
+            baseUrl?: string | null;
+            /** Apikey */
+            apiKey?: string | null;
+            /**
+             * Clearapikey
+             * @default false
+             */
+            clearApiKey: boolean;
+        };
+        /**
+         * PlannerProviderSettingsView
+         * @description Effective planner configuration after per-field decision fallback.
+         */
+        PlannerProviderSettingsView: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "mock" | "openai";
+            /** Model */
+            model: string;
+            /** Baseurl */
+            baseUrl: string;
+            /** Hasapikey */
+            hasApiKey: boolean;
+            /**
+             * Apikeysource
+             * @enum {string}
+             */
+            apiKeySource: "saved" | "environment" | "none";
+        };
+        /**
          * Priority
          * @enum {string}
          */
@@ -2016,11 +2198,13 @@ export interface components {
         ProviderSettingsUpdate: {
             vision?: components["schemas"]["ProviderEntryUpdate"] | null;
             decision?: components["schemas"]["ProviderEntryUpdate"] | null;
+            planner?: components["schemas"]["PlannerProviderSettingsUpdate"] | null;
         };
         /** ProviderSettingsView */
         ProviderSettingsView: {
             vision: components["schemas"]["ProviderEntryView"];
             decision: components["schemas"]["ProviderEntryView"];
+            planner: components["schemas"]["PlannerProviderSettingsView"];
             /** Ismock */
             isMock: boolean;
             /** Hassavedoverrides */
@@ -2030,6 +2214,7 @@ export interface components {
         ProviderTestResponse: {
             vision: components["schemas"]["ProviderTestResult"];
             decision: components["schemas"]["ProviderTestResult"];
+            planner: components["schemas"]["ProviderTestResult"];
         };
         /** ProviderTestResult */
         ProviderTestResult: {
@@ -2804,6 +2989,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Image is being analyzed or exported */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Upload or pixel limit exceeded */
             413: {
                 headers: {
@@ -2875,6 +3069,98 @@ export interface operations {
             };
             /** @description Image not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image is being analyzed or exported */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Upload or pixel limit exceeded */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unsupported or invalid image */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Storage failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_image_api_v1_images__image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or empty upload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image is being analyzed or exported */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3363,7 +3649,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3412,7 +3698,54 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_session_api_v1_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session, image, or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3464,7 +3797,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3519,7 +3852,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3636,7 +3969,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3685,7 +4018,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3738,7 +4071,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3787,7 +4120,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3839,7 +4172,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3901,7 +4234,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Revision conflict or no undo/redo step available */
+            /** @description Revision conflict, no undo/redo step available, or resource busy */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3939,6 +4272,185 @@ export interface operations {
             };
         };
     };
+    create_export_job_api_v1_exports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportJobRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJobResponse"];
+                };
+            };
+            /** @description Export session or revision not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid export request */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Export queue is full or the service is shutting down */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_export_job_api_v1_exports__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJobResponse"];
+                };
+            };
+            /** @description Export job not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_export_job_api_v1_exports__job_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export job not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_export_result_api_v1_exports__job_id__result_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rendered export bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                    "image/png": unknown;
+                };
+            };
+            /** @description Export job or result file not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Export is not ready, was cancelled, or failed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_preview_api_v1_previews__preview_id__get: {
         parameters: {
             query?: never;
@@ -3950,12 +4462,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Rendered JPEG preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "image/jpeg": unknown;
+                };
             };
             /** @description Preview expired or unknown */
             404: {

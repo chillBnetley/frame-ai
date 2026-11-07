@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     registry_filename: str = "image_registry.json"
     database_filename: str = "frame.db"
     preview_dirname: str = "tmp/previews"
+    export_dirname: str = "tmp/exports"
+    export_job_ttl_seconds: int = Field(default=3600, gt=0)
+    export_queue_max: int = Field(default=8, ge=1)
     preview_ttl_seconds: int = Field(default=3600, gt=0)
     preview_cleanup_interval_seconds: int = Field(default=600, gt=0)
     preview_max_bytes: int = Field(default=2 * 1024 * 1024 * 1024, gt=0)
@@ -64,6 +67,14 @@ class Settings(BaseSettings):
     decision_max_retries: int = Field(default=2, ge=0, le=10)
     decision_repair_attempts: int = Field(default=1, ge=0, le=3)
 
+    planner_provider: Literal["mock", "openai"] | None = None
+    planner_api_key: SecretStr | None = None
+    planner_model: str | None = None
+    planner_api_base_url: str | None = None
+    planner_timeout: float | None = Field(default=None, gt=0, le=600)
+    planner_max_retries: int | None = Field(default=None, ge=0, le=10)
+    planner_repair_attempts: int | None = Field(default=None, ge=0, le=3)
+
     mock_scenario: str = "generic"
 
     analysis_max_edge: int = Field(default=1024, ge=512, le=2048)
@@ -86,8 +97,10 @@ class Settings(BaseSettings):
     @field_validator(
         "vision_model",
         "decision_model",
+        "planner_model",
         "vision_api_base_url",
         "decision_api_base_url",
+        "planner_api_base_url",
         "mock_scenario",
         mode="before",
     )
@@ -95,9 +108,11 @@ class Settings(BaseSettings):
     def _strip_provider_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
-    @field_validator("vision_api_base_url", "decision_api_base_url")
+    @field_validator("vision_api_base_url", "decision_api_base_url", "planner_api_base_url")
     @classmethod
-    def _valid_base_url(cls, value: str) -> str:
+    def _valid_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         if value and not value.startswith(("http://", "https://")):
             raise ValueError("provider base URL must be an absolute http(s) URL")
         return value.rstrip("/")
@@ -133,6 +148,10 @@ class Settings(BaseSettings):
     @property
     def preview_dir(self) -> Path:
         return self.data_dir / self.preview_dirname
+
+    @property
+    def export_dir(self) -> Path:
+        return self.data_dir / self.export_dirname
 
 
 @lru_cache

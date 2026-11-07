@@ -14,6 +14,10 @@ Playwright 用生成的合成 JPEG 走完整条链路：上传 → 自动创建�
   验证失败提示与 `重试`，随后走 mock provider 的真实 202 → 轮询完成 → 校验六个区域、模拟标记、
   主体框叠加、`构图与遮挡`（构图平衡、遮挡）、`重新分析`（`force: true`）与更换照片后的状态重置。
   不同项目使用不同内容的分析样本，避免跨视口命中同一去重任务。2026-11-04 实测 11 passed / 5 skipped（21.8 s）。
+- `settings.spec.ts`：应用内模型设置回归，桌面与手机各跑一遍。先保存完整的 `openai` decision（本地假地址，
+  不发起真实调用）→ planner 逐字段镜像 decision → 仅提交 `planner.model` → 关闭重开确认 planner 已持久化且
+  vision/decision 未改动 → 清空 planner 模型确认回退 `decision-model` → “恢复环境变量配置”后三组均回 Mock。
+  2026-11-07 实测桌面/窄屏各 1 passed（`E2E_BROWSER_CHANNEL=msedge`，端口 8010/3010，临时数据目录已清理）。
 - `photographer-styles.spec.ts`：阶段 5 风格链路（仅桌面 `1280×800`，窄屏不跑）。校验风格库分组与“自动优化（不选风格）”、
   选择 `黑白纪实` 后的 `{mode:"style", styleId:"monochrome"}` 请求与返回配方（`saturation −100`、`styleId "documentary"`）、
   强度滑杆 `Home`/`End` 触发的 0% 与 100% 重新生成，并用 canvas 采样预览像素确认 0% 仍是彩色、100% 与接受后为灰度。

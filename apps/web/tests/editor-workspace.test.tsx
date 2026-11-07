@@ -60,6 +60,7 @@ interface MockApiOptions {
   revisionGate?: Promise<void>;
   renderError?: UploadErrorOption;
   renderErrorOnce?: UploadErrorOption;
+  deleteError?: UploadErrorOption;
 }
 
 function reportForUploadedImage() {
@@ -109,6 +110,24 @@ function mockApi(options: MockApiOptions = {}) {
         );
       }
       return jsonResponse(UPLOADED_IMAGE, 201);
+    }
+    if (
+      url.endsWith(`/api/v1/images/${UPLOADED_IMAGE.imageId}`) &&
+      init?.method === "DELETE"
+    ) {
+      if (options.deleteError) {
+        return jsonResponse(
+          {
+            error: {
+              code: options.deleteError.code,
+              message: options.deleteError.message,
+              details: {},
+            },
+          },
+          options.deleteError.status,
+        );
+      }
+      return new Response(null, { status: 204 });
     }
     if (url.endsWith("/api/v1/sessions") && init?.method === "POST") {
       if (options.sessionError) {
@@ -359,6 +378,59 @@ describe("EditorWorkspace", () => {
     );
     expect(uploadCall).toBeTruthy();
     expect((uploadCall?.[1] as RequestInit).body).toBeInstanceOf(FormData);
+  });
+
+  it("deletes the photo after confirmation and returns to the upload state", async () => {
+    const fetchMock = mockApi();
+    render(<EditorWorkspace />);
+
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "删除照片" }));
+    expect(
+      screen.getByRole("dialog", { name: "删除这张照片？" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "永久删除" }));
+
+    expect(
+      await screen.findByText(
+        "照片及其编辑会话、分析与缓存副本已从本机永久删除。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("拖入一张照片")).toBeInTheDocument();
+    expect(window.location.search).toBe("");
+    expect(
+      callCount(fetchMock, `/api/v1/images/${UPLOADED_IMAGE.imageId}`, "DELETE"),
+    ).toBe(1);
+  });
+
+  it("keeps the editor and explains a busy delete", async () => {
+    mockApi({
+      deleteError: {
+        code: "resource_busy",
+        message: "The image is in use by a running analysis or export.",
+        status: 409,
+      },
+    });
+    render(<EditorWorkspace />);
+
+    await screen.findByText("API 已连接");
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "删除照片" }));
+    await userEvent.click(screen.getByRole("button", { name: "永久删除" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "这张照片正在分析或导出，完成后再删除。",
+    );
+    expect(screen.getByText("编辑预览")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "永久删除" }),
+    ).toBeEnabled();
   });
 
   it("opens the analysis panel and renders a completed report", async () => {

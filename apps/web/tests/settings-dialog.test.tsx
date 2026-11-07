@@ -27,6 +27,13 @@ const VIEW: ProviderSettingsView = {
     hasApiKey: false,
     apiKeySource: "none",
   },
+  planner: {
+    provider: "mock",
+    model: "mock-planner",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+  },
   isMock: true,
   hasSavedOverrides: true,
 };
@@ -42,6 +49,13 @@ const RESET_VIEW: ProviderSettingsView = {
   decision: {
     provider: "mock",
     model: "mock-decision",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+  },
+  planner: {
+    provider: "mock",
+    model: "mock-planner",
     baseUrl: "",
     hasApiKey: false,
     apiKeySource: "none",
@@ -66,7 +80,7 @@ function applyPatch(
   update: ProviderSettingsUpdate,
 ): ProviderSettingsView {
   const next = structuredClone(view);
-  for (const section of ["vision", "decision"] as const) {
+  for (const section of ["vision", "decision", "planner"] as const) {
     const patch = update[section];
     if (!patch) {
       continue;
@@ -88,7 +102,12 @@ function applyPatch(
       next[section].apiKeySource = "saved";
     }
     if (next[section].provider === "mock" && !next[section].model) {
-      next[section].model = section === "vision" ? "mock-vision" : "mock-decision";
+      next[section].model =
+        section === "vision"
+          ? "mock-vision"
+          : section === "planner"
+            ? "mock-planner"
+            : "mock-decision";
     }
   }
   next.hasSavedOverrides = true;
@@ -148,6 +167,14 @@ const TEST_RESULTS: ProviderTestResponse = {
     code: "provider_auth_error",
     message: "The model provider rejected the configured credentials.",
   },
+  planner: {
+    ok: true,
+    provider: "mock",
+    model: "mock-planner",
+    latencyMs: 45,
+    code: null,
+    message: null,
+  },
 };
 
 function renderDialog(open = true) {
@@ -185,6 +212,11 @@ describe("SettingsDialog", () => {
     const decision = screen.getByRole("group", { name: "决策模型" });
     expect(within(decision).getByLabelText("Provider")).toHaveValue("mock");
     expect(within(decision).getByLabelText("模型名")).toBeDisabled();
+
+    const planner = screen.getByRole("group", { name: "规划模型（可选）" });
+    expect(within(planner).getByLabelText("Provider")).toHaveValue("mock");
+    expect(within(planner).getByLabelText("模型名")).toHaveValue("mock-planner");
+    expect(within(planner).getByText(/留空即跟随决策模型/)).toBeInTheDocument();
   });
 
   it("saves only changed fields and omits an empty apiKey", async () => {
@@ -203,6 +235,30 @@ describe("SettingsDialog", () => {
     const payload = JSON.parse(String(postCalls[0][1]?.body));
     expect(payload).toEqual({ vision: { model: "gpt-4o-mini" } });
     expect(within(vision).getByLabelText("模型名")).toHaveValue("gpt-4o-mini");
+  });
+
+  it("saves planner-only overrides without touching the decision section", async () => {
+    const fetchMock = stubApi();
+    renderDialog();
+
+    await visionGroup();
+    const planner = screen.getByRole("group", { name: "规划模型（可选）" });
+    await userEvent.selectOptions(within(planner).getByLabelText("Provider"), "openai");
+    await userEvent.type(within(planner).getByLabelText("模型名"), "planner-model");
+    await userEvent.type(within(planner).getByLabelText("Base URL"), "https://planner.test/v1");
+    await userEvent.type(within(planner).getByLabelText("API Key"), "sk-planner");
+    await userEvent.click(screen.getByRole("button", { name: "保存并应用" }));
+
+    expect(await screen.findByText(/已保存并应用/)).toBeInTheDocument();
+    const payload = JSON.parse(String(saveCalls(fetchMock)[0][1]?.body));
+    expect(payload).toEqual({
+      planner: {
+        provider: "openai",
+        model: "planner-model",
+        baseUrl: "https://planner.test/v1",
+        apiKey: "sk-planner",
+      },
+    });
   });
 
   it("submits a new api key and clears the field after saving", async () => {
@@ -242,6 +298,9 @@ describe("SettingsDialog", () => {
     expect(await screen.findByText(/视觉模型：连接正常（123 ms）/)).toBeInTheDocument();
     expect(
       screen.getByText(/决策模型：连接失败（provider_auth_error）/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/规划模型（可选）：连接正常（45 ms）/),
     ).toBeInTheDocument();
     expect(screen.getByText(/不会上传图片/)).toBeInTheDocument();
 

@@ -60,11 +60,19 @@ class OriginalImageStore:
             raise AppError(404, "image_file_missing", "The original image file is not available.")
         return path
 
-    def discard(self, storage_key: str) -> None:
+    def discard(self, storage_key: str) -> bool:
+        """Remove a stored original; ``False`` means the file is still there.
+
+        Callers report the outcome and leave a retry to the purge script rather
+        than failing a delete whose database rows are already gone.
+        """
         try:
             self._resolve_key(storage_key).unlink()
+        except FileNotFoundError:
+            return True
         except (OSError, AppError):
-            pass
+            return False
+        return True
 
     def _resolve_key(self, storage_key: str) -> Path:
         if not storage_key or Path(storage_key).is_absolute():

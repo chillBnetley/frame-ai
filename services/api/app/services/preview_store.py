@@ -124,6 +124,67 @@ class PreviewStore:
                     pass
         return destination
 
+    def purge_previews(self) -> CleanupReport:
+        """Remove every rendered preview, leaving the proxy directory alone.
+
+        Preview files are keyed by a render digest with no reverse index to the
+        source image, so deleting one image cannot target only its previews.
+        Dropping the whole preview cache is safe (it is disposable and
+        regenerated on demand) and guarantees no rendered copy of the removed
+        photo survives. Proxy files are deleted separately by the caller when
+        their source digest is no longer referenced.
+        """
+        deleted: list[str] = []
+        deleted_bytes = 0
+        skipped_symlinks = 0
+        skipped = 0
+        errors = 0
+        entries, scan_failed = self._scan(self.directory)
+        if scan_failed:
+            errors += 1
+        for entry in entries:
+            try:
+                if entry.is_symlink():
+                    skipped_symlinks += 1
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                stat = entry.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                errors += 1
+                logger.warning("preview_purge_stat_failed path=%s", entry.path)
+                continue
+            try:
+                os.unlink(entry.path)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                skipped += 1
+                logger.warning("preview_purge_unlink_failed path=%s", entry.path)
+                continue
+            deleted.append(entry.name)
+            deleted_bytes += stat.st_size
+        if deleted or skipped or errors:
+            logger.info(
+                "preview_purge deleted=%s deleted_bytes=%s skipped=%s "
+                "skipped_symlinks=%s errors=%s",
+                len(deleted),
+                deleted_bytes,
+                skipped,
+                skipped_symlinks,
+                errors,
+            )
+        return CleanupReport(
+            deleted=len(deleted),
+            skipped_symlinks=skipped_symlinks,
+            errors=errors,
+            deleted_names=tuple(sorted(deleted)),
+            deleted_bytes=deleted_bytes,
+            skipped=skipped,
+        )
+
     def cleanup(self, *, now: float | None = None) -> CleanupReport:
         """Delete idle render files, then enforce the capacity budget.
 

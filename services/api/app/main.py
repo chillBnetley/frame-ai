@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai.factory import ProviderBundle
 from app.api.errors import register_exception_handlers
-from app.api.routes import analysis, config, health, images, previews, sessions
+from app.api.routes import analysis, config, exports, health, images, previews, sessions
 from app.api.routes import photographer as photographer_routes
 from app.api.routes import settings as settings_routes
 from app.core.config import Settings, get_settings
@@ -28,6 +28,8 @@ from app.repositories.photographer_repo import (
     SqlitePhotographerPlanRepository,
 )
 from app.services.analysis_task_service import AnalysisTaskService
+from app.services.deletion_service import DeletionService
+from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
@@ -63,11 +65,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.image_service = service
         app.state.session_service = session_service
         app.state.render_service = render_service
-        app.state.export_service = ExportService(
+        export_service = ExportService(
             resolved_settings,
             service,
             session_service,
         )
+        app.state.export_service = export_service
+        export_jobs = ExportJobManager(
+            export_service,
+            directory=resolved_settings.export_dir,
+            ttl_seconds=resolved_settings.export_job_ttl_seconds,
+            queue_max=resolved_settings.export_queue_max,
+            max_workers=resolved_settings.export_max_concurrency,
+        )
+        export_jobs.ensure_ready()
+        app.state.export_jobs = export_jobs
         providers = ProviderSettingsService(resolved_settings)
         analysis_tasks = AnalysisTaskService(
             resolved_settings,
@@ -93,6 +105,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.provider_settings_service = providers
         analysis_tasks.recover()
         app.state.analysis_task_service = analysis_tasks
+        app.state.deletion_service = DeletionService(
+            resolved_settings,
+            images=service,
+            analysis=analysis_tasks,
+            exports=export_service,
+            previews=render_service.previews,
+            proxy_cache=render_service.proxy_cache,
+            export_jobs=export_jobs,
+        )
         app.state.photographer_service = photographer_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
@@ -106,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task
+            export_jobs.shutdown()
             await asyncio.to_thread(analysis_tasks.shutdown)
 
     app = FastAPI(
@@ -156,6 +178,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(images.router, prefix=API_PREFIX)
     app.include_router(analysis.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
+    app.include_router(exports.router, prefix=API_PREFIX)
     app.include_router(previews.router, prefix=API_PREFIX)
     app.include_router(photographer_routes.router, prefix=API_PREFIX)
 

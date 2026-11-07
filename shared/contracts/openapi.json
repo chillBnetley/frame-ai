@@ -317,6 +317,16 @@
               }
             }
           },
+          "409": {
+            "description": "Image is being analyzed or exported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "Upload or pixel limit exceeded",
             "content": {
@@ -409,6 +419,111 @@
           },
           "404": {
             "description": "Image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Image is being analyzed or exported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Upload or pixel limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported or invalid image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}": {
+      "delete": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Delete Image",
+        "operationId": "delete_image_api_v1_images__image_id__delete",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid or empty upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Image is being analyzed or exported",
             "content": {
               "application/json": {
                 "schema": {
@@ -980,7 +1095,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1042,7 +1157,60 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Delete Session",
+        "operationId": "delete_session_api_v1_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Session, image, or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1133,7 +1301,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1220,7 +1388,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1398,7 +1566,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1460,7 +1628,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1532,7 +1700,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1594,7 +1762,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1685,7 +1853,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1724,6 +1892,7 @@
         ],
         "summary": "Export Revision",
         "operationId": "export_revision_api_v1_sessions__session_id__export_post",
+        "deprecated": true,
         "parameters": [
           {
             "name": "session_id",
@@ -1765,7 +1934,7 @@
             }
           },
           "409": {
-            "description": "Revision conflict or no undo/redo step available",
+            "description": "Revision conflict, no undo/redo step available, or resource busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -1807,6 +1976,221 @@
         }
       }
     },
+    "/api/v1/exports": {
+      "post": {
+        "tags": [
+          "exports"
+        ],
+        "summary": "Create Export Job",
+        "operationId": "create_export_job_api_v1_exports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportJobResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Export session or revision not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid export request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Export queue is full or the service is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/{job_id}": {
+      "get": {
+        "tags": [
+          "exports"
+        ],
+        "summary": "Get Export Job",
+        "operationId": "get_export_job_api_v1_exports__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportJobResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Export job not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "exports"
+        ],
+        "summary": "Cancel Export Job",
+        "operationId": "cancel_export_job_api_v1_exports__job_id__delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Export job not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/{job_id}/result": {
+      "get": {
+        "tags": [
+          "exports"
+        ],
+        "summary": "Download Export Result",
+        "operationId": "download_export_result_api_v1_exports__job_id__result_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rendered export bytes",
+            "content": {
+              "image/jpeg": {},
+              "image/png": {}
+            }
+          },
+          "404": {
+            "description": "Export job or result file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Export is not ready, was cancelled, or failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/previews/{preview_id}": {
       "get": {
         "tags": [
@@ -1827,7 +2211,10 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "Rendered JPEG preview",
+            "content": {
+              "image/jpeg": {}
+            }
           },
           "404": {
             "description": "Preview expired or unknown",
@@ -4857,6 +5244,180 @@
         ],
         "title": "ErrorResponse"
       },
+      "ExportJobError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ExportJobError"
+      },
+      "ExportJobRequest": {
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revisionid"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "jpeg",
+              "png"
+            ],
+            "title": "Format"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          },
+          "maxEdge": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 64.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxedge"
+          },
+          "colorSpace": {
+            "type": "string",
+            "const": "sRGB",
+            "title": "Colorspace",
+            "default": "sRGB"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revisionId",
+          "format",
+          "sessionId"
+        ],
+        "title": "ExportJobRequest"
+      },
+      "ExportJobResponse": {
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "title": "Jobid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportJobError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "jobId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "ExportJobResponse"
+      },
       "ExportRequest": {
         "properties": {
           "revisionId": {
@@ -6420,6 +6981,116 @@
         ],
         "title": "PlannerMode"
       },
+      "PlannerProviderSettingsUpdate": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "mock",
+                  "openai"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "apiKey": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8192,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apikey"
+          },
+          "clearApiKey": {
+            "type": "boolean",
+            "title": "Clearapikey",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlannerProviderSettingsUpdate",
+        "description": "Optional planner overrides; omitted or empty fields follow the decision provider."
+      },
+      "PlannerProviderSettingsView": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "mock",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "baseUrl": {
+            "type": "string",
+            "title": "Baseurl"
+          },
+          "hasApiKey": {
+            "type": "boolean",
+            "title": "Hasapikey"
+          },
+          "apiKeySource": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "environment",
+              "none"
+            ],
+            "title": "Apikeysource"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "model",
+          "baseUrl",
+          "hasApiKey",
+          "apiKeySource"
+        ],
+        "title": "PlannerProviderSettingsView",
+        "description": "Effective planner configuration after per-field decision fallback."
+      },
       "Priority": {
         "type": "string",
         "enum": [
@@ -6588,6 +7259,16 @@
                 "type": "null"
               }
             ]
+          },
+          "planner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlannerProviderSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -6601,6 +7282,9 @@
           },
           "decision": {
             "$ref": "#/components/schemas/ProviderEntryView"
+          },
+          "planner": {
+            "$ref": "#/components/schemas/PlannerProviderSettingsView"
           },
           "isMock": {
             "type": "boolean",
@@ -6616,6 +7300,7 @@
         "required": [
           "vision",
           "decision",
+          "planner",
           "isMock",
           "hasSavedOverrides"
         ],
@@ -6628,13 +7313,17 @@
           },
           "decision": {
             "$ref": "#/components/schemas/ProviderTestResult"
+          },
+          "planner": {
+            "$ref": "#/components/schemas/ProviderTestResult"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "vision",
-          "decision"
+          "decision",
+          "planner"
         ],
         "title": "ProviderTestResponse"
       },

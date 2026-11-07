@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 
@@ -15,9 +16,11 @@ from app.imaging.params_map import (
     EXPORT_BYTES_PER_PIXEL_LOCAL,
     EXPORT_BYTES_PER_PIXEL_NEUTRAL,
 )
+from app.imaging.pipeline import raise_if_cancelled
 from app.imaging.pipeline import render as render_image
 from app.models.export import ExportRequest
 from app.models.recipe import EditRecipe
+from app.models.sessions import SessionState
 from app.services.export_admission import ExportAdmission
 from app.services.image_service import ImageService
 from app.services.session_service import SessionService
@@ -84,9 +87,54 @@ class ExportService:
             max_total_mb=settings.export_max_rss_mb,
             reserve_mb=settings.export_reserve_mb,
         )
+        # Delete requests need to refuse a session that is currently being
+        # rendered for export; the admission gate tracks memory, not identity.
+        # Count callers, not just membership: two concurrent exports of the
+        # same session must not have the first one cleared when the second
+        # fails and runs its ``finally`` block.
+        self._active_sessions: dict[str, int] = {}
+        self._active_lock = threading.Lock()
 
-    def export(self, session_id: str, request: ExportRequest) -> ExportResult:
+    def active_sessions(self) -> frozenset[str]:
+        with self._active_lock:
+            return frozenset(self._active_sessions)
+
+    def _mark_active(self, session_id: str) -> None:
+        with self._active_lock:
+            self._active_sessions[session_id] = self._active_sessions.get(session_id, 0) + 1
+
+    def _mark_idle(self, session_id: str) -> None:
+        with self._active_lock:
+            count = self._active_sessions.get(session_id, 0)
+            if count <= 1:
+                self._active_sessions.pop(session_id, None)
+            else:
+                self._active_sessions[session_id] = count - 1
+
+    def export(
+        self,
+        session_id: str,
+        request: ExportRequest,
+        *,
+        cancel: threading.Event | None = None,
+    ) -> ExportResult:
         state = self.sessions.get(session_id)
+        key = str(state.session_id).lower()
+        self._mark_active(key)
+        try:
+            return self._render_export(state, request, cancel=cancel)
+        finally:
+            self._mark_idle(key)
+
+    def _render_export(
+        self,
+        state: SessionState,
+        request: ExportRequest,
+        *,
+        cancel: threading.Event | None = None,
+    ) -> ExportResult:
+        raise_if_cancelled(cancel)
+        session_id = str(state.session_id)
         revision = self.sessions.get_revision(session_id, request.revision_id)
         record, path = self.images.get_original(str(state.image_id))
         adjustments = revision.recipe.adjustments
@@ -128,7 +176,9 @@ class ExportService:
             )
         started = time.perf_counter()
         try:
+            raise_if_cancelled(cancel)
             image = load_image(path, max_pixels=self.settings.max_image_pixels)
+            raise_if_cancelled(cancel)
             image_width, image_height = image.width, image.height
             if (image_width, image_height) != (record.width, record.height):
                 # Orientation-normalised decoding can differ from the stored
@@ -150,6 +200,7 @@ class ExportService:
                         max(1, round(image_height * source_scale)),
                     )
                 )
+            raise_if_cancelled(cancel)
             rendered = render_image(
                 image,
                 revision.recipe.adjustments,
@@ -161,12 +212,15 @@ class ExportService:
                 local_adjustments=revision.recipe.local_adjustments,
                 quality="export",
                 denoise_simplify_pixels=self.settings.export_denoise_simplify_pixels,
+                cancel=cancel,
             )
+            raise_if_cancelled(cancel)
             canvas = rendered.rgb
             if (canvas.shape[1], canvas.shape[0]) != (target_width, target_height):
                 # Geometry rounding can leave the canvas 1-2 px away from the
                 # requested long edge; converge instead of reporting a lie.
                 canvas = resize_exact(canvas, target_width, target_height)
+            raise_if_cancelled(cancel)
             quality = request.quality if request.quality is not None else EXPORT_JPEG_QUALITY
             try:
                 data = encode_image(canvas, image_format=request.format, quality=quality)
@@ -176,6 +230,7 @@ class ExportService:
                     "encode_failed",
                     "The rendered image could not be encoded.",
                 ) from exc
+            raise_if_cancelled(cancel)
         finally:
             self.admission.release(estimate_mb)
 

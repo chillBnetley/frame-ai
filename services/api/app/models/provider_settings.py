@@ -32,9 +32,14 @@ class ProviderEntryUpdate(ProviderSettingsModel):
         return self
 
 
+class PlannerProviderSettingsUpdate(ProviderEntryUpdate):
+    """Optional planner overrides; omitted or empty fields follow the decision provider."""
+
+
 class ProviderSettingsUpdate(ProviderSettingsModel):
     vision: ProviderEntryUpdate | None = None
     decision: ProviderEntryUpdate | None = None
+    planner: PlannerProviderSettingsUpdate | None = None
 
 
 class ProviderEntryView(ProviderSettingsModel):
@@ -45,9 +50,14 @@ class ProviderEntryView(ProviderSettingsModel):
     api_key_source: ApiKeySource
 
 
+class PlannerProviderSettingsView(ProviderEntryView):
+    """Effective planner configuration after per-field decision fallback."""
+
+
 class ProviderSettingsView(ProviderSettingsModel):
     vision: ProviderEntryView
     decision: ProviderEntryView
+    planner: PlannerProviderSettingsView
     is_mock: bool
     has_saved_overrides: bool
 
@@ -64,6 +74,7 @@ class ProviderTestResult(ProviderSettingsModel):
 class ProviderTestResponse(ProviderSettingsModel):
     vision: ProviderTestResult
     decision: ProviderTestResult
+    planner: ProviderTestResult
 
 
 class StoredProviderEntry(BaseModel):
@@ -81,10 +92,13 @@ class StoredProviderSettings(BaseModel):
     version: Literal[1] = 1
     vision: StoredProviderEntry | None = None
     decision: StoredProviderEntry | None = None
+    planner: StoredProviderEntry | None = None
 
 
 __all__ = [
     "ApiKeySource",
+    "PlannerProviderSettingsUpdate",
+    "PlannerProviderSettingsView",
     "ProviderEntryUpdate",
     "ProviderEntryView",
     "ProviderKind",

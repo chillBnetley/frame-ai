@@ -137,8 +137,7 @@ export async function apiJson<T>(
 export async function uploadImage(
   file: File,
   signal?: AbortSignal,
-): Promise<UploadedImage> {
-  const body = new FormData();
+): Promise<UploadedImage> {  const body = new FormData();
   body.append("file", file, file.name);
   const timeout = createTimeoutSignal(signal, UPLOAD_TIMEOUT_MS);
 
@@ -157,6 +156,33 @@ export async function uploadImage(
   } finally {
     timeout.cleanup();
   }
+}
+
+/**
+ * Permanently removes an image, its sessions, revisions and analysis rows.
+ * The API answers 204 both for a fresh delete and for an id it already removed.
+ */
+export async function deleteImage(
+  imageId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await apiRequest(
+    `/api/v1/images/${encodeURIComponent(imageId)}`,
+    { method: "DELETE" },
+    { signal },
+  );
+}
+
+/** Removes one editing session; the original image and its analyses stay. */
+export async function deleteSession(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await apiRequest(
+    `/api/v1/sessions/${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
+    { signal },
+  );
 }
 
 export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {

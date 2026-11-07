@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Literal
+from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -24,3 +25,28 @@ class ExportRequest(CamelModel):
         le=EXPORT_MAX_EDGE_LIMIT,
     )
     color_space: ColorSpace = "sRGB"
+
+
+ExportJobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+
+
+class ExportJobRequest(ExportRequest):
+    session_id: UUID
+
+
+class ExportJobError(CamelModel):
+    code: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExportJobResponse(CamelModel):
+    job_id: str
+    status: ExportJobStatus
+    filename: str | None = None
+    width: int | None = None
+    height: int | None = None
+    warnings: list[str] = Field(default_factory=list)
+    error: ExportJobError | None = None
+    created_at: datetime
+    updated_at: datetime

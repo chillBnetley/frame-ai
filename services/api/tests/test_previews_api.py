@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, ImageStat
 
@@ -352,6 +353,32 @@ def test_serving_a_preview_renews_its_idle_deadline(
 
     assert response.status_code == 200
     assert path.stat().st_mtime > old + 1
+
+
+def test_preview_deleted_after_resolve_returns_expired_instead_of_500(
+    client: TestClient,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    session = _session(client)
+    rendered = _render(client, session)
+    preview_id = PREVIEW_PATH.fullmatch(str(rendered["previewUrl"])).group(1)  # type: ignore[union-attr]
+    path = settings.preview_dir / f"{preview_id}.jpg"
+    assert path.is_file()
+    previews = client.app.state.render_service.previews
+    real_touch = previews.touch
+
+    def touch_then_remove(target: Path) -> None:
+        real_touch(target)
+        # Simulate a TTL/capacity cleanup winning the race after resolve().
+        target.unlink()
+
+    monkeypatch.setattr(previews, "touch", touch_then_remove)
+
+    response = client.get(str(rendered["previewUrl"]))
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "preview_expired"
 
 
 def test_preview_touch_failure_still_serves_the_preview(

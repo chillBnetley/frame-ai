@@ -22,6 +22,8 @@ function statusText(state: ExportState): string {
     }
     case "error":
       return `导出失败：${state.error?.message ?? "请稍后重试。"}`;
+    case "cancelled":
+      return "导出已取消，可以重新开始。";
     default:
       return "";
   }
@@ -69,6 +71,7 @@ export interface ExportDialogProps {
   dirty: boolean;
   disabled?: boolean;
   onExport: (format: ExportFormat, quality: number | null, maxEdge: number | null) => void;
+  onCancel: () => void;
 }
 
 const FOCUSABLE =
@@ -81,6 +84,7 @@ export function ExportDialog({
   dirty,
   disabled = false,
   onExport,
+  onCancel,
 }: ExportDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [format, setFormat] = useState<ExportFormat>("jpeg");
@@ -342,6 +346,15 @@ export function ExportDialog({
         )}
 
         <div className="mt-4 flex items-center justify-end gap-2">
+          {exporting && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="min-h-11 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 text-xs text-amber-100 transition-colors hover:bg-amber-300/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
+            >
+              取消导出
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

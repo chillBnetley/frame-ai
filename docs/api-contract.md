@@ -36,17 +36,17 @@
 | --- | --- |
 | 200 | 读取成功、更新成功、幂等重放 |
 | 201 | 新建图片、会话或 revision |
-| 202 | 分析任务已创建并进入后台队列 |
-| 204 | 删除分析任务成功，无响应体 |
+| 202 | 分析任务或导出作业已创建并进入后台队列 |
+| 204 | 删除分析任务、导出作业或图片/会话成功，无响应体 |
 | 400 | 请求体本身错误（空文件、多个 `file` 字段、缺少字段），或 Host 头不在允许列表 |
 | 403 | 写入请求的来源不在允许列表，或浏览器标记为跨站写入 |
-| 404 | 图片、会话、revision 或预览不存在 |
-| 409 ⊕ | 状态冲突：父 revision 不是活动版本、无可撤销/重做步骤、渲染已被更新请求取代 |
+| 404 | 图片、会话、revision、预览或导出作业不存在 |
+| 409 ⊕ | 状态冲突：父 revision 不是活动版本、无可撤销/重做步骤、渲染已被更新请求取代，或导出作业未就绪/已取消/已失败 |
 | 413 | 文件字节、像素数或导出预估内存超限 |
 | 415 | 无法解码、MIME 与内容不符、格式不支持、动画图 |
 | 422 | 字段校验失败（范围、两位小数、crop 越界等） |
 | 500 | 未预期错误或本地存储失败 |
-| 503 | 导出/渲染串行槽位被占用，或服务未就绪 |
+| 503 | 导出/渲染串行槽位被占用、导出队列已满，或服务未就绪 |
 
 任务书的状态码清单没有 403、409。并发/历史冲突使用 409、本机来源防护使用 403 是阶段 2 的契约扩展；具体 `code` 见 §4 与 §6。
 
@@ -234,6 +234,9 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `GET /api/v1/config` | — | `{maxUploadBytes, maxJsonBodyBytes, maxImagePixels, allowedMimeTypes}` | — |
 | `POST /api/v1/images` | multipart，唯一 `file` 字段 | 201 `{imageId, originalName, width, height, exifOrientation, mimeType, bytes}` | 400 `invalid_upload`/`empty_file`；413 `payload_too_large`/`file_too_large`；415 `invalid_image`/`mime_mismatch`/`unsupported_media_type`/`animated_not_supported`；500 `storage_error` |
 | `GET /api/v1/images/{imageId}/original` | 可选 `?download=true` | 原始字节；`inline` 或 `attachment` | 404 `image_not_found`/`image_file_missing` |
+| `DELETE /api/v1/images/{imageId}` | — | 204，无响应体；重复删除同样 204 | 404 `image_not_found`；409 `resource_busy`（分析 pending/processing） |
+
+`DELETE /images/{imageId}` 硬删除图片及其会话、revision、分析任务/结果、方案与反馈，并在提交后删除原图、无共享引用的代理与预览缓存。删除不可恢复；编辑器在删除前要求二次确认，并在成功后回到上传态。文件删除失败不回滚 204，由 `scripts/purge_orphans.py` 重试。
 
 `width/height` 是 EXIF 方向归一后的显示尺寸；`exifOrientation` 保留原始 1–8（D-07）。原图字节从上传到导出全程不变。阶段三遗留的 `POST /api/v1/images/{imageId}/analyze` 已在阶段四复审中删除（前端无引用，且与任务化 `POST /api/v1/analysis` 重复）；图像分析统一走 `/analysis` 任务接口。
 
@@ -247,6 +250,7 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | --- | --- | --- | --- |
 | `POST /api/v1/sessions` | `{imageId}` | 201 会话状态；创建 `source=initial` 的默认配方 revision | 404 `image_not_found`；422 |
 | `GET /api/v1/sessions/{sessionId}` | — | 会话状态 | 404 `session_not_found` |
+| `DELETE /api/v1/sessions/{sessionId}` | — | 204，无响应体；重复删除同样 204；保留原图 | 404 `session_not_found`；409 `resource_busy`（该会话正在导出） |
 | `GET /api/v1/sessions/{sessionId}/revisions` ⊕ | `?limit=20&cursor=3` | `{items:[{id, revisionNo, parentId, source, recipeHash, createdAt}], nextCursor}`；按 `revisionNo` 降序 | 404 `session_not_found`；422 |
 | `POST /api/v1/sessions/{sessionId}/render` | `{recipe, maxEdge?, quality?}` + 可选头 `X-Render-Seq` | 200 `{previewUrl, width, height, quality, cacheHit, warnings}`；无状态，不写数据库 | 404 `session_not_found`/`image_not_found`；409 `render_superseded`；422 `validation_error`；503 `server_busy` |
 | `POST /api/v1/sessions/{sessionId}/revisions` | `{recipe, parentRevisionId, source?}` + 头 `Idempotency-Key` | 201 新 revision 并设为活动；同 key 同内容重放 200 原 revision | 409 `revision_conflict` / `idempotency_key_reuse`；404；422 |
@@ -255,7 +259,7 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `POST /api/v1/sessions/{sessionId}/activate` ⊕ | `{revisionId}` | 会话状态；切到会话内任意 revision，不改 `head` | 404 `revision_not_found` |
 | `POST /api/v1/sessions/{sessionId}/reset` | — | 会话状态；若活动配方已是默认配方，直接返回当前状态且不新增 revision | 404 |
 | `GET /api/v1/sessions/{sessionId}/compare` | `?revisionId=&maxEdge=1600` | `{original:{previewUrl,width,height}, revision:{previewUrl,width,height}, warnings}` | 404 |
-| `POST /api/v1/sessions/{sessionId}/export` | ⊕ `{revisionId, format:"jpeg"\|"png", quality?, maxEdge?, colorSpace?}` | 文件流 + `Content-Disposition` + `X-Export-Width/Height`；必要时带 `X-Export-Warning`（逗号分隔，如 `denoise_simplified`、`local_mask_missing:<maskId>`） | 404；413 `export_too_large`；422；503 `server_busy` |
+| `POST /api/v1/sessions/{sessionId}/export`（deprecated，改用 `/exports`） | ⊕ `{revisionId, format:"jpeg"\|"png", quality?, maxEdge?, colorSpace?}` | 文件流 + `Content-Disposition` + `X-Export-Width/Height`；必要时带 `X-Export-Warning`（逗号分隔，如 `denoise_simplified`、`local_mask_missing:<maskId>`） | 404；413 `export_too_large`；422；503 `server_busy` |
 | `GET /api/v1/previews/{previewId}` ⊕ | — | `image/jpeg` | 404 `preview_expired` |
 
 #### 提交 revision 与幂等
@@ -364,6 +368,29 @@ GET /api/v1/sessions/{sessionId}/compare?revisionId=<uuid>&maxEdge=1600
 
 ### 4.5 export
 
+导出有异步作业（前端默认，阶段 2.1）与同步端点（兼容保留，deprecated）两个入口。两者共享同一渲染管线、内存准入与取消检查点。
+
+#### 4.5.1 异步作业（推荐）
+
+| 方法与路径 | 请求 | 响应 | 主要错误 |
+| --- | --- | --- | --- |
+| `POST /api/v1/exports` ⊕ | `{sessionId, revisionId, format:"jpeg"\|"png", quality?, maxEdge?, colorSpace?}` | 202 作业对象：`{jobId, status:"queued"\|"running", filename:null, width:null, height:null, warnings:[], error:null, createdAt, updatedAt}` | 404 `session_not_found`/`revision_not_found`；422 `validation_error`；503 `server_busy`（队列已满或服务关闭，带 `Retry-After: 2`） |
+| `GET /api/v1/exports/{jobId}` ⊕ | — | 作业对象；`status` 为 `queued/running/succeeded/failed/cancelled`。`succeeded` 时带 `filename/width/height/warnings`，`failed` 时带 `error:{code,message,details}` | 404 `export_not_found` |
+| `DELETE /api/v1/exports/{jobId}` ⊕ | — | 204；排队作业立即取消，运行中作业在下一个检查点停止；已结束作业幂等返回 204 | 404 `export_not_found` |
+| `GET /api/v1/exports/{jobId}/result` ⊕ | — | 文件流 + `Content-Disposition` + `X-Export-Width/Height` + 可选 `X-Export-Warning`；`Cache-Control: no-store`、`X-Content-Type-Options: nosniff` | 404 `export_not_found`/`export_result_missing`；409 `export_not_ready`/`export_cancelled`/`export_failed` |
+
+作业语义：
+
+- 提交时同步校验会话与 revision；等待中的作业（`queued`）达到 `FRAME_EXPORT_QUEUE_MAX`（默认 8）时立即返回 503 `server_busy`，不无限排队（运行中的作业不计入该上限）。通过队列后仍要走与同步端点相同的并发槽位与内存准入；准入失败时作业以 `failed` 结束，`error.code` 为 `server_busy`、`export_too_large` 等。
+- 取消是协作式的：渲染在解码前后、缩放、旋转/裁切、全局调色、局部调整、细节、编码前后与写文件前检查取消令牌。取消后释放并发槽位与内存准入；已接近完成的作业可能仍以 `succeeded` 结束，此时 DELETE 仍返回 204，以 `GET` 状态为准。
+- 结果写入 `FRAME_DATA_DIR/tmp/exports/`，先写临时文件再 `os.replace`；取消或失败的作业不保留结果文件。结果文件在**启动时**清空上次进程遗留，在 `GET`/`DELETE` 查询状态或提交新作业时**惰性清理**超过 `FRAME_EXPORT_JOB_TTL_SECONDS`（默认 3600）的已结束作业（状态与文件一并删除），并在**删除图片/会话时**同步清除。
+- 作业表只保存在进程内：服务重启后旧 `jobId` 全部返回 404。删除图片或会话时，任何 queued/running 的该图片/会话导出都会让删除在删除前返回 409 `resource_busy`；已成功的导出作业与其结果文件随图片/会话删除一并清除，之后 `GET /exports/{jobId}` 与 `GET /exports/{jobId}/result` 均返回 404。
+- 删除与提交存在一个窄窗口：作业已通过自身的会话校验、但尚未被删除前的忙碌检查看到。此时删除会把该会话登记为 retired，取消并移除匹配的 queued/running 作业；工作线程在写出结果后、置为 `succeeded` 前再次确认作业仍在表中且会话未 retired，否则删除文件并丢弃（不会重新登记）。因此删除后不会留下可下载结果，重复删除会继续清理延迟 unlink 与目录中的孤儿结果文件。
+- 结果下载在作业表锁内完成状态检查并打开文件句柄，再用流式响应返回；`Content-Length` 与既有 `Content-Disposition`、`X-Export-Width/Height`、可选 `X-Export-Warning` 保持一致。删除或 TTL 清理与下载交错时，已打开的文件仍可读完；Windows 上无法 unlink 的文件进入待删集合，由后续访问、墓碑删除或清理重试。作业不存在或文件缺失一律 404。
+- 前端轮询从 400 ms 起指数退避到 1.5 s；10 分钟仍未完成时请求取消并报 `export_timeout`。关闭对话框或卸载编辑器会中止轮询并发送 DELETE。
+
+#### 4.5.2 同步导出（deprecated）
+
 ```json
 POST /api/v1/sessions/{sessionId}/export
 {
@@ -375,7 +402,7 @@ POST /api/v1/sessions/{sessionId}/export
 }
 ```
 
-`maxEdge` 与 `colorSpace` 都可省略；省略 `maxEdge` 表示按原图长边导出。
+`maxEdge` 与 `colorSpace` 都可省略；省略 `maxEdge` 表示按原图长边导出。该端点直接渲染并返回文件流，不排队、不可取消，仅为兼容保留；新调用方应使用 `/exports`。
 
 响应：
 
@@ -393,7 +420,7 @@ POST /api/v1/sessions/{sessionId}/export
 - ⊕ `maxEdge`（64…100000 整数）指定输出的最长边；长边在该边长内保持不变，超过原图长边的请求**不放大**。边长在旋转/裁切之后的画布上测量，比例与构图与全尺寸导出一致（实测与全尺寸导出缩放到同画布后平均差 0.205、最大 1 灰阶）。前端导出对话框的自定义输入更严格：64…8192，留空表示原图尺寸。
 - ⊕ `colorSpace` 只接受字面量 `"sRGB"`；其他值（含小写 `"srgb"`）返回 422 `validation_error`。输出目标恒为 sRGB，因此该字段是显式声明而不是可选项。
 - 导出准入（⊕ 阶段四）：并发上限 `FRAME_EXPORT_MAX_CONCURRENCY`（默认 1，即串行）。超出并发数，或**已在跑的导出估算之和 + 本次估算**超过 `FRAME_EXPORT_MAX_RSS_MB` 时，立即返回 503 `server_busy` 并带 `Retry-After: 2`，不排队等待。通过静态估算后还有第二道实时门（复审整改 G4/P3-9）：用 `psutil.virtual_memory().available` 检查真实可用内存，若 `可用 − 本次估算 < FRAME_EXPORT_RESERVE_MB`（默认 256）同样返回 503 `server_busy`；该检查在静态估算之后执行，不替代它。
-- ⊕ 阶段四：导出**不支持服务端中止**。客户端断开或超时只停止前端等待，服务端会继续完成本次渲染后丢弃结果（导出不写缓存），因此期间新的导出仍可能拿到 503。
+- ⊕ 阶段四：同步端点**不支持服务端中止**。客户端断开或超时只停止前端等待，服务端会继续完成本次渲染后丢弃结果（导出不写缓存），因此期间新的导出仍可能拿到 503。需要取消请使用 §4.5.1 的异步作业端点：运行中的作业会在渲染阶段边界停止并释放槽位。
 - 解码前按**本次计划触及的像素数**与配方估算峰值内存（系数在阶段四 Task 8 按实测标定，复审整改 G4 把满配方从 240 下调到 160 B/px）：中性配方 45 B/px，其余 160 B/px；每个启用且参数非零的局部调整再加 8 B/px（一张全画布 float32 权重图约 4 B/px；实测增加局部调整对峰值的影响在 −48…+29 MB 之间，所以这 8 B/px 是余量而不是预测）；另加 150 MB 基线。
 - ⊕ **解码地板**：原图始终按整尺寸解码，所以估算不低于"原图像素 × 45 B/px + 150 MB"。带 `maxEdge` 时计划项按缩放后的源像素计算，因此下采样导出可以落入全尺寸导出被拒绝的预算；但一旦计划项掉到地板以下，再小的 `maxEdge` 也不会让估算继续下降（40 MP 原图的地板是 1863 MB）。
 - 估算超过 `FRAME_EXPORT_MAX_RSS_MB`（默认 3072）时返回 413 `export_too_large`，`details.estimatedPeakMb/limitMb/pixels/maxEdge` 给出估算、上限与本次尺寸，避免大图导出拖垮进程。默认预算下的实测边界（G4，估算／实测峰值）：40 MP 中性 1867／1635 MB 与 12 MP 满配方 1981／1478 MB **可导出**；24 MP 满配方 3812／2907 MB 与 40 MP 满配方 6254／4793 MB **返回 413**（满配方系数为 160 B/px，高于本轮实测最高的 131 B/px，仍保留约 22% 余量）。同一批图片改为 `maxEdge=2400` 后可导出，估算 1180／实测 794 MB（24 MP）与 1867／实测 1209 MB（40 MP），耗时 p95 4.3 s 与 5.0 s。
@@ -525,10 +552,10 @@ POST /api/v1/sessions/{sessionId}/export
 
 | 方法与路径 | 请求 | 响应 | 主要错误 |
 | --- | --- | --- | --- |
-| `GET /api/v1/settings/providers` | — | 脱敏配置视图，不含 API Key | 503 `provider_settings_unavailable` |
-| `POST /api/v1/settings/providers` | `{vision?, decision?}` | 保存并热替换后的脱敏配置视图 | 422 `invalid_provider_settings`；500 `provider_settings_write_failed`；503 |
-| `POST /api/v1/settings/providers/test` | `{vision?, decision?}`，用“当前配置 + 临时修改”测试 | `{vision, decision}` 两项独立结果；不持久化 | 422；503 |
-| `POST /api/v1/settings/providers/reset` | — | 删除本机覆盖文件后按环境变量重建的视图 | 500；503 |
+| `GET /api/v1/settings/providers` | — | 脱敏配置视图（`vision`/`decision`/`planner` 三组），不含 API Key | 503 `provider_settings_unavailable` |
+| `POST /api/v1/settings/providers` | `{vision?, decision?, planner?}` | 保存并热替换后的脱敏配置视图 | 422 `invalid_provider_settings`；500 `provider_settings_write_failed`；503 |
+| `POST /api/v1/settings/providers/test` | `{vision?, decision?, planner?}`，用“当前配置 + 临时修改”测试 | `{vision, decision, planner}` 三项独立结果；不持久化 | 422；503 |
+| `POST /api/v1/settings/providers/reset` | — | 删除本机覆盖文件后按环境变量重建的视图（含 planner 回退） | 500；503 |
 
 脱敏视图：
 
@@ -536,6 +563,7 @@ POST /api/v1/sessions/{sessionId}/export
 {
   "vision": {"provider": "mock", "model": "mock-vision", "baseUrl": "", "hasApiKey": false, "apiKeySource": "none"},
   "decision": {"provider": "mock", "model": "mock-decision", "baseUrl": "", "hasApiKey": false, "apiKeySource": "none"},
+  "planner": {"provider": "mock", "model": "mock-planner", "baseUrl": "", "hasApiKey": false, "apiKeySource": "none"},
   "isMock": true,
   "hasSavedOverrides": false
 }
@@ -544,9 +572,11 @@ POST /api/v1/sessions/{sessionId}/export
 - `apiKeySource ∈ {saved, environment, none}`；任何响应都不会包含 API Key 本身。
 - 保存请求可只带一个 Provider。字段缺省或 `null` 表示保持当前值；`apiKey` 为空字符串表示保持已保存密钥；`clearApiKey=true` 删除本地保存的密钥。`apiKey` 非空与 `clearApiKey=true` 同时出现返回 422 `validation_error`。
 - 选择 `openai` 时，模型名、Base URL 与 API Key 必须有值（本地保存或环境变量）；Base URL 必须是 `http(s)` 绝对地址；缺失/非法字段返回 422 `invalid_provider_settings`，`details.fields` 与请求体校验同构（对象数组 `{field, rule, limit, message}`，`rule ∈ {missing, invalid_url, invalid_characters}`），不改变已生效配置。
-- 保存成功后原子写入 `<FRAME_DATA_DIR>/provider-settings.json`（明文，尽力 `chmod 0600`），并热替换 Provider：新创建的分析任务使用新配置，已开始的任务继续使用旧 Provider。保存失败不会替换运行时配置。
+- **`planner` 逐字段回退决策 Provider**：没有保存过 planner 字段时，`planner` 视图的 `provider`、`model`、`baseUrl`、`apiKey` 分别跟随**当前生效的 decision**（含已保存的 decision 覆盖），而不是只读环境变量；`planner.apiKeySource` 因此可能显示 `saved`/`environment`/`none`，与 decision 一致。只保存 `planner.model` 时其余字段仍逐项回退；清空 planner 字段（提交空字符串）恢复为跟随 decision；显式保存 `planner.provider="mock"` 不会被 decision 的 `openai` 覆盖，此时模型名为 `mock-planner`（除非显式保存了 planner 模型名）。planner 独立配置的数值项（超时、重试、修复次数）同理优先 `FRAME_PLANNER_*`，否则跟随 `FRAME_DECISION_*`。
+- 顶层 `isMock` 仍只由 vision/decision 的 Mock 状态决定；planner 是否 Mock 以 `planner.provider` 为准（planner 独立为 `mock` 不会把整个分析链标成 Mock）。
+- 保存成功后原子写入 `<FRAME_DATA_DIR>/provider-settings.json`（明文，尽力 `chmod 0600`），并热替换 Provider：新创建的分析任务使用新配置，已开始的任务继续使用旧 Provider。保存失败不会替换运行时配置。旧版覆盖文件没有 `planner` 分组时按“未配置”读取，行为与此前复用 decision 时一致。
 - `test` 使用“当前生效配置 + 请求内临时修改”，不写入文件。真实 Provider 只发送一条纯文本 Chat Completions 提示，不发送用户图片；每项返回 `{ok, provider, model, latencyMs, code, message}`，失败码为安全的 `provider_*`/`provider_test_failed`，不返回上游响应正文。
-- `reset` 删除覆盖文件并恢复环境变量配置；没有覆盖文件时同样返回 200。
+- `reset` 删除覆盖文件并恢复环境变量配置（planner 随之回到逐字段跟随 decision）；没有覆盖文件时同样返回 200。
 
 ### 4.8 AI 摄影师（阶段 5）
 
@@ -610,6 +640,7 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | ⊕ `export.maxEdge` | 导出目标长边 64…100000；超过原图长边不放大，边长在旋转/裁切后的画布上测量 |
 | ⊕ `export.colorSpace` | 只接受字面量 `"sRGB"`，其他值 422；输出恒为 8-bit sRGB 并嵌入 ICC |
 | ⊕ 导出准入 | `FRAME_EXPORT_MAX_CONCURRENCY`（默认 1）与“在跑导出估算之和 + 本次估算”双重门；拒绝即 503 `server_busy` |
+| ⊕ 异步导出作业 | `POST/GET/DELETE /exports` 与 `GET /exports/{jobId}/result`；202 + 轮询、协作式取消、结果 TTL；删除图片/会话同步清除其已成功结果，并取消/丢弃删除窗口内晚到的作业；旧 `POST /sessions/{id}/export` 保留为 deprecated |
 | ⊕ 渲染缓存分层 | 代理磁盘缓存 + 进程内解码缓存（`FRAME_PROXY_CACHE_MB`）+ 进程内蒙版权重缓存（`FRAME_MASK_CACHE_MB`，单条上限 24 MB）；键均含 `ENGINE_VERSION`，命中与未命中输出字节一致 |
 | ⊕ Host/Origin 防护 | 本机 Host 白名单、写入请求 Origin 与 `Sec-Fetch-Site` 检查 |
 | ⊕ 请求体分档上限 | 上传走 `FRAME_MAX_UPLOAD_BYTES`（+ multipart 封装余量），其余写口走 `FRAME_MAX_JSON_BODY_BYTES`；按真实字节计数，块式请求无法绕过 |
@@ -619,7 +650,7 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | ⊕ `GET /analysis/{id}` / `GET /analysis/{id}/result` / `DELETE /analysis/{id}` | 任务状态、完整报告与删除；状态包含真实阶段与 Mock 标记 |
 | ⊕ `status/stage/error` 任务模型 | 失败任务保留供重试；只返回安全错误码与文案 |
 | ⊕ `stage3/1` 报告 | 场景/主体/区域/光线/色彩/构图/测量/问题/建议/局限；`bbox` 归一化，`mask` 为 `null` |
-| ⊕ `GET|POST /settings/providers`、`/test`、`/reset` | 应用内 Provider 配置；脱敏读取、热替换、纯文本连接测试与环境变量恢复 |
+| ⊕ `GET|POST /settings/providers`、`/test`、`/reset` | 应用内 Provider 配置（vision/decision/planner 三组）；脱敏读取、热替换、纯文本连接测试与环境变量恢复；planner 未配置时逐字段跟随 decision |
 | ⊕ `/ai/photographer/*` | 阶段 5 的 8 个端点（风格、方案、对话、点评、反馈），`schemaVersion` 为 `stage5/1` |
 | ⊕ 能力边界用 200 + `supported:false` | 越界指令不是错误码；返回的配方与请求方当前配方逐字段一致、`changes` 为空 |
 | ⊕ 确定性点评 `/critique` | 不调用语言模型，`generatedBy:"deterministic-rules"`；离开服务端前校验 `evidenceRefs` 引用闭合，越界即 500 `critique_invalid` |
@@ -647,10 +678,17 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | `nothing_to_undo` | 409 | 已到历史根节点 |
 | `nothing_to_redo` | 409 | 当前路径上没有下一步 |
 | `render_superseded` | 409 | 等待渲染期间已有更高 `X-Render-Seq` 的请求；前端静默忽略 |
+| `resource_busy` | 409 | 删除目标正在分析（`details.reasons=["analysis"]`）或导出（`details.reasons=["export"]`） |
 | `payload_too_large` | 413 | 请求体超过中间件上限：`/api/v1/images` 按 `FRAME_MAX_UPLOAD_BYTES`，其余写口按 `FRAME_MAX_JSON_BODY_BYTES` |
 | `file_too_large` | 413 | 单文件超过 `FRAME_MAX_UPLOAD_BYTES` |
 | `image_too_many_pixels` | 413 | 像素数超过 `FRAME_MAX_IMAGE_PIXELS` |
 | `export_too_large` | 413 | 导出预估峰值内存超过 `FRAME_EXPORT_MAX_RSS_MB` |
+| `export_not_found` | 404 | 导出作业不存在、ID 非法、超过 TTL 已清理或所属会话/图片已删除 |
+| `export_result_missing` | 404 | 作业状态为成功但结果文件已丢失（外部删除或清理） |
+| `export_not_ready` | 409 | 作业仍为 queued/running 时请求结果文件 |
+| `export_cancelled` | 409 | 作业已取消，无结果文件 |
+| `export_failed` | 409 | 作业失败，无结果文件；`error.details` 透传失败原因 |
+| `export_storage_error` | 500 | 导出结果文件写入或落盘失败 |
 | `analysis_input_too_large` | 413 | 分析内存 JPEG 副本超过 `FRAME_ANALYSIS_MAX_INPUT_BYTES` |
 | `invalid_analysis_options` | 400 | 分析选项全部为 `false` |
 | `analysis_not_found` | 404 | 分析任务不存在或 ID 非法 |

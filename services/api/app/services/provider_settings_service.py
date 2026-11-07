@@ -17,6 +17,7 @@ from app.core.config import Settings
 from app.core.errors import AppError, FieldIssue, field_error_details, field_names
 from app.models.provider_settings import (
     ApiKeySource,
+    PlannerProviderSettingsView,
     ProviderEntryUpdate,
     ProviderEntryView,
     ProviderKind,
@@ -32,7 +33,14 @@ logger = logging.getLogger("frame_ai.settings")
 
 SETTINGS_FILENAME = "provider-settings.json"
 TEST_TIMEOUT_SECONDS = 20.0
-_KINDS = ("vision", "decision")
+_KINDS = ("vision", "decision", "planner")
+_FALLBACK_KINDS = {"planner": "decision"}
+_MOCK_MODELS: dict[str, str] = {
+    "vision": "mock-vision",
+    "decision": "mock-decision",
+    "planner": "mock-planner",
+}
+_NUMERIC_FIELDS = ("timeout", "max_retries", "repair_attempts")
 
 BundleBuilder = Callable[..., ProviderBundle]
 ClientFactory = Callable[[], JsonHttpClient]
@@ -90,9 +98,10 @@ class ProviderSettingsService:
             if self._on_change is not None:
                 self._on_change(bundle)
             logger.info(
-                "provider_settings_applied vision=%s decision=%s saved=%s",
+                "provider_settings_applied vision=%s decision=%s planner=%s saved=%s",
                 effective.vision_provider,
                 effective.decision_provider,
+                effective.planner_provider,
                 self._has_saved(candidate),
             )
             return self._view(candidate)
@@ -176,13 +185,15 @@ class ProviderSettingsService:
                     latency_ms=latency_ms,
                 )
         logger.info(
-            "provider_test_completed vision_ok=%s decision_ok=%s",
+            "provider_test_completed vision_ok=%s decision_ok=%s planner_ok=%s",
             results["vision"].ok,
             results["decision"].ok,
+            results["planner"].ok,
         )
         return ProviderTestResponse(
             vision=results["vision"],
             decision=results["decision"],
+            planner=results["planner"],
         )
 
     def _load(self) -> StoredProviderSettings:
@@ -257,9 +268,19 @@ class ProviderSettingsService:
             updates[f"{kind}_model"] = entry.model
             updates[f"{kind}_api_base_url"] = entry.base_url
             updates[f"{kind}_api_key"] = SecretStr(entry.api_key)
+            for attribute in _NUMERIC_FIELDS:
+                value = getattr(self._base, f"{kind}_{attribute}")
+                if value is None and kind in _FALLBACK_KINDS:
+                    value = getattr(self._base, f"{_FALLBACK_KINDS[kind]}_{attribute}")
+                updates[f"{kind}_{attribute}"] = value
         return self._base.model_copy(update=updates)
 
     def _resolve(self, kind: str, stored: StoredProviderSettings) -> _ResolvedEntry:
+        if kind == "planner":
+            return self._resolve_planner(stored)
+        return self._resolve_kind(kind, stored)
+
+    def _resolve_kind(self, kind: str, stored: StoredProviderSettings) -> _ResolvedEntry:
         saved = getattr(stored, kind)
         provider = (
             saved.provider
@@ -268,7 +289,7 @@ class ProviderSettingsService:
         )
         model = _saved_or_base(saved, "model", kind, self._base)
         base_url = _saved_or_base(saved, "base_url", kind, self._base)
-        environment_key = getattr(self._base, f"{kind}_api_key").get_secret_value()
+        environment_key = _base_api_key(kind, self._base)
         if saved is not None and saved.api_key:
             api_key = saved.api_key
             source: ApiKeySource = "saved"
@@ -279,7 +300,44 @@ class ProviderSettingsService:
             api_key = ""
             source = "none"
         if provider == "mock" and not model:
-            model = "mock-vision" if kind == "vision" else "mock-decision"
+            model = _MOCK_MODELS[kind]
+        return _ResolvedEntry(
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            api_key_source=source,
+        )
+
+    def _resolve_planner(self, stored: StoredProviderSettings) -> _ResolvedEntry:
+        decision = self._resolve_kind("decision", stored)
+        decision_model = _saved_or_base(stored.decision, "model", "decision", self._base)
+        saved = stored.planner
+        provider = (
+            saved.provider
+            if saved and saved.provider
+            else (self._base.planner_provider or decision.provider)
+        )
+        model = (
+            saved.model if saved and saved.model else (self._base.planner_model or decision_model)
+        )
+        base_url = (
+            saved.base_url
+            if saved and saved.base_url
+            else (self._base.planner_api_base_url or decision.base_url)
+        )
+        planner_key = _secret_value(self._base.planner_api_key)
+        if saved is not None and saved.api_key:
+            api_key = saved.api_key
+            source: ApiKeySource = "saved"
+        elif planner_key:
+            api_key = planner_key
+            source = "environment"
+        else:
+            api_key = decision.api_key
+            source = decision.api_key_source
+        if provider == "mock":
+            model = saved.model if saved is not None and saved.model else _MOCK_MODELS["planner"]
         return _ResolvedEntry(
             provider=provider,
             model=model,
@@ -333,6 +391,7 @@ class ProviderSettingsService:
             effective,
             vision_client=client,
             decision_client=client,
+            planner_client=client,
         )
 
     def _build_bundle_or_error(self, effective: Settings) -> ProviderBundle:
@@ -356,17 +415,27 @@ class ProviderSettingsService:
                 has_api_key=bool(entry.api_key),
                 api_key_source=entry.api_key_source,
             )
+        planner_entry = entries["planner"]
         is_mock = self._bundle.is_mock
         return ProviderSettingsView(
             vision=entries["vision"],
             decision=entries["decision"],
+            planner=PlannerProviderSettingsView(
+                provider=planner_entry.provider,
+                model=planner_entry.model,
+                base_url=planner_entry.base_url,
+                has_api_key=planner_entry.has_api_key,
+                api_key_source=planner_entry.api_key_source,
+            ),
             is_mock=is_mock,
             has_saved_overrides=self._has_saved(stored),
         )
 
     @staticmethod
     def _has_saved(stored: StoredProviderSettings) -> bool:
-        return stored.vision is not None or stored.decision is not None
+        return (
+            stored.vision is not None or stored.decision is not None or stored.planner is not None
+        )
 
 
 def _apply_entry_patch(
@@ -404,14 +473,11 @@ def _saved_or_base(
 ) -> str:
     if saved is not None:
         value = getattr(saved, attribute)
-        if value is not None:
+        if value:
             return str(value)
-    return str(
-        getattr(
-            base,
-            f"{kind}_{'api_base_url' if attribute == 'base_url' else attribute}",
-        )
-    )
+    attribute_name = "api_base_url" if attribute == "base_url" else attribute
+    value = getattr(base, f"{kind}_{attribute_name}")
+    return "" if value is None else str(value)
 
 
 def _base_value(
@@ -420,6 +486,14 @@ def _base_value(
     base: Settings,
 ) -> ProviderKind:
     return cast(ProviderKind, getattr(base, f"{kind}_{attribute}"))
+
+
+def _base_api_key(kind: str, base: Settings) -> str:
+    return _secret_value(getattr(base, f"{kind}_api_key"))
+
+
+def _secret_value(secret: SecretStr | None) -> str:
+    return secret.get_secret_value() if secret is not None else ""
 
 
 def _restrict_permissions(path: Path) -> None:

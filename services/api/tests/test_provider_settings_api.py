@@ -8,6 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.ai.errors import ProviderConfigurationError
+from app.ai.providers.mock import MockPlannerProvider
+from app.ai.providers.openai_compatible import OpenAICompatiblePlannerProvider
 from app.ai.transport import HttpResponse
 from app.core.config import Settings
 from app.main import create_app
@@ -26,6 +28,12 @@ _OPENAI_DECISION = {
     "model": "decision-model",
     "baseUrl": "https://decision.example.test/v1",
     "apiKey": "decision-secret-key",
+}
+_OPENAI_PLANNER = {
+    "provider": "openai",
+    "model": "planner-model",
+    "baseUrl": "https://planner.example.test/v1",
+    "apiKey": "planner-secret-key",
 }
 
 
@@ -92,6 +100,13 @@ def test_get_reports_mock_defaults_without_exposing_keys(client: TestClient):
             "hasApiKey": False,
             "apiKeySource": "none",
         },
+        "planner": {
+            "provider": "mock",
+            "model": "mock-planner",
+            "baseUrl": "",
+            "hasApiKey": False,
+            "apiKeySource": "none",
+        },
         "isMock": True,
         "hasSavedOverrides": False,
     }
@@ -119,6 +134,13 @@ def test_saving_openai_settings_masks_and_persists_keys(
         "apiKeySource": "saved",
     }
     assert body["decision"]["provider"] == "openai"
+    assert body["planner"] == {
+        "provider": "openai",
+        "model": "decision-model",
+        "baseUrl": "https://decision.example.test/v1",
+        "hasApiKey": True,
+        "apiKeySource": "saved",
+    }
     assert body["isMock"] is False
     assert body["hasSavedOverrides"] is True
     assert "vision-secret-key" not in response.text
@@ -127,6 +149,7 @@ def test_saving_openai_settings_masks_and_persists_keys(
     saved = json.loads(_saved_path(settings).read_text(encoding="utf-8"))
     assert saved["vision"]["api_key"] == "vision-secret-key"
     assert saved["decision"]["api_key"] == "decision-secret-key"
+    assert "planner" not in saved
 
     settings_service = client.app.state.provider_settings_service
     assert task_service.orchestrator is not orchestrator_before
@@ -161,7 +184,184 @@ def test_saved_settings_are_loaded_on_startup(settings: Settings):
     assert body["vision"]["hasApiKey"] is True
     assert body["vision"]["apiKeySource"] == "saved"
     assert body["decision"]["provider"] == "mock"
+    assert body["planner"]["provider"] == "mock"
+    assert body["planner"]["model"] == "mock-planner"
     assert body["isMock"] is True
+
+
+def test_saved_settings_without_a_planner_group_follow_decision(
+    settings: Settings,
+):
+    _write_saved(
+        settings,
+        {
+            "version": 1,
+            "vision": None,
+            "decision": {
+                "provider": "openai",
+                "model": "decision-model",
+                "base_url": "https://decision.example.test/v1",
+                "api_key": "decision-secret-key",
+            },
+        },
+    )
+
+    with TestClient(create_app(settings)) as client:
+        body = client.get(PREFIX).json()
+
+    assert body["planner"] == {
+        "provider": "openai",
+        "model": "decision-model",
+        "baseUrl": "https://decision.example.test/v1",
+        "hasApiKey": True,
+        "apiKeySource": "saved",
+    }
+    assert body["hasSavedOverrides"] is True
+
+
+def test_planner_model_override_keeps_the_other_decision_fields(
+    client: TestClient,
+    settings: Settings,
+):
+    saved = client.post(PREFIX, json={"decision": _OPENAI_DECISION})
+    assert saved.status_code == 200, saved.text
+
+    response = client.post(PREFIX, json={"planner": {"model": "planner-model"}})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["planner"] == {
+        "provider": "openai",
+        "model": "planner-model",
+        "baseUrl": "https://decision.example.test/v1",
+        "hasApiKey": True,
+        "apiKeySource": "saved",
+    }
+    stored = json.loads(_saved_path(settings).read_text(encoding="utf-8"))
+    assert stored["planner"] == {"model": "planner-model"}
+
+    planner = client.app.state.photographer_service.planner
+    assert isinstance(planner, OpenAICompatiblePlannerProvider)
+    assert planner.model == "planner-model"
+
+
+def test_explicit_planner_mock_is_not_replaced_by_the_decision_provider(
+    client: TestClient,
+):
+    response = client.post(
+        PREFIX,
+        json={"decision": _OPENAI_DECISION, "planner": {"provider": "mock"}},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["decision"]["provider"] == "openai"
+    assert body["planner"] == {
+        "provider": "mock",
+        "model": "mock-planner",
+        "baseUrl": "https://decision.example.test/v1",
+        "hasApiKey": True,
+        "apiKeySource": "saved",
+    }
+    planner = client.app.state.photographer_service.planner
+    assert isinstance(planner, MockPlannerProvider)
+
+
+def test_empty_planner_strings_fall_back_to_the_saved_decision_fields(
+    client: TestClient,
+    settings: Settings,
+):
+    saved = client.post(PREFIX, json={"decision": _OPENAI_DECISION})
+    assert saved.status_code == 200, saved.text
+
+    response = client.post(
+        PREFIX,
+        json={"planner": {"model": "", "baseUrl": ""}},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["planner"]["model"] == "decision-model"
+    assert body["planner"]["baseUrl"] == "https://decision.example.test/v1"
+    stored = json.loads(_saved_path(settings).read_text(encoding="utf-8"))
+    assert stored["planner"] == {"model": "", "base_url": ""}
+
+
+def test_reset_removes_the_planner_group(
+    client: TestClient,
+    settings: Settings,
+):
+    saved = client.post(
+        PREFIX,
+        json={"decision": _OPENAI_DECISION, "planner": _OPENAI_PLANNER},
+    )
+    assert saved.status_code == 200, saved.text
+
+    response = client.post(f"{PREFIX}/reset")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["planner"] == {
+        "provider": "mock",
+        "model": "mock-planner",
+        "baseUrl": "",
+        "hasApiKey": False,
+        "apiKeySource": "none",
+    }
+    assert body["hasSavedOverrides"] is False
+    assert not _saved_path(settings).exists()
+    assert isinstance(client.app.state.photographer_service.planner, MockPlannerProvider)
+
+
+def test_incomplete_planner_openai_settings_report_planner_fields(client: TestClient):
+    response = client.post(
+        PREFIX,
+        json={
+            "planner": {
+                "provider": "openai",
+                "model": "planner-model",
+                "baseUrl": "https://planner.example.test/v1",
+            }
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    fields = response.json()["error"]["details"]["fields"]
+    assert [entry["field"] for entry in fields] == ["planner.apiKey"]
+    assert fields[0]["rule"] == "missing"
+
+
+def test_test_endpoint_checks_an_independent_planner_provider(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls: list[dict[str, Any]] = []
+
+    def fake_post(
+        self: Any,
+        url: str,
+        body: bytes,
+        headers: dict[str, str],
+        timeout: float,
+    ) -> HttpResponse:
+        calls.append({"url": url, "headers": dict(headers)})
+        payload = {"choices": [{"message": {"content": '{"ok": true}'}}]}
+        return HttpResponse(status=200, body=json.dumps(payload).encode("utf-8"))
+
+    monkeypatch.setattr("app.ai.transport.UrllibJsonTransport.post", fake_post)
+
+    response = client.post(f"{PREFIX}/test", json={"planner": _OPENAI_PLANNER})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["vision"]["provider"] == "mock"
+    assert body["decision"]["provider"] == "mock"
+    assert body["planner"]["provider"] == "openai"
+    assert body["planner"]["model"] == "planner-model"
+    assert body["planner"]["ok"] is True
+    assert len(calls) == 1
+    assert calls[0]["url"].startswith("https://planner.example.test/v1")
+    assert calls[0]["headers"]["Authorization"] == "Bearer planner-secret-key"
 
 
 def test_api_key_is_preserved_when_omitted_and_removed_with_clear(
@@ -222,8 +422,8 @@ def test_invalid_settings_return_422_and_keep_previous_config(
     missing_key = client.post(PREFIX, json={"decision": {"clearApiKey": True}})
     assert missing_key.status_code == 422, missing_key.text
     missing = missing_key.json()["error"]["details"]["fields"]
-    assert [entry["field"] for entry in missing] == ["decision.apiKey"]
-    assert missing[0]["rule"] == "missing"
+    assert [entry["field"] for entry in missing] == ["decision.apiKey", "planner.apiKey"]
+    assert all(entry["rule"] == "missing" for entry in missing)
     assert _saved_path(settings).read_text(encoding="utf-8") == before
 
     current = client.get(PREFIX).json()
@@ -290,6 +490,14 @@ def test_test_endpoint_reports_mock_providers_without_network(client: TestClient
             "code": None,
             "message": None,
         },
+        "planner": {
+            "ok": True,
+            "provider": "mock",
+            "model": "mock-planner",
+            "latencyMs": 0,
+            "code": None,
+            "message": None,
+        },
     }
 
 
@@ -331,11 +539,14 @@ def test_test_endpoint_sends_text_only_requests_and_reports_success(
     body = response.json()
     assert body["vision"]["ok"] is True
     assert body["decision"]["ok"] is True
+    assert body["planner"]["ok"] is True
     assert body["vision"]["provider"] == "openai"
     assert body["vision"]["model"] == "vision-model"
     assert body["vision"]["latencyMs"] >= 0
+    assert body["planner"]["provider"] == "openai"
+    assert body["planner"]["model"] == "decision-model"
 
-    assert len(calls) == 2
+    assert len(calls) == 3
     for call in calls:
         assert call["url"].endswith("/chat/completions")
         assert call["headers"]["Authorization"].startswith("Bearer ")
@@ -376,6 +587,7 @@ def test_test_endpoint_reports_provider_failures(
     body = response.json()
     assert body["vision"]["ok"] is False
     assert body["decision"]["ok"] is False
+    assert body["planner"]["ok"] is False
     assert "auth" in body["vision"]["code"]
     assert body["vision"]["message"]
     assert "secret-key" not in response.text

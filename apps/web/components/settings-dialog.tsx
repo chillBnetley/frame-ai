@@ -23,7 +23,9 @@ import type {
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-type ProviderSection = "vision" | "decision";
+const SECTIONS = ["vision", "decision", "planner"] as const;
+
+type ProviderSection = (typeof SECTIONS)[number];
 
 interface EntryForm {
   provider: ProviderKind;
@@ -43,6 +45,7 @@ interface Feedback {
 const SECTION_LABELS: Record<ProviderSection, string> = {
   vision: "视觉模型",
   decision: "决策模型",
+  planner: "规划模型（可选）",
 };
 
 const KEY_SOURCE_LABELS: Record<ApiKeySource, string> = {
@@ -59,12 +62,12 @@ function toForm(view: ProviderSettingsView): FormState {
     apiKey: "",
     clearApiKey: false,
   });
-  return { vision: entry("vision"), decision: entry("decision") };
+  return { vision: entry("vision"), decision: entry("decision"), planner: entry("planner") };
 }
 
 function toUpdate(form: FormState, view: ProviderSettingsView): ProviderSettingsUpdate {
   const update: ProviderSettingsUpdate = {};
-  for (const section of ["vision", "decision"] as const) {
+  for (const section of SECTIONS) {
     const entry = form[section];
     const current = view[section];
     const patch: ProviderEntryUpdate = {};
@@ -364,7 +367,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         {form && view && (
           <>
             <div className="mt-4 grid gap-3">
-              {(["vision", "decision"] as const).map((section) => {
+              {SECTIONS.map((section) => {
                 const entry = form[section];
                 const current = view[section];
                 const isMock = entry.provider === "mock";
@@ -375,6 +378,11 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                     className="rounded-xl border border-white/10 bg-white/[0.02] p-3"
                   >
                     <legend className="px-1 text-xs text-white/60">{label}</legend>
+                    {section === "planner" && (
+                      <p className="mt-1 text-[10px] text-white/35">
+                        留空即跟随决策模型；只有填写的字段会覆盖决策模型。
+                      </p>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-[11px] text-white/55" htmlFor={`${section}-provider`}>
                         Provider
@@ -497,7 +505,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 aria-live="polite"
                 className="mt-3 grid gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
               >
-                {(["vision", "decision"] as const).map((section) => {
+                {SECTIONS.map((section) => {
                   const result = testResults[section];
                   return (
                     <p

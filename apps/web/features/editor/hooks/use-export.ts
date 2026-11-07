@@ -1,13 +1,21 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEditorDispatch, useEditorState } from "@/features/editor/state/editor-context";
-import { exportSession } from "@/lib/api/sessions";
+import { ApiClientError } from "@/lib/api/client";
+import {
+  cancelExportJob,
+  createExportJob,
+  downloadExportResult,
+  exportJobError,
+  getExportJob,
+  type ExportJob,
+} from "@/lib/api/sessions";
 import { describeEditorError, type EditorError } from "@/lib/error-messages";
 import type { ExportFormat } from "@/types/session";
 
-export type ExportStatus = "idle" | "exporting" | "success" | "error";
+export type ExportStatus = "idle" | "exporting" | "success" | "error" | "cancelled";
 
 export interface ExportState {
   status: ExportStatus;
@@ -29,6 +37,7 @@ export interface ExportImageOptions {
 export interface UseExportResult {
   state: ExportState;
   exportImage: (options: ExportImageOptions) => Promise<boolean>;
+  cancel: () => Promise<void>;
   reset: () => void;
 }
 
@@ -41,6 +50,52 @@ const INITIAL_STATE: ExportState = {
   bytes: null,
   warnings: [],
 };
+
+const JOB_POLL_INITIAL_MS = 400;
+const JOB_POLL_MAX_MS = 1_500;
+const JOB_TIMEOUT_MS = 10 * 60_000;
+
+function abortError(): DOMException {
+  return new DOMException("Export polling aborted", "AbortError");
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+    const timer = globalThis.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      globalThis.clearTimeout(timer);
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function waitForJob(jobId: string, signal: AbortSignal): Promise<ExportJob> {
+  const deadline = Date.now() + JOB_TIMEOUT_MS;
+  let delay = JOB_POLL_INITIAL_MS;
+  for (;;) {
+    const job = await getExportJob(jobId, signal);
+    if (job.status !== "queued" && job.status !== "running") {
+      return job;
+    }
+    if (Date.now() >= deadline) {
+      await cancelExportJob(jobId).catch(() => undefined);
+      throw new ApiClientError(
+        "export_timeout",
+        "导出作业超时，已请求取消，请稍后重试。",
+      );
+    }
+    await sleep(delay, signal);
+    delay = Math.min(Math.round(delay * 1.4), JOB_POLL_MAX_MS);
+  }
+}
 
 function triggerDownload(blob: Blob, filename: string): void {
   const objectUrl = URL.createObjectURL(blob);
@@ -63,6 +118,37 @@ export function useExport(): UseExportResult {
   const dispatch = useEditorDispatch();
   const [exportState, setExportState] = useState<ExportState>(INITIAL_STATE);
   const exportingRef = useRef(false);
+  const jobRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const markCancelled = useCallback(() => {
+    setExportState((previous) =>
+      previous.status === "exporting"
+        ? { ...previous, status: "cancelled", error: null }
+        : previous,
+    );
+  }, []);
+
+  const cancel = useCallback(async () => {
+    const jobId = jobRef.current;
+    abortRef.current?.abort();
+    if (jobId !== null) {
+      // The job may have finished between the click and this request; a
+      // completed job is still a valid 204 no-op, not an error.
+      await cancelExportJob(jobId).catch(() => undefined);
+    }
+    markCancelled();
+  }, [markCancelled]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      const jobId = jobRef.current;
+      if (jobId !== null) {
+        void cancelExportJob(jobId).catch(() => undefined);
+      }
+    };
+  }, []);
 
   const exportImage = useCallback(
     async (options: ExportImageOptions): Promise<boolean> => {
@@ -81,9 +167,25 @@ export function useExport(): UseExportResult {
         bytes: null,
         warnings: [],
       });
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       try {
-        const result = await exportSession(sessionId, options);
+        const created = await createExportJob(sessionId, options, controller.signal);
+        jobRef.current = created.jobId;
+        const finished = await waitForJob(created.jobId, controller.signal);
+        if (finished.status === "cancelled") {
+          markCancelled();
+          return false;
+        }
+        if (finished.status !== "succeeded") {
+          throw exportJobError(finished);
+        }
+        const result = await downloadExportResult(
+          created.jobId,
+          options.format,
+          controller.signal,
+        );
         triggerDownload(result.blob, result.filename);
         setExportState({
           status: "success",
@@ -96,6 +198,10 @@ export function useExport(): UseExportResult {
         });
         return true;
       } catch (error) {
+        if (controller.signal.aborted) {
+          markCancelled();
+          return false;
+        }
         setExportState({
           status: "error",
           error: describeEditorError(error),
@@ -107,14 +213,18 @@ export function useExport(): UseExportResult {
         });
         return false;
       } finally {
+        jobRef.current = null;
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
         exportingRef.current = false;
         dispatch({ type: "export-finished" });
       }
     },
-    [dispatch, sessionId],
+    [dispatch, markCancelled, sessionId],
   );
 
   const reset = useCallback(() => setExportState(INITIAL_STATE), []);
 
-  return { state: exportState, exportImage, reset };
+  return { state: exportState, exportImage, cancel, reset };
 }

@@ -179,12 +179,19 @@ def test_settings_mask_secrets_in_repr_and_dump():
     [
         {"vision_provider": "bogus"},
         {"decision_provider": "bogus"},
+        {"planner_provider": "bogus"},
         {"vision_api_base_url": "ftp://example.test"},
+        {"planner_api_base_url": "ftp://example.test"},
         {"vision_timeout": 0},
         {"vision_max_retries": -1},
         {"vision_repair_attempts": 4},
         {"decision_timeout": 601},
         {"decision_max_retries": 11},
+        {"planner_timeout": 0},
+        {"planner_timeout": 601},
+        {"planner_max_retries": -1},
+        {"planner_max_retries": 11},
+        {"planner_repair_attempts": 4},
         {"analysis_max_edge": 511},
         {"analysis_max_edge": 2049},
     ],
@@ -224,6 +231,111 @@ def test_openai_planner_reports_each_missing_decision_setting():
     message = str(error.value)
     assert message.index("FRAME_DECISION_API_KEY") < message.index("FRAME_DECISION_MODEL")
     assert message.index("FRAME_DECISION_MODEL") < message.index("FRAME_DECISION_API_BASE_URL")
+
+
+def test_planner_falls_back_to_decision_field_by_field():
+    settings = make_settings(
+        decision_provider="openai",
+        decision_api_key="sk-decision-secret",
+        decision_model="decision-model",
+        decision_api_base_url="https://decision.test/v1",
+        decision_timeout=30.0,
+        decision_max_retries=4,
+        decision_repair_attempts=2,
+        planner_model="planner-model",
+    )
+
+    planner = build_planner_provider(settings)
+
+    assert isinstance(planner, OpenAICompatiblePlannerProvider)
+    assert planner.model == "planner-model"
+    assert planner._base_url == "https://decision.test/v1"  # type: ignore[attr-defined]
+    assert planner._api_key == "sk-decision-secret"  # type: ignore[attr-defined]
+    assert planner._timeout == 30.0  # type: ignore[attr-defined]
+    assert planner._max_retries == 4  # type: ignore[attr-defined]
+    assert planner._repair_attempts == 2  # type: ignore[attr-defined]
+
+
+def test_planner_uses_every_explicit_override():
+    settings = make_settings(
+        decision_provider="openai",
+        decision_api_key="sk-decision-secret",
+        decision_model="decision-model",
+        decision_api_base_url="https://decision.test/v1",
+        planner_provider="openai",
+        planner_api_key="sk-planner-secret",
+        planner_model="planner-model",
+        planner_api_base_url="https://planner.test/v1/",
+        planner_timeout=12.5,
+        planner_max_retries=0,
+        planner_repair_attempts=3,
+    )
+
+    planner = build_planner_provider(settings)
+
+    assert isinstance(planner, OpenAICompatiblePlannerProvider)
+    assert planner.model == "planner-model"
+    assert planner._base_url == "https://planner.test/v1"  # type: ignore[attr-defined]
+    assert planner._api_key == "sk-planner-secret"  # type: ignore[attr-defined]
+    assert planner._timeout == 12.5  # type: ignore[attr-defined]
+    assert planner._max_retries == 0  # type: ignore[attr-defined]
+    assert planner._repair_attempts == 3  # type: ignore[attr-defined]
+    assert "sk-planner-secret" not in repr(planner)
+
+
+def test_explicit_planner_mock_overrides_the_decision_provider():
+    settings = make_settings(
+        decision_provider="openai",
+        decision_api_key="sk-decision-secret",
+        decision_model="decision-model",
+        decision_api_base_url="https://decision.test/v1",
+        planner_provider="mock",
+    )
+
+    assert isinstance(build_planner_provider(settings), MockPlannerProvider)
+
+
+def test_explicit_planner_openai_does_not_follow_a_mock_decision_provider():
+    settings = make_settings(
+        planner_provider="openai",
+        planner_api_key="sk-planner-secret",
+        planner_model="planner-model",
+        planner_api_base_url="https://planner.test/v1",
+    )
+
+    planner = build_planner_provider(settings)
+
+    assert isinstance(planner, OpenAICompatiblePlannerProvider)
+    assert planner.model == "planner-model"
+
+
+def test_openai_planner_reports_each_missing_planner_setting():
+    with pytest.raises(ProviderConfigurationError) as error:
+        build_planner_provider(make_settings(planner_provider="openai"))
+
+    message = str(error.value)
+    assert message.index("FRAME_PLANNER_API_KEY") < message.index("FRAME_PLANNER_MODEL")
+    assert message.index("FRAME_PLANNER_MODEL") < message.index("FRAME_PLANNER_API_BASE_URL")
+    assert "FRAME_DECISION" not in message
+
+
+def test_empty_planner_strings_fall_back_to_decision_values():
+    settings = make_settings(
+        decision_provider="openai",
+        decision_api_key="sk-decision-secret",
+        decision_model="decision-model",
+        decision_api_base_url="https://decision.test/v1",
+        planner_api_key="",
+        planner_model="",
+        planner_api_base_url="",
+    )
+
+    planner = build_planner_provider(settings)
+
+    assert isinstance(planner, OpenAICompatiblePlannerProvider)
+    assert planner.model == "decision-model"
+    assert planner._base_url == "https://decision.test/v1"  # type: ignore[attr-defined]
+    assert planner._api_key == "sk-decision-secret"  # type: ignore[attr-defined]
 
 
 def test_bundle_constructs_a_matching_planner():

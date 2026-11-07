@@ -5,7 +5,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Header, Query, Response
 
-from app.api.deps import get_export_service, get_render_service, get_session_service
+from app.api.deps import (
+    get_deletion_service,
+    get_export_service,
+    get_render_service,
+    get_session_service,
+)
 from app.models.export import ExportRequest
 from app.models.render import CompareResponse, RenderRequest, RenderResponse
 from app.models.schemas import ErrorResponse
@@ -17,6 +22,7 @@ from app.models.sessions import (
     SessionState,
     UndoRequest,
 )
+from app.services.deletion_service import DeletionService
 from app.services.export_service import ExportService
 from app.services.render_service import RenderService
 from app.services.session_service import SessionService
@@ -25,7 +31,7 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     code: {"model": ErrorResponse, "description": description}
     for code, description in {
         404: "Session, image, or revision not found",
-        409: "Revision conflict or no undo/redo step available",
+        409: "Revision conflict, no undo/redo step available, or resource busy",
         422: "Invalid request payload",
     }.items()
 }
@@ -55,6 +61,15 @@ def get_session(
     service: Annotated[SessionService, Depends(get_session_service)],
 ) -> SessionState:
     return service.get(session_id)
+
+
+@router.delete("/{session_id}", status_code=204)
+def delete_session(
+    session_id: str,
+    service: Annotated[DeletionService, Depends(get_deletion_service)],
+) -> Response:
+    service.delete_session(session_id)
+    return Response(status_code=204)
 
 
 @router.get("/{session_id}/revisions", response_model=RevisionListResponse)
@@ -160,6 +175,7 @@ def compare_revision(
 @router.post(
     "/{session_id}/export",
     responses=_EXPORT_ERROR_RESPONSES,
+    deprecated=True,
 )
 def export_revision(
     session_id: str,

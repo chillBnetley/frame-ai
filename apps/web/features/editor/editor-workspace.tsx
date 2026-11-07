@@ -16,6 +16,7 @@ import { ColorGradingPanel } from "@/features/editor/components/color-grading-pa
 import { CompareView } from "@/features/editor/components/compare-view";
 import { CropOverlay } from "@/features/editor/components/crop-overlay";
 import { CurveEditor } from "@/features/editor/components/curve-editor";
+import { DeletePhotoDialog } from "@/features/editor/components/delete-photo-dialog";
 import { ExportDialog } from "@/features/editor/components/export-dialog";
 import { HslPanel } from "@/features/editor/components/hsl-panel";
 import { HistoryBar } from "@/features/editor/components/history-bar";
@@ -53,6 +54,7 @@ import {
   useEditorState,
 } from "@/features/editor/state/editor-context";
 import {
+  deleteImage,
   fetchConfig,
   fetchHealth,
   originalImageUrl,
@@ -184,6 +186,7 @@ interface EditorStageProps {
   uploading: boolean;
   onFileSelected: (file: File) => void;
   onStartOver: () => void;
+  onPhotoDeleted: () => void;
 }
 
 function EditorStage({
@@ -191,6 +194,7 @@ function EditorStage({
   uploading,
   onFileSelected,
   onStartOver,
+  onPhotoDeleted,
 }: EditorStageProps) {
   const state = useEditorState();
   const dispatch = useEditorDispatch();
@@ -217,6 +221,9 @@ function EditorStage({
   const cropBaseRotationRef = useRef<number | null>(null);
   const [cropBefore, setCropBefore] = useState<Crop | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [commitNonce, setCommitNonce] = useState(0);
   const commitNonceRef = useRef(0);
   const commitInFlightRef = useRef(false);
@@ -408,6 +415,35 @@ function EditorStage({
     [exporter, state.activeRevisionId],
   );
 
+  const handleCloseExport = useCallback(() => {
+    if (exporter.state.status === "exporting") {
+      void exporter.cancel();
+    }
+    setExportOpen(false);
+  }, [exporter, setExportOpen]);
+
+  const handleOpenDelete = useCallback(() => {
+    setDeleteError(null);
+    setDeleteOpen(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (deleting || state.imageId === null) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteImage(state.imageId);
+      setDeleteOpen(false);
+      onPhotoDeleted();
+    } catch (error) {
+      setDeleteError(describeEditorError(error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleting, onPhotoDeleted, state.imageId]);
+
   if (state.sessionId === null) {
     return null;
   }
@@ -594,6 +630,15 @@ function EditorStage({
               className={toolButtonBase}
             >
               重新开始
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenDelete}
+              disabled={uploading || saving || deleting || state.imageId === null}
+              title="永久删除原图、会话与本机派生数据"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-red-300/25 bg-red-300/[0.06] px-3 text-xs text-red-100 transition-colors hover:bg-red-300/[0.12] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              删除照片
             </button>
           </div>
 
@@ -958,11 +1003,24 @@ function EditorStage({
 
       <ExportDialog
         open={exportOpen}
-        onClose={() => setExportOpen(false)}
+        onClose={handleCloseExport}
         state={exporter.state}
         dirty={dirty}
         disabled={!canExport}
         onExport={handleExport}
+        onCancel={() => void exporter.cancel()}
+      />
+
+      <DeletePhotoDialog
+        open={deleteOpen}
+        busy={deleting}
+        error={deleteError}
+        onCancel={() => {
+          if (!deleting) {
+            setDeleteOpen(false);
+          }
+        }}
+        onConfirm={() => void handleConfirmDelete()}
       />
     </div>
   );
@@ -977,6 +1035,7 @@ function EditorWorkspaceInner() {
   const [error, setError] = useState<UploadError | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const { startSession } = useSessionActions();
 
@@ -988,6 +1047,7 @@ function EditorWorkspaceInner() {
 
   const handleFileSelected = useCallback(
     async (file: File) => {
+      setDeleteNotice(null);
       const validation = validateUploadFile(file, limits ?? undefined);
       if (!validation.ok) {
         setPendingFile(file);
@@ -1044,9 +1104,15 @@ function EditorWorkspaceInner() {
     setPendingFile(null);
     setImage(null);
     setError(null);
+    setDeleteNotice(null);
     clearSessionUrl();
     dispatch({ type: "reset-editor" });
   }, [dispatch]);
+
+  const handlePhotoDeleted = useCallback(() => {
+    handleStartOver();
+    setDeleteNotice("照片及其编辑会话、分析与缓存副本已从本机永久删除。");
+  }, [handleStartOver]);
 
   const inEditor = state.phase === "ready" || state.phase === "exporting";
 
@@ -1074,6 +1140,15 @@ function EditorWorkspaceInner() {
         </div>
 
         <div className="p-3 sm:p-6">
+          {deleteNotice && (
+            <p
+              role="status"
+              className="mb-3 rounded-xl border border-accent/25 bg-accent/[0.06] px-3 py-2 text-xs text-accent"
+            >
+              {deleteNotice}
+            </p>
+          )}
+
           {error && (
             <ErrorAlert
               error={error}
@@ -1106,6 +1181,7 @@ function EditorWorkspaceInner() {
               uploading={uploading}
               onFileSelected={handleFileSelected}
               onStartOver={handleStartOver}
+              onPhotoDeleted={handlePhotoDeleted}
             />
           ) : (
             <>

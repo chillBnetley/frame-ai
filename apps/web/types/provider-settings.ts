@@ -9,9 +9,12 @@ export interface ProviderEntryView {
   apiKeySource: ApiKeySource;
 }
 
+export type PlannerProviderSettingsView = ProviderEntryView;
+
 export interface ProviderSettingsView {
   vision: ProviderEntryView;
   decision: ProviderEntryView;
+  planner: PlannerProviderSettingsView;
   isMock: boolean;
   hasSavedOverrides: boolean;
 }
@@ -24,9 +27,12 @@ export interface ProviderEntryUpdate {
   clearApiKey?: boolean;
 }
 
+export type PlannerProviderSettingsUpdate = ProviderEntryUpdate;
+
 export interface ProviderSettingsUpdate {
   vision?: ProviderEntryUpdate;
   decision?: ProviderEntryUpdate;
+  planner?: PlannerProviderSettingsUpdate;
 }
 
 export interface ProviderTestResult {
@@ -41,4 +47,5 @@ export interface ProviderTestResult {
 export interface ProviderTestResponse {
   vision: ProviderTestResult;
   decision: ProviderTestResult;
+  planner: ProviderTestResult;
 }

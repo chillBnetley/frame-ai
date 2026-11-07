@@ -6,6 +6,8 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.photographer.service import PhotographerService
 from app.services.analysis_task_service import AnalysisTaskService
+from app.services.deletion_service import DeletionService
+from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
 from app.services.provider_settings_service import ProviderSettingsService
@@ -62,8 +64,22 @@ def get_export_service(request: Request) -> ExportService:
     return service
 
 
+def get_export_job_manager(request: Request) -> ExportJobManager:
+    manager = getattr(request.app.state, "export_jobs", None)
+    if not isinstance(manager, ExportJobManager):
+        raise AppError(503, "service_unavailable", "The service is not ready.")
+    return manager
+
+
 def get_photographer_service(request: Request) -> PhotographerService:
     service = getattr(request.app.state, "photographer_service", None)
     if not isinstance(service, PhotographerService):
+        raise AppError(503, "service_unavailable", "The service is not ready.")
+    return service
+
+
+def get_deletion_service(request: Request) -> DeletionService:
+    service = getattr(request.app.state, "deletion_service", None)
+    if not isinstance(service, DeletionService):
         raise AppError(503, "service_unavailable", "The service is not ready.")
     return service

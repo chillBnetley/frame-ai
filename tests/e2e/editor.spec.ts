@@ -10,6 +10,7 @@ import {
   openApp,
   requirePython,
   uploadFixture,
+  waitForAppReady,
 } from "./support";
 
 interface Fixture {
@@ -152,4 +153,88 @@ test("upload, adjust, compare, undo/redo/reset, and export JPEG", async ({
     () => document.documentElement.scrollWidth > window.innerWidth + 1,
   );
   expect(overflow, "page must not scroll horizontally").toBe(false);
+});
+
+test("cancelling an export stops polling and a later export still succeeds", async ({
+  page,
+}, testInfo) => {
+  await openApp(page);
+  await uploadFixture(page);
+  await waitForAppReady(page);
+
+  // Hold the first status poll so the job is still "running" from the UI's
+  // point of view long enough to exercise the cancel path.
+  await page.route("**/api/v1/exports/*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await route.continue().catch(() => undefined);
+  });
+
+  await page.getByRole("button", { name: "导出", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "导出图像" })).toBeVisible();
+  await page.getByRole("button", { name: "开始导出" }).click();
+
+  await expect(page.getByRole("button", { name: "取消导出" })).toBeVisible();
+  await page.getByRole("button", { name: "取消导出" }).click();
+  await expect(page.getByText("导出已取消，可以重新开始。")).toBeVisible();
+
+  await page.unroute("**/api/v1/exports/*");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "开始导出" }).click();
+  const download = await downloadPromise;
+  await download.saveAs(
+    path.join(ARTIFACTS, `cancel-retry-${testInfo.project.name}.jpg`),
+  );
+  await expect(page.getByText(/导出完成/)).toBeVisible({ timeout: 120_000 });
+});
+
+test("deleting a photo removes the original permanently and survives reload", async ({
+  page,
+}) => {
+  await openApp(page);
+  await uploadFixture(page);
+
+  const originalHref = await page
+    .getByRole("link", { name: "下载原图" })
+    .getAttribute("href");
+  expect(originalHref).toBeTruthy();
+  expect((await page.request.get(originalHref!)).status()).toBe(200);
+
+  await page.getByRole("button", { name: "删除照片", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "删除这张照片？" });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByText(/AI 分析与缓存副本会从本机永久删除/),
+  ).toBeVisible();
+
+  const deleteResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "DELETE" &&
+      new URL(response.url()).pathname.startsWith("/api/v1/images/"),
+  );
+  await dialog.getByRole("button", { name: "永久删除", exact: true }).click();
+  expect((await deleteResponse).status()).toBe(204);
+
+  await expect(
+    page.getByText("照片及其编辑会话、分析与缓存副本已从本机永久删除。"),
+  ).toBeVisible();
+  await expect(page.getByText("拖入一张照片")).toBeVisible();
+  await expect(page).not.toHaveURL(/session=/);
+
+  // Deletion also wins over session restore: the original endpoint is gone and
+  // a reload cannot bring the editor session back.
+  await expect
+    .poll(async () => (await page.request.get(originalHref!)).status(), {
+      timeout: 15_000,
+    })
+    .toBe(404);
+
+  await page.reload();
+  await waitForAppReady(page);
+  await expect(page.getByText("拖入一张照片")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "编辑预览" })).toHaveCount(0);
 });
