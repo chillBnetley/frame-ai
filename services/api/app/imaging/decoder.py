@@ -8,24 +8,29 @@ from typing import Any
 from PIL import Image, UnidentifiedImageError
 
 from app.core.errors import AppError
+from app.imaging.loader import image_bit_depth, validate_tiff_container
 
 DECLARED_MIME_TO_FORMAT = {
     "image/jpeg": "JPEG",
     "image/jpg": "JPEG",
     "image/png": "PNG",
     "image/webp": "WEBP",
+    "image/tiff": "TIFF",
 }
 
 FORMAT_INFO = {
     "JPEG": (".jpg", "image/jpeg"),
     "PNG": (".png", "image/png"),
     "WEBP": (".webp", "image/webp"),
+    "TIFF": (".tiff", "image/tiff"),
 }
 
-SUPPORTED_MIME_TYPES = ("image/jpeg", "image/png", "image/webp")
+SUPPORTED_MIME_TYPES = ("image/jpeg", "image/png", "image/webp", "image/tiff")
 
 ORIENTATION_TAG = 0x0112
 _SWAPPING_ORIENTATIONS = {5, 6, 7, 8}
+_TIFF_WIDTH_TAG = 256
+_TIFF_HEIGHT_TAG = 257
 
 
 @dataclass(frozen=True)
@@ -36,6 +41,7 @@ class DecodedImage:
     width: int
     height: int
     exif_orientation: int
+    bit_depth: int = 8
 
 
 def normalize_declared_mime(content_type: str | None) -> str:
@@ -59,6 +65,32 @@ def display_dimensions(width: int, height: int, orientation: int) -> tuple[int, 
     return width, height
 
 
+def raw_dimensions(image: Image.Image, image_format: str | None) -> tuple[int, int]:
+    """Return the stored pixel dimensions before EXIF orientation is applied.
+
+    Pillow reports a TIFF's ``Image.size`` with the orientation tag already
+    applied, while tags 256/257 keep the dimensions as stored. Reading those
+    tags prevents an orientation-aware size from being swapped a second time.
+    JPEG, PNG and WebP keep the unrotated dimensions in ``Image.size``.
+    """
+    if image_format == "TIFF":
+        tag_v2 = getattr(image, "tag_v2", None)
+        if tag_v2 is not None:
+            try:
+                raw_width = tag_v2.get(_TIFF_WIDTH_TAG)
+                raw_height = tag_v2.get(_TIFF_HEIGHT_TAG)
+            except (AttributeError, KeyError, TypeError, ValueError):
+                raw_width = raw_height = None
+            if (
+                isinstance(raw_width, int)
+                and isinstance(raw_height, int)
+                and raw_width > 0
+                and raw_height > 0
+            ):
+                return raw_width, raw_height
+    return image.size
+
+
 def _pixel_error(width: int, height: int, max_pixels: int) -> AppError:
     return AppError(
         413,
@@ -78,7 +110,7 @@ def inspect_image(data: bytes, declared_mime: str, max_pixels: int) -> DecodedIm
         raise AppError(
             415,
             "unsupported_media_type",
-            "Only JPEG, PNG, and WebP images are supported.",
+            "Only JPEG, PNG, WebP and TIFF images are supported.",
             {"allowedMimeTypes": list(SUPPORTED_MIME_TYPES)},
         )
 
@@ -86,16 +118,17 @@ def inspect_image(data: bytes, declared_mime: str, max_pixels: int) -> DecodedIm
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(BytesIO(data)) as image:
-                width, height = image.size
                 detected_format = image.format
 
                 if not detected_format or detected_format not in FORMAT_INFO:
                     raise AppError(
                         415,
                         "unsupported_media_type",
-                        "Only JPEG, PNG, and WebP images are supported.",
+                        "Only JPEG, PNG, WebP and TIFF images are supported.",
                         {"allowedMimeTypes": list(SUPPORTED_MIME_TYPES)},
                     )
+
+                width, height = raw_dimensions(image, detected_format)
 
                 if width <= 0 or height <= 0:
                     raise AppError(
@@ -107,6 +140,8 @@ def inspect_image(data: bytes, declared_mime: str, max_pixels: int) -> DecodedIm
                 if width * height > max_pixels:
                     raise _pixel_error(width, height, max_pixels)
 
+                if detected_format == "TIFF":
+                    validate_tiff_container(image)
                 if getattr(image, "n_frames", 1) > 1:
                     raise AppError(
                         415,
@@ -114,6 +149,7 @@ def inspect_image(data: bytes, declared_mime: str, max_pixels: int) -> DecodedIm
                         "Animated images are not supported.",
                     )
 
+                bit_depth = image_bit_depth(image, data)
                 orientation = _read_orientation(image)
                 image.load()
     except AppError:
@@ -148,4 +184,5 @@ def inspect_image(data: bytes, declared_mime: str, max_pixels: int) -> DecodedIm
         width=display_width,
         height=display_height,
         exif_orientation=orientation,
+        bit_depth=bit_depth,
     )

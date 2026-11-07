@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from app.imaging.loader import PROXY_VERSION, LoadedImage
 
-ProxyKey: TypeAlias = tuple[str, str, int]
+ProxyKey: TypeAlias = tuple[str, str, int, int]
 
 
 @dataclass(frozen=True)
@@ -50,8 +50,8 @@ class DecodedProxyCache:
     def enabled(self) -> bool:
         return self.max_bytes > 0
 
-    def key_for(self, original_sha256: str, edge: int) -> ProxyKey:
-        return (original_sha256.lower(), PROXY_VERSION, edge)
+    def key_for(self, original_sha256: str, edge: int, *, bit_depth: int = 8) -> ProxyKey:
+        return (original_sha256.lower(), PROXY_VERSION, edge, 16 if bit_depth == 16 else 8)
 
     def get(self, key: ProxyKey) -> LoadedImage | None:
         with self._lock:

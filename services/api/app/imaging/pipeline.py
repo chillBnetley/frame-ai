@@ -10,12 +10,12 @@ from app.imaging.color_grading import apply_color_grading
 from app.imaging.color_ops import apply_color
 from app.imaging.curves import apply_curves
 from app.imaging.detail import apply_detail
-from app.imaging.geometry import crop_pixels, rotate_inscribed
+from app.imaging.geometry import apply_geometry, rotation_target_size
 from app.imaging.hsl import apply_hsl
-from app.imaging.loader import LoadedImage, resize_to_max_edge
+from app.imaging.loader import BitDepth, LoadedImage, resize_to_max_edge
 from app.imaging.local import apply_local
 from app.imaging.local_masks import apply_local_adjustments
-from app.imaging.output import to_uint8
+from app.imaging.output import to_uint8, to_uint8_alpha
 from app.imaging.params_map import (
     DRAFT_MAX_EDGE,
     EXPORT_DENOISE_SIMPLIFY_PIXELS,
@@ -44,11 +44,15 @@ def raise_if_cancelled(cancel: threading.Event | None) -> None:
 
 @dataclass(frozen=True)
 class RenderedImage:
-    rgb: NDArray[np.uint8]
+    # 8-bit renders hand back quantised samples; 16-bit renders keep float32
+    # perceptual values in [0, 1] so the export encoder decides the depth.
+    rgb: NDArray[np.uint8] | NDArray[np.float32]
     canvas_width: int
     canvas_height: int
     quality: RenderQuality
     warnings: tuple[str, ...] = ()
+    alpha: NDArray[np.uint8] | NDArray[np.float32] | None = None
+    bit_depth: BitDepth = 8
 
     @property
     def width(self) -> int:
@@ -88,24 +92,37 @@ def render(
     quality: RenderQuality = "final",
     max_edge: int | None = None,
     denoise_simplify_pixels: int = EXPORT_DENOISE_SIMPLIFY_PIXELS,
+    bit_depth: BitDepth = 8,
     cancel: threading.Event | None = None,
 ) -> RenderedImage:
     raise_if_cancelled(cancel)
+    if bit_depth not in (8, 16):
+        raise ValueError("bit_depth must be 8 or 16")
     source = image
     edge = _resolve_edge(quality, max_edge)
     if edge is not None:
         source = resize_to_max_edge(source, edge)
 
     denoise_simplified = (
-        quality == "export"
+        bit_depth == 8
+        and quality == "export"
         and adjustments.denoise > 0
         and source.width * source.height > denoise_simplify_pixels
     )
 
     raise_if_cancelled(cancel)
-    rotated = rotate_inscribed(source.rgb, adjustments.rotation_deg, quality=quality)
-    canvas_height, canvas_width = rotated.shape[:2]
-    cropped = crop_pixels(rotated, adjustments.crop)
+    cropped, cropped_alpha = apply_geometry(
+        source.rgb,
+        source.alpha,
+        rotation_deg=adjustments.rotation_deg,
+        crop=adjustments.crop,
+        quality=quality,
+    )
+    canvas_width, canvas_height = rotation_target_size(
+        source.width,
+        source.height,
+        adjustments.rotation_deg,
+    )
 
     raise_if_cancelled(cancel)
     linear = srgb_to_linear(cropped)
@@ -153,7 +170,9 @@ def render(
     raise_if_cancelled(cancel)
     perceptual = apply_detail(
         perceptual,
-        denoise=adjustments.denoise,
+        # Denoise is decoded to 8 bits internally, which would defeat the point
+        # of a 16-bit export. Skip it and say so instead of silently degrading.
+        denoise=0.0 if bit_depth == 16 else adjustments.denoise,
         sharpen=adjustments.sharpen,
         grain=adjustments.grain,
         image_sha256=image_sha256,
@@ -161,13 +180,27 @@ def render(
         denoise_simplified=denoise_simplified,
     )
 
+    if bit_depth == 16 and adjustments.denoise > 0:
+        render_warnings.append("denoise_skipped_for_16bit")
     if denoise_simplified:
         render_warnings.append("denoise_simplified")
     raise_if_cancelled(cancel)
+    if bit_depth == 16:
+        rgb: NDArray[np.uint8] | NDArray[np.float32] = np.ascontiguousarray(perceptual)
+        alpha: NDArray[np.uint8] | NDArray[np.float32] | None = (
+            None
+            if cropped_alpha is None
+            else np.ascontiguousarray(np.clip(cropped_alpha, 0.0, 1.0))
+        )
+    else:
+        rgb = to_uint8(perceptual, inplace=True)
+        alpha = None if cropped_alpha is None else to_uint8_alpha(cropped_alpha)
     return RenderedImage(
-        rgb=to_uint8(perceptual, inplace=True),
+        rgb=rgb,
         canvas_width=canvas_width,
         canvas_height=canvas_height,
         quality=quality,
         warnings=tuple(render_warnings),
+        alpha=alpha,
+        bit_depth=bit_depth,
     )

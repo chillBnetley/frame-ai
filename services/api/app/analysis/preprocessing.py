@@ -75,7 +75,7 @@ def preprocess_original(
         raise AppError(500, "original_changed", ORIGINAL_CHANGED_MESSAGE)
 
     had_alpha = _has_alpha(path)
-    loaded = load_image(path, max_pixels=max_pixels)
+    loaded = load_image(path, max_pixels=max_pixels, preserve_alpha=False)
     scaled = resize_to_max_edge(loaded, max_edge)
     encoded = _encode_jpeg(scaled)
     if max_bytes is not None and len(encoded) > max_bytes:

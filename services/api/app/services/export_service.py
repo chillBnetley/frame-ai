@@ -4,21 +4,28 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
+from typing import Any, cast
+
+import numpy as np
+from numpy.typing import NDArray
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.imaging.geometry import export_target_size, resize_exact
-from app.imaging.loader import LoadedImage, load_image
-from app.imaging.output import FORMAT_INFO, encode_image
+from app.imaging.geometry import export_target_size, resize_exact, resize_exact_alpha
+from app.imaging.loader import LoadedImage, load_image, probe_bit_depth
+from app.imaging.output import FORMAT_INFO, encode_image, to_uint16, to_uint16_alpha
 from app.imaging.params_map import (
     EXPORT_BASELINE_MB,
+    EXPORT_BYTES_PER_PIXEL_ALPHA,
     EXPORT_BYTES_PER_PIXEL_FULL,
     EXPORT_BYTES_PER_PIXEL_LOCAL,
     EXPORT_BYTES_PER_PIXEL_NEUTRAL,
+    EXPORT_BYTES_PER_PIXEL_OUTPUT_16,
+    EXPORT_BYTES_PER_PIXEL_SOURCE_16,
 )
 from app.imaging.pipeline import raise_if_cancelled
 from app.imaging.pipeline import render as render_image
-from app.models.export import ExportRequest
+from app.models.export import ExportBitDepth, ExportRequest
 from app.models.recipe import EditRecipe
 from app.models.sessions import SessionState
 from app.services.export_admission import ExportAdmission
@@ -28,6 +35,10 @@ from app.services.session_service import SessionService
 logger = logging.getLogger("frame_ai.export")
 
 EXPORT_JPEG_QUALITY = 92
+# PNG, WebP and TIFF can carry an alpha plane. JPEG never does, so its memory
+# plan is unchanged; the mime check is deliberately conservative for PNG
+# palette/colour-key transparency that a header-only probe could miss.
+ALPHA_CAPABLE_MIME_TYPES = frozenset({"image/png", "image/webp", "image/tiff"})
 
 
 def _active_local_count(recipe: EditRecipe) -> int:
@@ -43,12 +54,18 @@ def estimate_export_peak_mb(
     recipe: EditRecipe,
     *,
     decode_pixels: int | None = None,
+    alpha_candidate: bool = False,
+    source_bit_depth: int = 8,
+    output_bit_depth: int = 8,
 ) -> float:
     """Conservative peak-RSS estimate for one export plan.
 
     ``decode_pixels`` is the size of the image that still gets decoded whole.
     A downscaled export renders ``pixels`` but reads the original at full size,
     so its plan can never be cheaper than a neutral pass over that decode.
+    Alpha-capable inputs add a float32 coverage plane at both sizes.  A 16-bit
+    source pays for the uint16 decode buffer plus the float32 conversion; a
+    16-bit output pays for the uint16 quantisation and encoder scratch.
     """
     neutral = recipe == EditRecipe()
     per_pixel = EXPORT_BYTES_PER_PIXEL_NEUTRAL if neutral else EXPORT_BYTES_PER_PIXEL_FULL
@@ -57,6 +74,14 @@ def estimate_export_peak_mb(
     if decode_pixels is not None and decode_pixels > pixels:
         floor = decode_pixels * EXPORT_BYTES_PER_PIXEL_NEUTRAL / (1024 * 1024)
         estimate = max(estimate, floor + EXPORT_BASELINE_MB)
+    if alpha_candidate:
+        alpha_pixels = pixels + (decode_pixels if decode_pixels is not None else 0)
+        estimate += alpha_pixels * EXPORT_BYTES_PER_PIXEL_ALPHA / (1024 * 1024)
+    if source_bit_depth == 16:
+        decoded = decode_pixels if decode_pixels is not None else pixels
+        estimate += decoded * EXPORT_BYTES_PER_PIXEL_SOURCE_16 / (1024 * 1024)
+    if output_bit_depth == 16:
+        estimate += pixels * EXPORT_BYTES_PER_PIXEL_OUTPUT_16 / (1024 * 1024)
     return estimate
 
 
@@ -68,6 +93,7 @@ class ExportResult:
     filename: str
     media_type: str
     warnings: tuple[str, ...] = ()
+    bit_depth: ExportBitDepth = 8
 
 
 class ExportService:
@@ -138,6 +164,16 @@ class ExportService:
         revision = self.sessions.get_revision(session_id, request.revision_id)
         record, path = self.images.get_original(str(state.image_id))
         adjustments = revision.recipe.adjustments
+        if request.bit_depth == 16 and request.format == "jpeg":
+            # The request model already rejects this; keep the service honest
+            # when it is called outside the HTTP layer.
+            raise AppError(
+                422,
+                "unsupported_bit_depth",
+                "JPEG does not support 16-bit output.",
+                {"format": request.format, "bitDepth": request.bit_depth},
+            )
+        source_bit_depth = probe_bit_depth(path)
         # Sizing happens before decoding so the memory estimate describes the
         # pixels this export will actually touch, not the original's.
         target_width, target_height, source_scale = export_target_size(
@@ -154,6 +190,9 @@ class ExportService:
             source_pixels,
             revision.recipe,
             decode_pixels=record.width * record.height,
+            alpha_candidate=record.mime_type in ALPHA_CAPABLE_MIME_TYPES,
+            source_bit_depth=source_bit_depth,
+            output_bit_depth=request.bit_depth,
         )
         if estimate_mb > self.settings.export_max_rss_mb:
             raise AppError(
@@ -193,13 +232,25 @@ class ExportService:
             if source_scale < 1.0:
                 # Scaling the source first keeps the composition identical to a
                 # full-canvas export while cutting render time and peak memory.
-                image = LoadedImage(
-                    rgb=resize_exact(
-                        image.rgb,
-                        max(1, round(image_width * source_scale)),
-                        max(1, round(image_height * source_scale)),
+                scaled_width = max(1, round(image_width * source_scale))
+                scaled_height = max(1, round(image_height * source_scale))
+                if image.alpha is None:
+                    image = LoadedImage(
+                        rgb=resize_exact(image.rgb, scaled_width, scaled_height),
+                        bit_depth=image.bit_depth,
                     )
-                )
+                else:
+                    scaled_rgb, scaled_alpha = resize_exact_alpha(
+                        image.rgb,
+                        image.alpha,
+                        scaled_width,
+                        scaled_height,
+                    )
+                    image = LoadedImage(
+                        rgb=scaled_rgb,
+                        alpha=scaled_alpha,
+                        bit_depth=image.bit_depth,
+                    )
             raise_if_cancelled(cancel)
             rendered = render_image(
                 image,
@@ -212,18 +263,45 @@ class ExportService:
                 local_adjustments=revision.recipe.local_adjustments,
                 quality="export",
                 denoise_simplify_pixels=self.settings.export_denoise_simplify_pixels,
+                bit_depth=request.bit_depth,
                 cancel=cancel,
             )
             raise_if_cancelled(cancel)
-            canvas = rendered.rgb
+            canvas: NDArray[Any] = rendered.rgb
+            canvas_alpha: NDArray[Any] | None = rendered.alpha
             if (canvas.shape[1], canvas.shape[0]) != (target_width, target_height):
                 # Geometry rounding can leave the canvas 1-2 px away from the
                 # requested long edge; converge instead of reporting a lie.
-                canvas = resize_exact(canvas, target_width, target_height)
+                if canvas_alpha is None:
+                    canvas = resize_exact(canvas, target_width, target_height)
+                else:
+                    canvas, canvas_alpha = resize_exact_alpha(
+                        canvas,
+                        canvas_alpha,
+                        target_width,
+                        target_height,
+                    )
             raise_if_cancelled(cancel)
+            pixels: NDArray[np.uint8] | NDArray[np.uint16]
+            if rendered.bit_depth == 16:
+                pixels = to_uint16(cast(NDArray[np.float32], canvas))
+                canvas_alpha = (
+                    None
+                    if canvas_alpha is None
+                    else to_uint16_alpha(cast(NDArray[np.float32], canvas_alpha))
+                )
+            else:
+                pixels = cast(NDArray[np.uint8], canvas)
+                canvas_alpha = cast(NDArray[np.uint8] | None, canvas_alpha)
             quality = request.quality if request.quality is not None else EXPORT_JPEG_QUALITY
             try:
-                data = encode_image(canvas, image_format=request.format, quality=quality)
+                data = encode_image(
+                    pixels,
+                    image_format=request.format,
+                    quality=quality,
+                    alpha=canvas_alpha,
+                    bit_depth=rendered.bit_depth,
+                )
             except (OSError, ValueError) as exc:
                 raise AppError(
                     500,
@@ -237,10 +315,12 @@ class ExportService:
         _, suffix, media_type = FORMAT_INFO[request.format]
         filename = f"frame-{revision.id.hex[:8]}{suffix}"
         logger.info(
-            "export_completed session_id=%s revision_id=%s format=%s bytes=%s duration_ms=%.2f",
+            "export_completed session_id=%s revision_id=%s format=%s bit_depth=%s "
+            "bytes=%s duration_ms=%.2f",
             state.session_id,
             revision.id,
             request.format,
+            request.bit_depth,
             len(data),
             (time.perf_counter() - started) * 1000,
         )
@@ -251,4 +331,5 @@ class ExportService:
             filename=filename,
             media_type=media_type,
             warnings=rendered.warnings,
+            bit_depth=request.bit_depth,
         )

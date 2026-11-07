@@ -487,7 +487,7 @@ describe("EditorWorkspace", () => {
     await uploadFile();
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("仅支持 JPEG、PNG 与 WebP 图片。");
+    expect(alert).toHaveTextContent("仅支持 JPEG、PNG、WebP 与 TIFF 图片。");
     expect(alert).toHaveTextContent("unsupported_media_type");
     expect(screen.queryByRole("button", { name: "重试上传" })).not.toBeInTheDocument();
   });

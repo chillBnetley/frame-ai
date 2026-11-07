@@ -155,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "X-Request-ID",
             "X-Export-Width",
             "X-Export-Height",
+            "X-Export-Bit-Depth",
             "X-Export-Warning",
             "Content-Disposition",
         ],

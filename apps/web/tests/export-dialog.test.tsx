@@ -48,7 +48,43 @@ describe("ExportDialog", () => {
     expect(screen.queryByLabelText("JPEG 质量")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenCalledWith("png", null, null);
+    expect(onExport).toHaveBeenCalledWith("png", null, null, 8);
+  });
+
+  it("exports 16-bit PNG and TIFF with the selected depth", async () => {
+    const { onExport } = renderDialog();
+
+    await userEvent.click(screen.getByRole("radio", { name: /PNG/ }));
+    await userEvent.click(screen.getByRole("radio", { name: /16-bit/ }));
+    expect(
+      screen.getByText("16-bit 输出使用 sRGB ICC；源为 8-bit 时 16-bit 仅扩展精度。"),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("png", null, null, 16);
+
+    await userEvent.click(screen.getByRole("radio", { name: /TIFF/ }));
+    expect(screen.queryByLabelText("JPEG 质量")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("tiff", null, null, 16);
+  });
+
+  it("locks JPEG to 8-bit and resets a previous 16-bit choice", async () => {
+    const { onExport } = renderDialog();
+
+    const sixteen = screen.getByRole("radio", { name: /16-bit/ });
+    expect(sixteen).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /^8-bit/ })).toBeChecked();
+    expect(screen.getByText("JPEG 不支持 16-bit，导出始终为 8-bit。")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: /PNG/ }));
+    await userEvent.click(screen.getByRole("radio", { name: /16-bit/ }));
+    expect(sixteen).toBeChecked();
+
+    await userEvent.click(screen.getByRole("radio", { name: /JPEG/ }));
+    expect(sixteen).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /^8-bit/ })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, null, 8);
   });
 
   it("passes the JPEG quality", async () => {
@@ -57,7 +93,7 @@ describe("ExportDialog", () => {
     fireEvent.change(screen.getByLabelText("JPEG 质量"), { target: { value: "80" } });
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
 
-    expect(onExport).toHaveBeenCalledWith("jpeg", 80, null);
+    expect(onExport).toHaveBeenCalledWith("jpeg", 80, null, 8);
   });
 
   it("sends no max edge for the default original size", async () => {
@@ -67,7 +103,7 @@ describe("ExportDialog", () => {
     expect(screen.getByText("原图尺寸（不发送 maxEdge）")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenCalledWith("jpeg", 92, null);
+    expect(onExport).toHaveBeenCalledWith("jpeg", 92, null, 8);
   });
 
   it("sends the selected size preset as max edge", async () => {
@@ -78,11 +114,11 @@ describe("ExportDialog", () => {
     expect(screen.queryByLabelText("自定义长边（像素）")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenCalledWith("jpeg", 92, 2400);
+    expect(onExport).toHaveBeenCalledWith("jpeg", 92, 2400, 8);
 
     await userEvent.click(screen.getByRole("radio", { name: /长边 1080/ }));
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 1080);
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 1080, 8);
   });
 
   it("sends a custom long edge and treats an empty value as original size", async () => {
@@ -93,12 +129,12 @@ describe("ExportDialog", () => {
 
     fireEvent.change(input, { target: { value: "3200" } });
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 3200);
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 3200, 8);
 
     fireEvent.change(input, { target: { value: "" } });
     expect(screen.getByText(/留空表示原图尺寸/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, null);
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, null, 8);
   });
 
   it("clamps out-of-range custom sizes and explains the clamp", async () => {
@@ -110,11 +146,11 @@ describe("ExportDialog", () => {
     fireEvent.change(input, { target: { value: "20" } });
     expect(screen.getByText(/已限制到 64–8192 之间，实际使用 64 像素/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 64);
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 64, 8);
 
     fireEvent.change(input, { target: { value: "99999" } });
     await userEvent.click(screen.getByRole("button", { name: /开始导出/ }));
-    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 8192);
+    expect(onExport).toHaveBeenLastCalledWith("jpeg", 92, 8192, 8);
   });
 
   it("shows the pinned sRGB colour space", () => {
@@ -181,6 +217,25 @@ describe("ExportDialog", () => {
       screen.getByText(/降噪已简化（导出尺寸超过 12 MP）/),
     ).toBeInTheDocument();
     expect(screen.getByText(/改用更小的长边/)).toBeInTheDocument();
+  });
+
+  it("explains that 16-bit exports skip denoise", () => {
+    renderDialog({
+      state: {
+        status: "success",
+        error: null,
+        filename: "frame-abcd1234.png",
+        width: 6000,
+        height: 4000,
+        bytes: 2048,
+        warnings: ["denoise_skipped_for_16bit"],
+      },
+    });
+
+    expect(
+      screen.getByText(/16-bit 导出已跳过降噪（降噪会降为 8-bit 处理）/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/请改用 8-bit 导出/)).toBeInTheDocument();
   });
 
   it("offers cancellation while a job is running and announces the cancelled state", async () => {

@@ -215,8 +215,17 @@ def test_hash_change_during_reading_is_rejected(tmp_path: Path, monkeypatch):
     path = _write(tmp_path, make_image("PNG", size=(16, 16)))
     original_load = preprocessing.load_image
 
-    def tampering_load(source: Path, *, max_pixels: int | None = None):
-        loaded = original_load(source, max_pixels=max_pixels)
+    def tampering_load(
+        source: Path,
+        *,
+        max_pixels: int | None = None,
+        preserve_alpha: bool = True,
+    ):
+        loaded = original_load(
+            source,
+            max_pixels=max_pixels,
+            preserve_alpha=preserve_alpha,
+        )
         path.write_bytes(b"replaced while reading")
         return loaded
 

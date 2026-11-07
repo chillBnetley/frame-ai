@@ -16,6 +16,10 @@ describe("describeUploadError", () => {
     ["animated_not_supported", "阶段 1 不支持动图，请换用静态图片。"],
     ["cors_origin_denied", "当前来源不被允许访问 API。"],
     ["invalid_upload", "一次只能上传一张图片。"],
+    [
+      "associated_alpha_not_supported",
+      "这个 TIFF 使用预乘 alpha（associated alpha），暂不支持；请导出为非预乘（unassociated）alpha 后重试。",
+    ],
     ["storage_error", "原图保存失败，请稍后重试。"],
     ["internal_error", "服务出现未预期错误，请稍后重试。"],
   ])("maps %s to Chinese copy", (code, expected) => {

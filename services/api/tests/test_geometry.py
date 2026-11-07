@@ -11,6 +11,7 @@ from app.imaging.geometry import (
     export_target_size,
     inscribed_scale,
     resize_exact,
+    resize_exact_alpha,
     rotate_inscribed,
 )
 from app.models.recipe import Crop
@@ -113,8 +114,9 @@ def test_geometry_applies_rotation_before_crop():
     rgb = np.ones((80, 100, 3), dtype=np.float32)
     crop = Crop(x=0.25, y=0.25, w=0.5, h=0.5)
 
-    result = apply_geometry(rgb, rotation_deg=15.0, crop=crop)
+    result, alpha = apply_geometry(rgb, rotation_deg=15.0, crop=crop)
 
+    assert alpha is None
     scale = inscribed_scale(100, 80, 15.0)
     rotated_width = round(100 * scale)
     rotated_height = round(80 * scale)
@@ -139,7 +141,7 @@ def test_canvas_size_applies_crop_after_rotation():
     crop = Crop(x=0.25, y=0.25, w=0.5, h=0.5)
     rgb = np.ones((80, 100, 3), dtype=np.float32)
 
-    cropped = apply_geometry(rgb, rotation_deg=15.0, crop=crop)
+    cropped, _ = apply_geometry(rgb, rotation_deg=15.0, crop=crop)
 
     assert canvas_size(100, 80, 15.0, crop) == (cropped.shape[1], cropped.shape[0])
 
@@ -216,3 +218,97 @@ def test_resize_exact_of_a_gradient_stays_in_range():
     assert float(resized.min()) >= -1e-6
     assert float(resized.max()) <= 1.0 + 1e-6
     assert float(resized[0, -1, 0]) > float(resized[0, 0, 0])
+
+
+def test_apply_geometry_keeps_alpha_aligned_with_rgb():
+    height, width = 90, 130
+    rgb = np.random.default_rng(3).random((height, width, 3), dtype=np.float32)
+    alpha = np.random.default_rng(4).random((height, width), dtype=np.float32)
+    crop = Crop(x=0.1, y=0.2, w=0.7, h=0.6)
+
+    result_rgb, result_alpha = apply_geometry(
+        rgb,
+        alpha,
+        rotation_deg=7.5,
+        crop=crop,
+    )
+
+    assert result_alpha is not None
+    assert result_rgb.shape[:2] == result_alpha.shape
+    assert result_rgb.dtype == np.float32
+    assert result_alpha.dtype == np.float32
+    assert 0.0 <= float(result_alpha.min())
+    assert float(result_alpha.max()) <= 1.0
+    assert 0.0 <= float(result_rgb.min())
+    assert float(result_rgb.max()) <= 1.0
+
+
+def test_geometry_crop_keeps_transparent_corners_transparent():
+    rgb = np.ones((40, 60, 3), dtype=np.float32)
+    alpha = np.ones((40, 60), dtype=np.float32)
+    alpha[:4, :] = 0.0
+    alpha[:, :4] = 0.0
+    alpha[-4:, :] = 0.0
+    alpha[:, -4:] = 0.0
+
+    result_rgb, result_alpha = apply_geometry(
+        rgb,
+        alpha,
+        rotation_deg=0.0,
+        crop=Crop(x=0.0, y=0.0, w=1.0, h=1.0),
+    )
+
+    assert result_alpha is not None
+    assert result_alpha[0, 0] == 0.0
+    assert result_alpha[0, -1] == 0.0
+    assert result_alpha[-1, 0] == 0.0
+    assert result_alpha[-1, -1] == 0.0
+    assert result_alpha[20, 30] == 1.0
+    # Fully transparent pixels get deterministic black RGB.
+    assert np.all(result_rgb[0, 0] == 0.0)
+
+
+@pytest.mark.parametrize("quality", ["draft", "final"])
+def test_alpha_rotation_does_not_pull_transparent_colour_into_visible_edges(
+    quality: str,
+):
+    # Opaque red left half, transparent green right half. Premultiplied warping
+    # must not produce a green fringe along the alpha edge.
+    rgb = np.zeros((80, 160, 3), dtype=np.float32)
+    rgb[:, :80] = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+    rgb[:, 80:] = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    alpha = np.zeros((80, 160), dtype=np.float32)
+    alpha[:, :80] = 1.0
+
+    out_rgb, out_alpha = apply_geometry(
+        rgb,
+        alpha,
+        rotation_deg=7.5,
+        crop=None,
+        quality=quality,  # type: ignore[arg-type]
+    )
+
+    assert out_alpha is not None
+    visible = out_alpha > 0.25
+    assert np.any(visible)
+    assert float(out_rgb[visible, 1].max()) < 0.02
+
+
+def test_resize_exact_alpha_premultiplies_and_preserves_dtype():
+    rgb = np.zeros((2, 4, 3), dtype=np.uint8)
+    rgb[:, :2] = np.array([255, 0, 0], dtype=np.uint8)
+    rgb[:, 2:] = np.array([0, 255, 0], dtype=np.uint8)
+    alpha = np.zeros((2, 4), dtype=np.uint8)
+    alpha[:, :2] = 255
+
+    resized_rgb, resized_alpha = resize_exact_alpha(rgb, alpha, 2, 1)
+
+    assert resized_rgb.dtype == np.uint8
+    assert resized_alpha.dtype == np.uint8
+    assert resized_alpha[0, 0] > 200
+    assert resized_alpha[0, 1] == 0
+    assert resized_rgb[0, 0, 0] > 250
+    assert resized_rgb[0, 0, 1] < 5
+    same_rgb, same_alpha = resize_exact_alpha(rgb, alpha, 4, 2)
+    assert same_rgb is rgb
+    assert same_alpha is alpha

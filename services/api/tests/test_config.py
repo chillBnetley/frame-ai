@@ -67,7 +67,7 @@ def test_config_endpoint_exposes_runtime_limits(client: TestClient, settings: Se
         "maxUploadBytes": settings.max_upload_bytes,
         "maxJsonBodyBytes": settings.max_json_body_bytes,
         "maxImagePixels": settings.max_image_pixels,
-        "allowedMimeTypes": ["image/jpeg", "image/png", "image/webp"],
+        "allowedMimeTypes": ["image/jpeg", "image/png", "image/webp", "image/tiff"],
     }
 
 

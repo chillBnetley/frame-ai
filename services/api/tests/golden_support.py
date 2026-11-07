@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 SOURCES_DIR = GOLDEN_DIR / "sources"
-IMAGE_NAMES = ("ramp", "detail", "mixed")
+IMAGE_NAMES = ("ramp", "detail", "mixed", "alpha")
 RECIPE_NAMES = (
     "neutral",
     "tone",
@@ -196,7 +196,28 @@ def _mixed() -> Image.Image:
     return image
 
 
-_BUILDERS = {"ramp": _ramp, "detail": _detail, "mixed": _mixed}
+def _alpha() -> Image.Image:
+    width, height = 192, 128
+    y, x = np.mgrid[0:height, 0:width].astype(np.float32)
+    u = x / (width - 1)
+    v = y / (height - 1)
+    red = 0.12 + 0.72 * u
+    green = 0.10 + 0.62 * v
+    blue = 0.68 - 0.42 * u + 0.18 * v
+    data = np.stack([red, green, blue], axis=-1)
+    pixels = np.clip(np.rint(data * 255.0), 0, 255).astype(np.uint8)
+
+    # A smooth transparent border with semi-transparent falloff and an opaque
+    # centre: corners are fully transparent, the inner 70% stays fully opaque.
+    edge = np.minimum(np.minimum(x, width - 1 - x), np.minimum(y, height - 1 - y))
+    falloff = np.clip(edge / (min(width, height) * 0.16), 0.0, 1.0)
+    smooth = falloff * falloff * (3.0 - 2.0 * falloff)
+    alpha = np.rint(smooth * 255.0).astype(np.uint8)
+    rgba = np.dstack([pixels, alpha])
+    return Image.fromarray(rgba, mode="RGBA")
+
+
+_BUILDERS = {"ramp": _ramp, "detail": _detail, "mixed": _mixed, "alpha": _alpha}
 
 
 def build_source(image_name: str) -> Image.Image:

@@ -15,6 +15,7 @@ from PIL import Image
 
 from app.core.config import Settings
 from app.imaging.output import srgb_icc_profile
+from app.imaging.params_map import EXPORT_BYTES_PER_PIXEL_ALPHA
 from app.main import create_app
 from app.models.recipe import (
     Adjustments,
@@ -124,6 +125,29 @@ def _gradient_png(size: tuple[int, int] = (640, 480)) -> bytes:
         ]
     )
     image = Image.fromarray(np.rint(channels).astype(np.uint8), "RGB")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _transparent_png(size: tuple[int, int] = (80, 60)) -> bytes:
+    width, height = size
+    y, x = np.mgrid[0:height, 0:width].astype(np.float32)
+    u = x / max(width - 1, 1)
+    v = y / max(height - 1, 1)
+    rgb = np.stack(
+        [
+            40.0 + 180.0 * u,
+            30.0 + 120.0 * v,
+            200.0 - 140.0 * u,
+        ],
+        axis=-1,
+    )
+    edge = np.minimum(np.minimum(x, width - 1 - x), np.minimum(y, height - 1 - y))
+    alpha = np.clip(edge / (min(width, height) * 0.25), 0.0, 1.0)
+    alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+    rgba = np.dstack([rgb, alpha * 255.0])
+    image = Image.fromarray(np.clip(np.rint(rgba), 0, 255).astype(np.uint8), "RGBA")
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
@@ -431,6 +455,23 @@ def test_export_estimate_floors_at_the_neutral_cost_of_the_original_decode():
     assert floored == pytest.approx(neutral_original)
     assert floored > estimate_export_peak_mb(planned, recipe)
     assert estimate_export_peak_mb(original, recipe, decode_pixels=original) > floored
+
+
+def test_export_estimate_reserves_alpha_memory_only_when_requested():
+    recipe = EditRecipe(adjustments=Adjustments(exposure_ev=0.5))
+    pixels = 640 * 480
+    decode = 1280 * 960
+
+    without = estimate_export_peak_mb(pixels, recipe, decode_pixels=decode)
+    with_alpha = estimate_export_peak_mb(
+        pixels,
+        recipe,
+        decode_pixels=decode,
+        alpha_candidate=True,
+    )
+
+    expected = (pixels + decode) * EXPORT_BYTES_PER_PIXEL_ALPHA / (1024 * 1024)
+    assert with_alpha - without == pytest.approx(expected)
 
 
 def test_export_estimate_adds_a_surcharge_for_active_local_adjustments():
@@ -901,6 +942,73 @@ def test_export_ignores_the_recipe_output_block(client: TestClient):
     assert response.headers["content-type"] == "image/jpeg"
     size, _ = _decoded(response)
     assert size == (640, 480)
+
+
+def test_transparent_png_export_preserves_alpha_and_rgb(client: TestClient):
+    payload = _transparent_png()
+    session = _session(client, payload)
+    committed = _commit(client, session, adjustments={})
+
+    response = _export(client, committed, committed["activeRevisionId"], image_format="png")
+
+    assert response.status_code == 200, response.text
+    with Image.open(io.BytesIO(response.content)) as exported:
+        assert exported.mode == "RGBA"
+        assert exported.size == (80, 60)
+        assert exported.info.get("icc_profile")
+        decoded = np.asarray(exported, dtype=np.uint8)
+    source = np.asarray(Image.open(io.BytesIO(payload)), dtype=np.uint8)
+    assert np.array_equal(decoded[..., 3], source[..., 3])
+    assert decoded[0, 0, 3] == 0
+    assert decoded[30, 40, 3] == 255
+    # Visible RGB is the pipeline's rendering, not a white composite of the
+    # transparent corners.
+    assert not np.all(decoded[0, 0, :3] == 255)
+
+
+def test_transparent_png_exported_as_jpeg_composites_on_white(client: TestClient):
+    payload = _transparent_png()
+    session = _session(client, payload)
+    committed = _commit(client, session, adjustments={})
+
+    response = _export(
+        client,
+        committed,
+        committed["activeRevisionId"],
+        image_format="jpeg",
+        quality=100,
+    )
+
+    assert response.status_code == 200, response.text
+    with Image.open(io.BytesIO(response.content)) as exported:
+        assert exported.mode == "RGB"
+        assert exported.getbands() == ("R", "G", "B")
+        decoded = np.asarray(exported, dtype=np.uint8)
+    assert np.all(decoded[0, 0] >= 250)
+    assert np.all(decoded[-1, -1] >= 250)
+
+
+def test_transparent_png_export_scales_alpha_with_the_canvas(client: TestClient):
+    payload = _transparent_png((160, 120))
+    session = _session(client, payload)
+    committed = _commit(client, session, adjustments={"rotationDeg": 7.5})
+
+    response = _export(
+        client,
+        committed,
+        committed["activeRevisionId"],
+        image_format="png",
+        max_edge=80,
+    )
+
+    assert response.status_code == 200, response.text
+    with Image.open(io.BytesIO(response.content)) as exported:
+        assert exported.mode == "RGBA"
+        assert max(exported.size) == 80
+        alpha = np.asarray(exported.getchannel("A"), dtype=np.uint8)
+    assert alpha.max() == 255
+    assert int(alpha.min()) < 128
+    assert 0.0 < float((alpha < 128).mean()) < 0.6
 
 
 @pytest.mark.parametrize("image_format", ["jpeg", "png"])

@@ -40,12 +40,24 @@ def test_key_separates_images_edges_and_proxy_version() -> None:
     cache = DecodedProxyCache(1024 * 1024)
     image = LoadedImage(rgb=_array())
 
-    assert cache.key_for(SHA, 1600) == (SHA.lower(), PROXY_VERSION, 1600)
+    assert cache.key_for(SHA, 1600) == (SHA.lower(), PROXY_VERSION, 1600, 8)
     cache.put(cache.key_for(SHA, 1600), image)
 
     assert cache.get(cache.key_for(SHA, 1536)) is None
     assert cache.get(cache.key_for("b" * 64, 1600)) is None
-    assert cache.get((SHA.lower(), "loader/0", 1600)) is None
+    assert cache.get((SHA.lower(), "loader/0", 1600, 8)) is None
+    assert cache.get((SHA.lower(), "loader/3", 1600, 16)) is None
+
+
+def test_key_separates_sixteen_bit_sources_from_eight_bit_sources() -> None:
+    cache = DecodedProxyCache(1024 * 1024)
+
+    eight = cache.key_for(SHA, 1600)
+    sixteen = cache.key_for(SHA, 1600, bit_depth=16)
+
+    assert eight != sixteen
+    assert sixteen[-1] == 16
+    assert eight[-1] == 8
 
 
 def test_zero_budget_disables_the_cache() -> None:

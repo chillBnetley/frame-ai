@@ -70,7 +70,12 @@ export interface ExportDialogProps {
   state: ExportState;
   dirty: boolean;
   disabled?: boolean;
-  onExport: (format: ExportFormat, quality: number | null, maxEdge: number | null) => void;
+  onExport: (
+    format: ExportFormat,
+    quality: number | null,
+    maxEdge: number | null,
+    bitDepth: 8 | 16,
+  ) => void;
   onCancel: () => void;
 }
 
@@ -88,6 +93,7 @@ export function ExportDialog({
 }: ExportDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [format, setFormat] = useState<ExportFormat>("jpeg");
+  const [bitDepth, setBitDepth] = useState<8 | 16>(8);
   const [quality, setQuality] = useState(92);
   const [sizeChoice, setSizeChoice] = useState<SizeChoice>("original");
   const [customEdge, setCustomEdge] = useState("");
@@ -193,11 +199,12 @@ export function ExportDialog({
 
         <fieldset className="mt-4 grid gap-2" disabled={exporting}>
           <legend className="text-xs text-white/55">导出格式</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {(
               [
                 { value: "jpeg", label: "JPEG", hint: "体积小，适合分享" },
-                { value: "png", label: "PNG", hint: "无损，透明区域按白底合成" },
+                { value: "png", label: "PNG", hint: "无损，保留透明" },
+                { value: "tiff", label: "TIFF", hint: "无损，适合归档" },
               ] as const
             ).map((option) => (
               <label
@@ -213,7 +220,12 @@ export function ExportDialog({
                   name="export-format"
                   value={option.value}
                   checked={format === option.value}
-                  onChange={() => setFormat(option.value)}
+                  onChange={() => {
+                    setFormat(option.value);
+                    if (option.value === "jpeg") {
+                      setBitDepth(8);
+                    }
+                  }}
                   className="mt-0.5 accent-[#d8ff5f]"
                 />
                 <span>
@@ -223,6 +235,60 @@ export function ExportDialog({
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset className="mt-4 grid gap-2" disabled={exporting}>
+          <legend className="flex items-baseline gap-2 text-xs text-white/55">
+            <span>位深</span>
+            <span className="font-mono text-[10px] text-white/30">预览为 8-bit</span>
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { value: 8 as const, label: "8-bit", hint: "兼容性最好" },
+                { value: 16 as const, label: "16-bit", hint: "高精度编辑导出" },
+              ] as const
+            ).map((option) => {
+              const unavailable = format === "jpeg" && option.value === 16;
+              return (
+                <label
+                  key={option.value}
+                  className={`flex min-h-11 items-start gap-2 rounded-lg border px-3 py-2.5 text-xs transition-colors ${
+                    unavailable
+                      ? "cursor-not-allowed border-white/8 bg-white/[0.01] text-white/25"
+                      : format === "jpeg" && option.value === 8
+                        ? "border-accent/45 bg-accent/[0.08] text-white"
+                        : bitDepth === option.value
+                          ? "border-accent/45 bg-accent/[0.08] text-white"
+                          : "border-white/12 bg-white/[0.02] text-white/65"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="export-bit-depth"
+                    value={option.value}
+                    checked={option.value === 8 ? format === "jpeg" || bitDepth === 8 : bitDepth === 16}
+                    disabled={unavailable}
+                    onChange={() => setBitDepth(option.value)}
+                    className="mt-0.5 accent-[#d8ff5f]"
+                  />
+                  <span>
+                    <span className="block font-medium">{option.label}</span>
+                    <span className="mt-0.5 block text-[10px] text-white/35">
+                      {unavailable ? "JPEG 固定 8-bit" : option.hint}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-white/35">
+            {format === "jpeg"
+              ? "JPEG 不支持 16-bit，导出始终为 8-bit。"
+              : bitDepth === 16
+                ? "16-bit 输出使用 sRGB ICC；源为 8-bit 时 16-bit 仅扩展精度。"
+                : "需求更高精度时选择 16-bit（PNG/TIFF）。"}
+          </p>
         </fieldset>
 
         <fieldset className="mt-4 grid gap-2" disabled={exporting}>
@@ -345,6 +411,12 @@ export function ExportDialog({
           </p>
         )}
 
+        {state.status === "success" && state.warnings.includes("denoise_skipped_for_16bit") && (
+          <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+            16-bit 导出已跳过降噪（降噪会降为 8-bit 处理）。如需降噪，请改用 8-bit 导出。
+          </p>
+        )}
+
         <div className="mt-4 flex items-center justify-end gap-2">
           {exporting && (
             <button
@@ -366,7 +438,14 @@ export function ExportDialog({
             type="button"
             data-autofocus
             disabled={blocked}
-            onClick={() => onExport(format, format === "jpeg" ? quality : null, maxEdge)}
+            onClick={() =>
+              onExport(
+                format,
+                format === "jpeg" ? quality : null,
+                maxEdge,
+                format === "jpeg" ? 8 : bitDepth,
+              )
+            }
             className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-xs font-semibold text-[#101208] transition-colors hover:bg-accent/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
             <DownloadIcon className="size-4" />

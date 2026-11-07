@@ -26,6 +26,7 @@ export type RenderRequest = components["schemas"]["RenderRequest"];
 export type RenderResponse = components["schemas"]["RenderResponse"];
 export type CompareResponse = components["schemas"]["CompareResponse"];
 export type ExportFormat = components["schemas"]["ExportRequest"]["format"];
+export type ExportBitDepth = components["schemas"]["ExportRequest"]["bitDepth"];
 
 export interface EditorRecipe
   extends Omit<

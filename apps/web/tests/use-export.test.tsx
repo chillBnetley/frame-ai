@@ -40,6 +40,7 @@ function jobPayload(overrides: Record<string, unknown> = {}): Record<string, unk
     filename: null,
     width: null,
     height: null,
+    bitDepth: 8,
     warnings: [],
     error: null,
     createdAt: CREATED_AT,
@@ -122,7 +123,7 @@ describe("useExport", () => {
     });
 
     expect(posted).toEqual([
-      { sessionId: SESSION_ID, revisionId: REVISION_ID, format: "jpeg" },
+      { sessionId: SESSION_ID, revisionId: REVISION_ID, format: "jpeg", bitDepth: 8 },
     ]);
     expect(statusPolls).toBe(1);
     expect(result.current.exporter.state.status).toBe("success");
@@ -196,11 +197,86 @@ describe("useExport", () => {
         sessionId: SESSION_ID,
         revisionId: REVISION_ID,
         format: "jpeg",
+        bitDepth: 8,
         quality: 80,
         maxEdge: 2400,
       },
-      { sessionId: SESSION_ID, revisionId: REVISION_ID, format: "jpeg", quality: 80 },
+      {
+        sessionId: SESSION_ID,
+        revisionId: REVISION_ID,
+        format: "jpeg",
+        bitDepth: 8,
+        quality: 80,
+      },
     ]);
+  });
+
+  it("sends bitDepth 16 for a 16-bit PNG export", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:png16");
+    URL.revokeObjectURL = vi.fn();
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+
+    const posted: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
+          posted.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+          return jsonResponse(jobPayload({ bitDepth: 16 }), 202);
+        }
+        if (url.endsWith(`/api/v1/exports/${JOB_ID}/result`)) {
+          return new Response(new Blob(["png-bytes"]), {
+            status: 200,
+            headers: {
+              "content-type": "image/png",
+              "content-disposition": 'attachment; filename="frame-abcd1234.png"',
+              "x-export-width": "640",
+              "x-export-height": "480",
+              "x-export-bit-depth": "16",
+            },
+          });
+        }
+        if (url.endsWith(`/api/v1/exports/${JOB_ID}`)) {
+          return jsonResponse(
+            jobPayload({
+              status: "succeeded",
+              filename: "frame-abcd1234.png",
+              width: 640,
+              height: 480,
+              bitDepth: 16,
+            }),
+          );
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const { result } = exportHook(readyEditorState());
+
+    await act(async () => {
+      expect(
+        await result.current.exporter.exportImage({
+          revisionId: REVISION_ID,
+          format: "png",
+          bitDepth: 16,
+        }),
+      ).toBe(true);
+    });
+
+    expect(posted).toEqual([
+      {
+        sessionId: SESSION_ID,
+        revisionId: REVISION_ID,
+        format: "png",
+        bitDepth: 16,
+      },
+    ]);
+    expect(result.current.exporter.state.status).toBe("success");
+    expect(result.current.exporter.state.filename).toBe("frame-abcd1234.png");
+    expect(click).toHaveBeenCalledTimes(1);
   });
 
   it("reports the estimated memory when the job fails with export_too_large", async () => {

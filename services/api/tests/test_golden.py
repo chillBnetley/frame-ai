@@ -59,7 +59,20 @@ def test_golden_images_match_within_one_gray_level(
 
     with Image.open(GOLDEN_DIR / file_name) as golden_image:
         golden = np.asarray(golden_image.convert("RGB"), dtype=np.uint8)
+        golden_alpha = (
+            np.asarray(golden_image.getchannel("A"), dtype=np.uint8)
+            if "A" in golden_image.getbands()
+            else None
+        )
 
     assert golden.shape == rendered.rgb.shape
     difference = np.abs(golden.astype(np.int16) - rendered.rgb.astype(np.int16))
     assert int(difference.max()) <= MANIFEST["tolerance"]
+
+    if rendered.alpha is None:
+        assert golden_alpha is None
+    else:
+        assert golden_alpha is not None
+        assert golden_alpha.shape == rendered.alpha.shape
+        alpha_difference = np.abs(golden_alpha.astype(np.int16) - rendered.alpha.astype(np.int16))
+        assert int(alpha_difference.max()) <= MANIFEST["tolerance"]

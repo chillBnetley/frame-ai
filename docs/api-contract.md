@@ -232,7 +232,7 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | --- | --- | --- | --- |
 | `GET /api/v1/health` | — | `{status, service, version, storage:{ok,writable}}` | — |
 | `GET /api/v1/config` | — | `{maxUploadBytes, maxJsonBodyBytes, maxImagePixels, allowedMimeTypes}` | — |
-| `POST /api/v1/images` | multipart，唯一 `file` 字段 | 201 `{imageId, originalName, width, height, exifOrientation, mimeType, bytes}` | 400 `invalid_upload`/`empty_file`；413 `payload_too_large`/`file_too_large`；415 `invalid_image`/`mime_mismatch`/`unsupported_media_type`/`animated_not_supported`；500 `storage_error` |
+| `POST /api/v1/images` | multipart，唯一 `file` 字段 | 201 `{imageId, originalName, width, height, exifOrientation, mimeType, bytes}` | 400 `invalid_upload`/`empty_file`；413 `payload_too_large`/`file_too_large`；415 `invalid_image`/`mime_mismatch`/`unsupported_media_type`/`animated_not_supported`/`unsupported_tiff_compression`/`tiff_multipage_not_supported`/`associated_alpha_not_supported`；500 `storage_error` |
 | `GET /api/v1/images/{imageId}/original` | 可选 `?download=true` | 原始字节；`inline` 或 `attachment` | 404 `image_not_found`/`image_file_missing` |
 | `DELETE /api/v1/images/{imageId}` | — | 204，无响应体；重复删除同样 204 | 404 `image_not_found`；409 `resource_busy`（分析 pending/processing） |
 
@@ -240,7 +240,7 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 
 `width/height` 是 EXIF 方向归一后的显示尺寸；`exifOrientation` 保留原始 1–8（D-07）。原图字节从上传到导出全程不变。阶段三遗留的 `POST /api/v1/images/{imageId}/analyze` 已在阶段四复审中删除（前端无引用，且与任务化 `POST /api/v1/analysis` 重复）；图像分析统一走 `/analysis` 任务接口。
 
-**原图与输出的色彩差异**（详见 [色彩管理](color-management.md)）：`/original` 返回上传时保存的原始字节，因此**保留原嵌入 ICC 配置与原 EXIF/GPS**；预览与导出则按 §1 的策略把输入转换到 sRGB、重编码为 8-bit sRGB、剥离全部元数据并**嵌入固定 sRGB ICC**。契约是"原图不动、输出重编码"，分享场景应使用导出而非原图下载。上传入口只接受 JPEG/PNG/WebP；`loader` 能解码更多容器（实测 TIFF），但不受入口暴露。`X-Export-Warning` 只承载降噪与蒙版缺失提示，与色彩无关。
+**原图与输出的色彩差异**（详见 [色彩管理](color-management.md)）：`/original` 返回上传时保存的原始字节，因此**保留原嵌入 ICC 配置与原 EXIF/GPS**；预览与导出则按 §1 的策略把输入转换到 sRGB、重编码为 8-bit 或 16-bit sRGB、剥离全部元数据并**嵌入固定 sRGB ICC**。契约是"原图不动、输出重编码"，分享场景应使用导出而非原图下载。上传入口接受 JPEG/PNG/WebP/TIFF；TIFF 只支持单页、未压缩或 Deflate，LZW/JPEG 压缩返回 415 `unsupported_tiff_compression`，多页返回 415 `tiff_multipage_not_supported`，associated（预乘）alpha 返回 415 `associated_alpha_not_supported`（仅接受 unassociated alpha；输出端写 `unassalpha`）。**上传不在入口校验 ICC**：16-bit 的 LUT/非 RGB/越界配置会在首次 `render`/导出解码时返回 422 `unsupported_icc_profile`，上传响应与 OpenAPI 不声明该 422。`X-Export-Warning` 只承载降噪与蒙版缺失提示，与色彩无关。
 
 该端点是阶段 2 的启发式特征（`features.isHeuristic=true`），不调用外部模型，结果只在进程内 LRU 缓存。阶段 3 的 AI 分析与持久化使用 §4.6 的 `/analysis` 任务端点，两者并存但互不替代。
 
@@ -259,7 +259,7 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `POST /api/v1/sessions/{sessionId}/activate` ⊕ | `{revisionId}` | 会话状态；切到会话内任意 revision，不改 `head` | 404 `revision_not_found` |
 | `POST /api/v1/sessions/{sessionId}/reset` | — | 会话状态；若活动配方已是默认配方，直接返回当前状态且不新增 revision | 404 |
 | `GET /api/v1/sessions/{sessionId}/compare` | `?revisionId=&maxEdge=1600` | `{original:{previewUrl,width,height}, revision:{previewUrl,width,height}, warnings}` | 404 |
-| `POST /api/v1/sessions/{sessionId}/export`（deprecated，改用 `/exports`） | ⊕ `{revisionId, format:"jpeg"\|"png", quality?, maxEdge?, colorSpace?}` | 文件流 + `Content-Disposition` + `X-Export-Width/Height`；必要时带 `X-Export-Warning`（逗号分隔，如 `denoise_simplified`、`local_mask_missing:<maskId>`） | 404；413 `export_too_large`；422；503 `server_busy` |
+| `POST /api/v1/sessions/{sessionId}/export`（deprecated，改用 `/exports`） | ⊕ `{revisionId, format:"jpeg"\|"png"\|"tiff", quality?, maxEdge?, bitDepth?:8\|16, colorSpace?}` | 文件流 + `Content-Disposition` + `X-Export-Width/Height/Bit-Depth`；必要时带 `X-Export-Warning`（逗号分隔，如 `denoise_simplified`、`denoise_skipped_for_16bit`、`local_mask_missing:<maskId>`） | 404；413 `export_too_large`；422 `validation_error`（含 JPEG+16 组合、`bitDepth` 越界）/`unsupported_icc_profile`；503 `server_busy` |
 | `GET /api/v1/previews/{previewId}` ⊕ | — | `image/jpeg` | 404 `preview_expired` |
 
 #### 提交 revision 与幂等
@@ -374,10 +374,10 @@ GET /api/v1/sessions/{sessionId}/compare?revisionId=<uuid>&maxEdge=1600
 
 | 方法与路径 | 请求 | 响应 | 主要错误 |
 | --- | --- | --- | --- |
-| `POST /api/v1/exports` ⊕ | `{sessionId, revisionId, format:"jpeg"\|"png", quality?, maxEdge?, colorSpace?}` | 202 作业对象：`{jobId, status:"queued"\|"running", filename:null, width:null, height:null, warnings:[], error:null, createdAt, updatedAt}` | 404 `session_not_found`/`revision_not_found`；422 `validation_error`；503 `server_busy`（队列已满或服务关闭，带 `Retry-After: 2`） |
-| `GET /api/v1/exports/{jobId}` ⊕ | — | 作业对象；`status` 为 `queued/running/succeeded/failed/cancelled`。`succeeded` 时带 `filename/width/height/warnings`，`failed` 时带 `error:{code,message,details}` | 404 `export_not_found` |
+| `POST /api/v1/exports` ⊕ | `{sessionId, revisionId, format:"jpeg"\|"png"\|"tiff", quality?, maxEdge?, bitDepth?:8\|16, colorSpace?}` | 202 作业对象：`{jobId, status:"queued"\|"running", filename:null, width:null, height:null, bitDepth, warnings:[], error:null, createdAt, updatedAt}` | 404 `session_not_found`/`revision_not_found`；422 `validation_error`（含 JPEG+16 组合、`bitDepth` 越界）/`unsupported_icc_profile`；503 `server_busy`（队列已满或服务关闭，带 `Retry-After: 2`） |
+| `GET /api/v1/exports/{jobId}` ⊕ | — | 作业对象；`status` 为 `queued/running/succeeded/failed/cancelled`。`succeeded` 时带 `filename/width/height/bitDepth/warnings`，`failed` 时带 `error:{code,message,details}` | 404 `export_not_found` |
 | `DELETE /api/v1/exports/{jobId}` ⊕ | — | 204；排队作业立即取消，运行中作业在下一个检查点停止；已结束作业幂等返回 204 | 404 `export_not_found` |
-| `GET /api/v1/exports/{jobId}/result` ⊕ | — | 文件流 + `Content-Disposition` + `X-Export-Width/Height` + 可选 `X-Export-Warning`；`Cache-Control: no-store`、`X-Content-Type-Options: nosniff` | 404 `export_not_found`/`export_result_missing`；409 `export_not_ready`/`export_cancelled`/`export_failed` |
+| `GET /api/v1/exports/{jobId}/result` ⊕ | — | 文件流（`image/jpeg`/`image/png`/`image/tiff`）+ `Content-Disposition` + `X-Export-Width/Height/Bit-Depth` + 可选 `X-Export-Warning`（含 `denoise_skipped_for_16bit`）；`Cache-Control: no-store`、`X-Content-Type-Options: nosniff` | 404 `export_not_found`/`export_result_missing`；409 `export_not_ready`/`export_cancelled`/`export_failed` |
 
 作业语义：
 
@@ -398,39 +398,44 @@ POST /api/v1/sessions/{sessionId}/export
   "format": "jpeg",
   "quality": 92,
   "maxEdge": 2400,
+  "bitDepth": 8,
   "colorSpace": "sRGB"
 }
 ```
 
-`maxEdge` 与 `colorSpace` 都可省略；省略 `maxEdge` 表示按原图长边导出。该端点直接渲染并返回文件流，不排队、不可取消，仅为兼容保留；新调用方应使用 `/exports`。
+`maxEdge`、`bitDepth` 与 `colorSpace` 都可省略；省略 `maxEdge` 表示按原图长边导出，省略 `bitDepth` 表示 8-bit。该端点直接渲染并返回文件流，不排队、不可取消，仅为兼容保留；新调用方应使用 `/exports`。
 
 响应：
 
-- `Content-Type: image/jpeg` 或 `image/png`。
-- `Content-Disposition: attachment; filename="frame-<8位id>.jpg"`（或 `.png`）。
+- `Content-Type: image/jpeg`、`image/png` 或 `image/tiff`。
+- `Content-Disposition: attachment; filename="frame-<8位id>.jpg"`（或 `.png`/`.tiff`）。
 - `X-Export-Width`、`X-Export-Height`：实际导出像素尺寸；等于请求 `maxEdge` 限制后的画布尺寸（未请求时是旋转/裁切后的完整画布尺寸）。
-- 本次**实际参与渲染的像素**（应用 `maxEdge` 下采样之后）超过 `FRAME_EXPORT_DENOISE_SIMPLIFY_PIXELS`（默认 12 MP）且启用了降噪时，导出使用与 draft 相同的较小降噪搜索窗口，并带 `X-Export-Warning: denoise_simplified`；无简化时省略此头。因此同一张大图的全尺寸导出会带该头、长边 2400 的导出不会。前端应向用户显示“大图导出使用简化降噪”。
+- `X-Export-Bit-Depth`：`8` 或 `16`，与请求的 `bitDepth` 一致（JPEG 恒为 `8`）。
+- 本次**实际参与渲染的像素**（应用 `maxEdge` 下采样之后）超过 `FRAME_EXPORT_DENOISE_SIMPLIFY_PIXELS`（默认 12 MP）且启用了降噪时：8-bit 导出使用与 draft 相同的较小降噪搜索窗口，并带 `X-Export-Warning: denoise_simplified`；16-bit 导出**跳过降噪**并带 `X-Export-Warning: denoise_skipped_for_16bit`。无提示时省略此头。因此同一张大图的全尺寸 8-bit 导出会带简化头、长边 2400 的不会。前端应向用户显示对应的降噪提示。
 - `Cache-Control: no-store`、`X-Content-Type-Options: nosniff`。
 
 规则：
 
 - 从**原始分辨率**重渲染，不使用预览代理图。
 - `revisionId` 必须属于该会话，否则 404 `revision_not_found`。
-- JPEG `quality` 1…100，默认 92；quality ≥ 90 时 `subsampling=0`。PNG 忽略 quality。
+- JPEG `quality` 1…100，默认 92；quality ≥ 90 时 `subsampling=0`。PNG 与 TIFF 忽略 quality。
+- ⊕ `bitDepth` 只接受 `8` 或 `16`。`16` 仅对 PNG 与 TIFF 有效；`format:"jpeg"` 与 `bitDepth:16` 组合在请求模型校验阶段返回 422 `validation_error`（异步作业不会创建），`format` 无该字段时默认 8。服务层另有 `unsupported_bit_depth` 保护性错误，仅在绕过 HTTP 模型直接调用导出服务时出现。
 - ⊕ `maxEdge`（64…100000 整数）指定输出的最长边；长边在该边长内保持不变，超过原图长边的请求**不放大**。边长在旋转/裁切之后的画布上测量，比例与构图与全尺寸导出一致（实测与全尺寸导出缩放到同画布后平均差 0.205、最大 1 灰阶）。前端导出对话框的自定义输入更严格：64…8192，留空表示原图尺寸。
 - ⊕ `colorSpace` 只接受字面量 `"sRGB"`；其他值（含小写 `"srgb"`）返回 422 `validation_error`。输出目标恒为 sRGB，因此该字段是显式声明而不是可选项。
 - 导出准入（⊕ 阶段四）：并发上限 `FRAME_EXPORT_MAX_CONCURRENCY`（默认 1，即串行）。超出并发数，或**已在跑的导出估算之和 + 本次估算**超过 `FRAME_EXPORT_MAX_RSS_MB` 时，立即返回 503 `server_busy` 并带 `Retry-After: 2`，不排队等待。通过静态估算后还有第二道实时门（复审整改 G4/P3-9）：用 `psutil.virtual_memory().available` 检查真实可用内存，若 `可用 − 本次估算 < FRAME_EXPORT_RESERVE_MB`（默认 256）同样返回 503 `server_busy`；该检查在静态估算之后执行，不替代它。
 - ⊕ 阶段四：同步端点**不支持服务端中止**。客户端断开或超时只停止前端等待，服务端会继续完成本次渲染后丢弃结果（导出不写缓存），因此期间新的导出仍可能拿到 503。需要取消请使用 §4.5.1 的异步作业端点：运行中的作业会在渲染阶段边界停止并释放槽位。
-- 解码前按**本次计划触及的像素数**与配方估算峰值内存（系数在阶段四 Task 8 按实测标定，复审整改 G4 把满配方从 240 下调到 160 B/px）：中性配方 45 B/px，其余 160 B/px；每个启用且参数非零的局部调整再加 8 B/px（一张全画布 float32 权重图约 4 B/px；实测增加局部调整对峰值的影响在 −48…+29 MB 之间，所以这 8 B/px 是余量而不是预测）；另加 150 MB 基线。
+- 解码前按**本次计划触及的像素数**与配方估算峰值内存（系数在阶段四 Task 8 按实测标定，复审整改 G4 把满配方从 240 下调到 160 B/px）：中性配方 45 B/px，其余 160 B/px；每个启用且参数非零的局部调整再加 8 B/px（一张全画布 float32 权重图约 4 B/px；实测增加局部调整对峰值的影响在 −48…+29 MB 之间，所以这 8 B/px 是余量而不是预测）；另加 150 MB 基线。**PNG/WebP/TIFF 输入再加 4 B/px**（`EXPORT_BYTES_PER_PIXEL_ALPHA`，解码与渲染各一条 float32 alpha 覆盖平面）；JPEG 输入不加。**B5b 16-bit 附加项**：源位深 16 再加 18 B/px（uint16 解码平面 + float32 转换），输出位深 16 再加 18 B/px（uint16 输出 + 编码器工作副本）。24/40 MP 实测：16-bit 中性峰值 1026/1671 MB、同尺寸 8-bit 为 966/1562 MB；16-bit 满配方 2801/4616 MB、8-bit 2801/4617 MB（渲染阶段主导，位深几乎无差）。36 B/px 合计明显保守，默认 3072 MB 预算下 24 MP 16-bit 中性可导出，而 40 MP 16-bit 中性虽实测 1671 MB 仍会被估算拒绝（413）——与既有“估算偏保守”的取舍一致，可调高 `FRAME_EXPORT_MAX_RSS_MB` 或使用 `maxEdge`。详见 [performance.md](performance.md)。
 - ⊕ **解码地板**：原图始终按整尺寸解码，所以估算不低于"原图像素 × 45 B/px + 150 MB"。带 `maxEdge` 时计划项按缩放后的源像素计算，因此下采样导出可以落入全尺寸导出被拒绝的预算；但一旦计划项掉到地板以下，再小的 `maxEdge` 也不会让估算继续下降（40 MP 原图的地板是 1863 MB）。
-- 估算超过 `FRAME_EXPORT_MAX_RSS_MB`（默认 3072）时返回 413 `export_too_large`，`details.estimatedPeakMb/limitMb/pixels/maxEdge` 给出估算、上限与本次尺寸，避免大图导出拖垮进程。默认预算下的实测边界（G4，估算／实测峰值）：40 MP 中性 1867／1635 MB 与 12 MP 满配方 1981／1478 MB **可导出**；24 MP 满配方 3812／2907 MB 与 40 MP 满配方 6254／4793 MB **返回 413**（满配方系数为 160 B/px，高于本轮实测最高的 131 B/px，仍保留约 22% 余量）。同一批图片改为 `maxEdge=2400` 后可导出，估算 1180／实测 794 MB（24 MP）与 1867／实测 1209 MB（40 MP），耗时 p95 4.3 s 与 5.0 s。
-- 元数据：剥离全部 EXIF/XMP/IPTC（含 GPS）；嵌入标准 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。ICC 头部创建时间固定，保证同一像素与参数跨进程编码逐字节一致。
-- 输出目标色彩空间**恒为 sRGB**、8-bit/通道、RGB 三通道（不带 alpha）；预览 JPEG 同样嵌入 sRGB ICC 且不含 EXIF。原图的 ICC 配置不保留到输出，输入按 [色彩管理](color-management.md) §1 的策略转换或回退。
+- 估算超过 `FRAME_EXPORT_MAX_RSS_MB`（默认 3072）时返回 413 `export_too_large`，`details.estimatedPeakMb/limitMb/pixels/maxEdge` 给出估算、上限与本次尺寸，避免大图导出拖垮进程。默认预算下的实测边界（G4，估算／实测峰值）：40 MP 中性 1867／1635 MB 与 12 MP 满配方 1981／1478 MB **可导出**；24 MP 满配方 3812／2907 MB 与 40 MP 满配方 6254／4793 MB **返回 413**（满配方系数为 160 B/px，高于本轮实测最高的 131 B/px，仍保留约 22% 余量）。同一批图片改为 `maxEdge=2400` 后可导出，估算 1180／实测 794 MB（24 MP）与 1867／实测 1209 MB（40 MP），耗时 p95 4.3 s 与 5.0 s。以上均为 8-bit；16-bit 的附加估算与实测见上一条。
+- 元数据：剥离全部 EXIF/XMP/IPTC（含 GPS）；嵌入标准 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。ICC 头部创建时间固定，保证同一像素与参数跨进程编码逐字节一致；16-bit PNG/TIFF 同样嵌入固定 sRGB ICC。
+- 输出目标色彩空间**恒为 sRGB**、8-bit 或 16-bit/通道（由 `bitDepth` 决定，JPEG 恒 8-bit）。PNG/TIFF 在输入带 alpha 时输出 RGBA（8-bit 一条 8-bit alpha，16-bit 一条 16-bit alpha），否则输出 RGB；JPEG 与所有预览恒为 RGB，带 alpha 的输入在编码前用 `round(rgb*a + 255*(1-a))` 合成白底。预览 JPEG 同样嵌入 sRGB ICC 且不含 EXIF。原图的 ICC 配置不保留到输出，输入按 [色彩管理](color-management.md) §1 的策略转换或回退；16-bit 输入携带 LUT/mAB/mft 或非 RGB/XYZ 配置时返回 422 `unsupported_icc_profile`，不做静默降级。
 - 原图字节不被改写；日志只记录 sessionId、revisionId、格式、字节数与耗时。
 
-#### 阶段 2 的 PNG alpha 限制
+#### Alpha、位深与 TIFF（B5a/B5b）
 
-任务书要求“导出 PNG 保留 alpha；导出 JPEG 合成到白底”。阶段 2 的 loader 会把所有带 alpha 的输入统一合成到白底并转为 RGB，因此**导出的 PNG 目前没有 alpha 通道**，语义等同于白底合成。这是已记录的实现缺口，不是契约承诺；修复计划见 [known-issues.md](known-issues.md)。
+任务书要求“导出 PNG 保留 alpha；导出 JPEG 合成到白底”。loader 拆分 RGB 与 alpha，几何/缩放按预乘 alpha 同步处理；PNG 输出 RGBA 并嵌入 sRGB ICC，JPEG 编码前合成白底。
+
+B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD_UNCHANGED` 解码、`imencode` 编码并手写 iCCP；16-bit TIFF 用 tifffile（Deflate，tag 34675 携带 ICC，带 alpha 时写 `ExtraSamples=unassalpha`）读写；16-bit 输入不被降为 8-bit，工作空间保持 float32，仅编码时量化到 uint16。16-bit + `denoise>0` 跳过降噪并返回 `denoise_skipped_for_16bit`，不经过 8-bit 中间步骤。预览、代理与 AI 分析仍为 8-bit 并按白底合成，`PROXY_VERSION` 保持 `loader/3`（16-bit 源的代理缓存键追加 `|b16`，8-bit 键与像素不变）。详见 [color-management.md](color-management.md) §5 与 [ADR-0004](decisions/ADR-0004-color-management.md) D8/D9。
 
 ### 4.6 分析任务与报告（阶段 3）
 
@@ -636,9 +641,13 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | ⊕ `POST /sessions/{id}/activate` | 历史切换；不改 head（D-02） |
 | ⊕ `render.quality` / `cacheHit` | `draft`/`final` 两档与缓存命中标记 |
 | ⊕ `X-Render-Seq` / `render_superseded` | 同会话单调渲染序号；过期渲染返回 409，避免旧结果覆盖新操作 |
-| ⊕ `X-Export-Warning` / `export_too_large` | 大图简化降噪提示与导出内存预算拒绝 |
+| ⊕ `X-Export-Warning` / `export_too_large` | 降噪简化/16-bit 跳过降噪/局部蒙版缺失提示与导出内存预算拒绝 |
+| ⊕ `X-Export-Bit-Depth` | 同步与异步结果均回传实际位深（8/16）；JPEG 恒为 8 |
+| ⊕ `export.format:"tiff"` | PNG/TIFF 支持 8/16-bit；JPEG 只有 8-bit |
+| ⊕ `export.bitDepth` | `8`（默认）或 `16`；16 仅 PNG/TIFF，JPEG+16 在请求模型校验阶段返回 422 `validation_error` |
 | ⊕ `export.maxEdge` | 导出目标长边 64…100000；超过原图长边不放大，边长在旋转/裁切后的画布上测量 |
-| ⊕ `export.colorSpace` | 只接受字面量 `"sRGB"`，其他值 422；输出恒为 8-bit sRGB 并嵌入 ICC |
+| ⊕ `export.colorSpace` | 只接受字面量 `"sRGB"`，其他值 422；输出恒为 8-bit 或 16-bit sRGB 并嵌入 ICC |
+| ⊕ 16-bit 输入 ICC | 支持矩阵/TRC 配置（curv/para 0–4）；LUT/mAB/mft 或非 RGB/XYZ 返回 422 `unsupported_icc_profile` |
 | ⊕ 导出准入 | `FRAME_EXPORT_MAX_CONCURRENCY`（默认 1）与“在跑导出估算之和 + 本次估算”双重门；拒绝即 503 `server_busy` |
 | ⊕ 异步导出作业 | `POST/GET/DELETE /exports` 与 `GET /exports/{jobId}/result`；202 + 轮询、协作式取消、结果 TTL；删除图片/会话同步清除其已成功结果，并取消/丢弃删除窗口内晚到的作业；旧 `POST /sessions/{id}/export` 保留为 deprecated |
 | ⊕ 渲染缓存分层 | 代理磁盘缓存 + 进程内解码缓存（`FRAME_PROXY_CACHE_MB`）+ 进程内蒙版权重缓存（`FRAME_MASK_CACHE_MB`，单条上限 24 MB）；键均含 `ENGINE_VERSION`，命中与未命中输出字节一致 |
@@ -717,6 +726,10 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | `invalid_image` | 415 | 内容无法解码或尺寸非法 |
 | `mime_mismatch` | 415 | 声明 MIME 与真实格式不符 |
 | `animated_not_supported` | 415 | 多帧图片 |
+| `unsupported_tiff_compression` | 415 | TIFF 使用 LZW/JPEG 等未支持压缩（仅接受未压缩与 Deflate） |
+| `tiff_multipage_not_supported` | 415 | TIFF 含多页/多帧 |
+| `unsupported_icc_profile` | 422 | 16-bit 输入的 ICC 为 LUT/non-RGB/XYZ 或超出解析边界，不做静默降级 |
+| `unsupported_bit_depth` | 422 | 导出服务的保护性错误（绕过 HTTP 模型直接调用）；HTTP 入口的 JPEG+16 组合统一返回 `validation_error` |
 | `validation_error` | 422 | 字段校验失败（含未知字段 `extra_forbidden`），`details.fields` 给出字段、规则与限制 |
 | `storage_error` | 500 | 原图或登记写入失败 |
 | `storage_conflict` | 500 | 存储键冲突 |

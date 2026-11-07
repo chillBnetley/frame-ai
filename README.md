@@ -1,6 +1,6 @@
 # FRAME AI
 
-响应式、非破坏性照片后期工具。本仓库已完成 **开发阶段 5：AI 摄影师与智能后期决策**（Task 0–9），在阶段 3 的视觉理解之上增加了可解释的调色方案、参数化风格、对话修改、摄影点评与反馈闭环；执行层沿用阶段 4 的专业调色引擎（配方 v2、全局调色、RGB 曲线、八色带 HSL、三区域颜色分级、全图/矩形/椭圆蒙版局部调整，以及导出尺寸、两层进程内缓存、导出并发准入与渲染序号统一）。阶段 2 的完整编辑闭环继续保留：上传、自动建会话、手动参数调整、前后对比、撤销/重做/重置，到从原图全分辨率导出 JPEG/PNG。
+响应式、非破坏性照片后期工具。本仓库已完成 **开发阶段 5：AI 摄影师与智能后期决策**（Task 0–9），在阶段 3 的视觉理解之上增加了可解释的调色方案、参数化风格、对话修改、摄影点评与反馈闭环；执行层沿用阶段 4 的专业调色引擎（配方 v2、全局调色、RGB 曲线、八色带 HSL、三区域颜色分级、全图/矩形/椭圆蒙版局部调整，以及导出尺寸、两层进程内缓存、导出并发准入与渲染序号统一）。阶段 2 的完整编辑闭环继续保留：上传、自动建会话、手动参数调整、前后对比、撤销/重做/重置，到从原图全分辨率导出 JPEG/PNG/TIFF（PNG/TIFF 可选 8/16-bit，带 alpha 时保留透明度）。
 
 原图字节从上传到导出全程不变；编辑只记录配方（recipe）与 revision，渲染始终从原图重算。阶段 3 的异步分析任务（预处理与 OpenCV 测量、可替换的视觉/决策 Provider、主体与区域引用、摄影问题诊断、五区界面）继续作为阶段 5 的输入。阶段 5 的 AI 摄影师把“照片是什么样”转换为“建议调什么、调多少、为什么”，但**只生成提案并在预览中展示，不自动写入配方或修改原图**；只有用户显式接受后才生成普通 revision。默认使用离线 Mock Provider，风格由参数实现，**不伪造人物/天空语义分割**。
 
@@ -42,7 +42,7 @@
 - 会话与 revision：自动创建初始 revision、提交、撤销、重做、激活任意历史、重置、`Idempotency-Key` 幂等与内容一致性校验、409 冲突处理；历史操作前自动保存未提交草稿。
 - 预览：`draft` 960 px / `final` 1600 px、内容寻址缓存、方向归一代理缓存、TTL 清理与 `cacheHit`；`X-Render-Seq` 保证过期渲染不覆盖新操作。
 - 前后对比：原图侧仅应用相同旋转/裁切，与渲染代理保持同尺寸和像素对齐，含按住空格查看原图。
-- 导出：从原始分辨率重渲染、JPEG/PNG、剥离全部 EXIF/XMP/IPTC/GPS、嵌入 sRGB ICC、导出串行化、运行期内存预算与大图简化降噪提示。
+- 导出：从原始分辨率重渲染、JPEG/PNG/TIFF、剥离全部 EXIF/XMP/IPTC/GPS、嵌入 sRGB ICC、导出串行化、运行期内存预算与降噪提示；PNG/TIFF 可选 8/16-bit，透明输入导出 RGBA（8/16-bit alpha），JPEG 在白底合成且只支持 8-bit。16-bit 输入不被截断，工作空间保持 float32；16-bit + 降噪会跳过降噪并返回 `denoise_skipped_for_16bit`。预览与代理仍为 8-bit 白底 RGB，不因 alpha 失效缓存。
 - 前端编辑工作区：参数面板、裁切/旋转、历史栏、对比视图、导出对话框、可访问性检查。
 - 预览可见性：桌面端左列预览与历史栏固定在视口内、参数面板独立滚动；窄屏在主预览离屏时显示固定迷你预览（对比/裁切/导出时隐藏）。
 - AI 分析任务：`POST /analysis` 异步创建，`pending/processing/completed/failed` 状态与真实阶段（预处理/视觉/特征/诊断）；失败任务保留供重试，`force=true` 重新分析，按图片内容与配置去重。
@@ -61,7 +61,7 @@
 - 颜色分级：按 Rec.709 亮度平滑分配阴影/中间调/高光，支持色相、强度、balance 与 blending；零亮度色偏在未截断时保持亮度。
 - 局部调整：全图或用户矩形/椭圆蒙版，支持曝光、对比、高光、阴影、白/黑场、色温、色调、饱和、自然饱和度、清晰度 11 个字段；羽化带位于形状内部，支持反选与不透明度；蒙版锚定 EXIF 归一化原图坐标，预览与导出共用同一映射；悬空蒙版跳过并返回 `local_mask_missing` warning。
 - 编码 `frame-engine/10`。`schemaVersion` 参与 canonical 哈希，因此 v1→v2 重标会改变旧 revision 在新代码下计算出的摘要；`recipe_hash` 列只作缓存，重置与幂等比较都用当前代码从已存 `recipe_json` 重新推导，不承诺跨版本哈希恒定。空 `masks` 是唯一被省略的惰性字段。新增曲线、HSL、颜色分级与局部调整黄金图。`frame-engine/8` 把嵌入 ICC 管理的适用范围从 `RGB`/`RGBA` 扩展到全部可归一为 RGB 的输入（含调色板、1-bit、灰度）；`frame-engine/9` 修正三处调色语义——白平衡改为守恒全图平均亮度（纯色不再自我抵消）、HSL 色相改为受单调上限约束的查表映射（消除局部色相反序与等色轮廓带）、颜色分级越界由逐通道裁剪改为等比缩放（黑位不被抬亮）；`frame-engine/10` 落地复审摄影语义决策——Blacks 方向与掩膜端点、HSL 分档门控、曲线端点线性外推、对比度色度回收，并删除遗留 `POST /images/{id}/analyze`。
-- 色彩管理边界（Task 7）：ICC 管理移到模式归一之后，调色板/1-bit/灰度输入按嵌入配置转换；16-bit RGB 与灰度的位深取舍、CMYK 上的 RGB 配置回退与不新增依赖的结论见 [docs/color-management.md](docs/color-management.md) 与 [ADR-0004](docs/decisions/ADR-0004-color-management.md)。
+- 色彩管理（Task 7 + B5b）：8-bit 路径的 ICC 管理移到模式归一之后，调色板/1-bit/灰度输入按嵌入配置转换；16-bit 路径用 OpenCV/tifffile 解码并以纯 NumPy 矩阵/TRC 转换到 sRGB，支持 `curv`/`para 0–4`，LUT/mAB/mft 或非 RGB/XYZ 配置返回 422 `unsupported_icc_profile`，不静默降级。CMYK 上的 RGB 配置仍回退；依赖边界见 [docs/color-management.md](docs/color-management.md) 与 [ADR-0004](docs/decisions/ADR-0004-color-management.md)。
 - 导出尺寸与色彩空间（Task 8）：`maxEdge`（64…100000，前端另给原图/2400/1600/1080 预设与 64…8192 自定义）在解码之后、渲染之前缩放源图，构图与全尺寸导出一致且**不放大**；`colorSpace` 只接受 `"sRGB"`，其他值 422。24 MP 满配方导出因此从 p50 29.6 s 降到 4.6 s。
 - 渲染缓存分层（Task 8）：解码代理与蒙版权重的进程内 LRU（各 `FRAME_PROXY_CACHE_MB`/`FRAME_MASK_CACHE_MB`，默认 64 MB，0 关闭）＋代理磁盘缓存；`previews/proxies/` 纳入同一轮 TTL 清理。预览冷解码 200–471 ms → 内存命中 12–13 ms，蒙版权重 57–67 ms → 0.02 ms。
 - 导出并发准入（Task 8 + G4）：`FRAME_EXPORT_MAX_CONCURRENCY`（默认 1，上限 4）与"在跑导出估算之和 ≤ `FRAME_EXPORT_MAX_RSS_MB`"两道门，任一不满足立即 503 `server_busy` 带 `Retry-After: 2`，不排队；通过静态估算后还会用 psutil 的实时可用内存做第二道门（`FRAME_EXPORT_RESERVE_MB`，默认 256）。估算系数按 Task 8 的 11 个与 G4 的 8 个实测峰值标定，满配方为 160 B/px，并保留原图解码地板。
@@ -81,7 +81,7 @@
 - 栅格蒙版、画笔/渐变蒙版、蒙版布尔运算与图层混合；当前蒙版是随 recipe 保存的参数化几何。
 - 几何编辑（裁剪/旋转/扩图/删除物体/换背景）不由 AI 发起；方案不生成裁切或旋转。
 - 真实视觉/规划模型的准确率、成本与稳定性评估；本机没有授权标注集与真实密钥，默认 Mock Provider 未调用第三方。评估框架与冒烟脚本已提供，但正式指标仍为未测量。
-- 导出 PNG 的 alpha 通道（当前 loader 统一合成到白底；见 [known-issues.md](docs/known-issues.md)）。
+- 预览、代理与 AI 分析仍为 8-bit 白底 RGB；16-bit 只用于上传解码与导出，没有 HDR/32-bit 管线，16-bit JPEG 不支持；TIFF 只接受单页、未压缩或 Deflate（见 [known-issues.md](docs/known-issues.md)）。
 - 删除后的回收站/撤销、跨进程一致性与配额、多用户。
 - 鉴权、限流、公网部署加固；API 仅限本机（D-13）。
 - 真实 iOS Safari / Android Chrome 真机回归。
@@ -229,6 +229,8 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 ```
 
+`requirements.txt` 固定 `tifffile==2026.3.3`（BSD-3-Clause），仅用于 16-bit TIFF 输入/输出；LZW 压缩需要其可选的 `imagecodecs`，本项目不引入，因此 LZW TIFF 返回 415。
+
 可选配置：复制根目录配置样例。后端会自动读取仓库根目录的 `.env`，同时支持 `services/api/.env` 覆盖。
 
 ```powershell
@@ -272,13 +274,13 @@ npm run dev                  # Turbopack
 
 无需任何 API Key。默认使用离线 Mock Provider，界面会显示“模拟分析（未调用真实视觉模型）”；Mock 结果只用于开发与流程验证，不代表真实模型能力：
 
-1. 选择或拖入 JPEG/PNG/WebP 图片（超限或类型不符会在前后端双重拦截）。
+1. 选择或拖入 JPEG/PNG/WebP/TIFF 图片（超限或类型不符会在前后端双重拦截；TIFF 仅支持单页、未压缩或 Deflate）。
 2. 上传成功后自动创建编辑会话，左侧参数面板实时调整曝光、对比度、高光、阴影、色温、色调、饱和度、自然饱和度、清晰度、锐化、降噪、暗角、颗粒、旋转与裁切。
 3. 可按住空格查看原图进行前后对比。
 4. 每次保存生成 revision；支持撤销、重做、激活历史版本与重置。
 5. 点击工具栏“AI 摄影分析”：开始分析、查看场景/主体/光线与色彩/问题/建议、显示主体框、重新分析；失败可重试，切换图片会清空旧结果。
 6. 打开“AI 摄影师”面板：选择风格与强度或直接生成方案，查看参数改动、理由与证据；可在预览中确认，接受后写入普通历史，也可拒绝、重置或提交评分。对话输入用于自然语言修改，点评区显示确定性优点/问题/建议。
-7. 导出 JPEG/PNG：从原图全分辨率重渲染，自动剥离元数据并嵌入 sRGB。
+7. 导出 JPEG/PNG/TIFF：从原图全分辨率重渲染，自动剥离元数据并嵌入 sRGB；PNG/TIFF 可选 8/16-bit 并保留透明通道，JPEG 在白底合成且固定 8-bit。
 
 使用真实 OpenAI 兼容视觉/决策/规划服务时，可直接在页面顶栏打开“模型设置”，填写 Provider、模型名、Base URL 与 API Key 后“保存并应用”；规划模型留空的字段逐项跟随决策模型。也可以继续用 `.env` 设置 `FRAME_VISION_PROVIDER=openai`、`FRAME_DECISION_PROVIDER=openai`（可选 `FRAME_PLANNER_PROVIDER=openai`）及对应 `*_API_KEY`、`*_MODEL`、`*_API_BASE_URL`。本地保存的字段优先于环境变量，点击“恢复环境变量配置”会删除覆盖文件（包括规划覆盖）。缺少必需配置时启动或保存失败，不会静默回退到 Mock。密钥只留在服务端的本机覆盖文件或环境变量中，不会回显到页面、日志或前端构建产物，禁止提交到版本库。
 
@@ -300,7 +302,7 @@ npm run dev                  # Turbopack
 | `FRAME_RENDER_MAX_EDGE_DEFAULT` | `1600` | `final` 预览默认最长边 |
 | `FRAME_RENDER_MAX_EDGE_LIMIT` | `2560` | 预览最长边配置上限；请求字段本身仍限制在 1…2560 |
 | `FRAME_EXPORT_MAX_CONCURRENCY` | `1` | 同时准入的导出数量（1…4）；准入还要求"在跑导出估算之和"不超过下面的预算 |
-| `FRAME_EXPORT_MAX_RSS_MB` | `3072` | 导出预估峰值内存上限；超限返回 413 `export_too_large`，性能脚本也据此断言实测 RSS。系数在阶段四 Task 8 按 11 个实测峰值标定（45/240/8 B/px + 150 MB 基线 + 原图解码地板），默认值会拒绝 24 MP 满配方的全尺寸导出 |
+| `FRAME_EXPORT_MAX_RSS_MB` | `3072` | 导出预估峰值内存上限；超限返回 413 `export_too_large`，性能脚本也据此断言实测 RSS。系数在阶段四 Task 8 按 11 个实测峰值标定（45/240/8 B/px + 150 MB 基线 + 原图解码地板），复审整改 G4 把满配方降到 160 B/px；PNG/WebP/TIFF 输入另加 4 B/px 覆盖 alpha，16-bit 源与输出各加 18 B/px。默认值会拒绝 24 MP 满配方的全尺寸导出 |
 | `FRAME_EXPORT_DENOISE_SIMPLIFY_PIXELS` | `12000000` | 本次实际参与渲染的像素（应用 `maxEdge` 之后）超过该值且启用降噪时，导出使用简化降噪并返回 `X-Export-Warning` |
 | `FRAME_EXPORT_QUEUE_MAX` | `8` | 异步导出作业的等待队列上限（只计 `queued`，运行中的作业不计入）；达到上限后新作业返回 503 `server_busy` 并带 `Retry-After: 2` |
 | `FRAME_EXPORT_JOB_TTL_SECONDS` | `3600` | 已结束导出作业的状态与结果文件保留秒数；过期后查询返回 404 `export_not_found`，结果文件在启动时也会清空 |
@@ -407,18 +409,19 @@ data/
 
 | 项目 | 阶段 2 约定 |
 | --- | --- |
-| 允许格式 | JPEG、PNG、WebP |
+| 允许格式 | JPEG、PNG、WebP、TIFF |
 | 单次上传 | 仅一个 `file` 字段；多个文件返回 `400 invalid_upload` |
-| 单文件上限 | 20 MiB（可配置） |
+| 单文件上限 | 20 MiB（可配置；大 TIFF 需先用 Deflate 压缩） |
 | 像素上限 | 40,000,000（可配置） |
-| 声明 MIME | 必须是上述三种之一（`image/jpg` 归一为 JPEG） |
+| 声明 MIME | 必须是上述四种之一（`image/jpg` 归一为 JPEG） |
 | 内容核验 | Pillow 解码格式必须与声明 MIME 一致 |
 | 损坏/伪造 | 无效内容返回 `415 invalid_image`；类型不符返回 `415 mime_mismatch` |
-| 动画 | 动画 WebP/APNG 返回 `415 animated_not_supported` |
+| 动画 | 动画 WebP/APNG 与多页 TIFF 返回 415（前者 `animated_not_supported`，后者 `tiff_multipage_not_supported`） |
+| TIFF 压缩 | 仅未压缩与 Deflate；LZW/JPEG 等返回 `415 unsupported_tiff_compression` |
 | 超限 | 文件过大/像素超限返回 `413`，不会静默夹紧 |
-| Alpha | 当前统一合成到白底；导出 PNG 不含 alpha 通道 |
-| 色彩 | L/P/PA/1/RGBA/CMYK/I;16 等统一转 8-bit sRGB RGB；携带有效 RGB 设备空间配置的输入（含调色板、1-bit、灰度）在模式归一后转换到 sRGB；非 RGB 设备空间或损坏配置、以及无配置输入均**按 sRGB 解释**（显式默认策略）；导出不保留原 ICC 配置，恒嵌入 sRGB ICC。详见 `docs/color-management.md` |
-| 色彩管理边界 | 不做 RAW 显影、高位深/HDR 管线、CMYK 正确显影、非 RGB 配置转换、广色域输出与软打样；依赖评估结论为**不新增任何依赖**（`docs/decisions/ADR-0004-color-management.md`） |
+| Alpha | 导出路径保留 8/16-bit alpha：PNG/TIFF 输出 RGBA，JPEG 在白底合成；预览、代理与 AI 分析仍按白底合成且为 8-bit |
+| 色彩 | 8-bit 输入（L/P/PA/1/RGBA/CMYK 等）转 8-bit sRGB；16-bit PNG/TIFF 保持 16-bit，用 NumPy 矩阵/TRC 转到 sRGB；非 RGB 设备空间或损坏配置按 sRGB 解释；16-bit 的 LUT/非 RGB/XYZ 配置返回 422 `unsupported_icc_profile`；导出不保留原 ICC 配置，恒嵌入 sRGB ICC。详见 `docs/color-management.md` |
+| 色彩管理边界 | 不做 RAW 显影、32-bit/HDR 管线、16-bit JPEG、CMYK 正确显影、非 RGB 配置转换、广色域输出与软打样；TIFF 不支持 LZW/JPEG 压缩与多页。依赖为 Pillow/OpenCV/NumPy 与新增的 `tifffile==2026.3.3`（BSD-3-Clause），未引入 imagecodecs/rawpy/pillow-heif/colorio（`docs/decisions/ADR-0004-color-management.md`） |
 | 方向 | 读取 EXIF 方向并在渲染前烘焙进像素；原图字节保留原始 EXIF |
 
 服务端使用随机文件名与路径隔离；同时限制上传字节数和像素数。前端限制只用于即时提示，不能替代服务端校验。
@@ -449,7 +452,8 @@ data/
 | `POST /sessions/{id}/render` | 渲染预览，支持 `X-Render-Seq`，返回 `previewUrl/width/height/quality/cacheHit` |
 | `POST /sessions/{id}/undo|redo|activate|reset` | 历史操作 |
 | `GET /sessions/{id}/compare` | 原图侧仅应用旋转/裁切，与当前 revision 同尺寸对比 |
-| `POST /sessions/{id}/export` | 全分辨率导出 JPEG/PNG，带内存预算与简化降噪提示 |
+| `POST /sessions/{id}/export` | 全分辨率导出 JPEG/PNG/TIFF（可选 8/16-bit），带内存预算与降噪提示 |
+| `POST /exports`、`GET/DELETE /exports/{id}`、`GET /exports/{id}/result` | 异步导出作业：202 + 轮询、协作式取消、结果 TTL |
 | `DELETE /images/{id}`, `DELETE /sessions/{id}` | 硬删除图片/会话（204）；重复删除幂等，忙碌 409 |
 | `GET /previews/{previewId}` | 内容寻址预览缓存 |
 | `POST /analysis` | 创建异步分析任务；`force=true` 强制重新分析，去重命中返回 200 |
@@ -481,7 +485,7 @@ data/
 - **第三方数据留存**：发送到外部 Provider 的图片副本与结构化数据受该 Provider 自身的留存、日志与训练政策约束，本项目无法控制；接入前应确认服务条款与所在地区的合规要求。本项目不替用户开启训练授权，也不会把 Provider 返回的原始响应持久化。
 - 密钥只存在于服务器进程内存、`.env` 或本机覆盖文件 `<FRAME_DATA_DIR>/provider-settings.json` 中，不会出现在 API 响应、日志或前端构建产物中；`.env`、`data/` 与测试产物已被忽略。覆盖文件以明文保存密钥并尽力限制权限，能读取数据目录的本机进程仍可读取它。
 - 日志包含请求 ID、方法、路径、状态码、耗时、分析任务 ID 与阶段；不记录图片字节、Base64、原始文件名、配方内容、分析报告正文或密钥。
-- 导出与预览剥离全部 EXIF/XMP/IPTC/GPS 并嵌入 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。输出目标色彩空间恒为 sRGB、8-bit、RGB 三通道。
+- 导出与预览剥离全部 EXIF/XMP/IPTC/GPS 并嵌入 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。输出目标色彩空间恒为 sRGB，位深为 8 或 16（JPEG 固定 8）；PNG/TIFF 可带一条同深度的 alpha（RGBA），其余输出为 RGB 三通道。
 - 原图下载仍返回上传时的原始字节，包含可能存在的 EXIF/GPS 与原嵌入 ICC 配置；界面会提示这一点。契约是"原图不动、输出重编码"。
 - 当前没有登录、权限或限流；本机以外的访问不属于支持范围。
 
@@ -718,10 +722,10 @@ SQLite 记录仍存在但文件被移动/删除时，预览接口返回 `404 ima
 
 完整清单见 [docs/known-issues.md](docs/known-issues.md)。阶段 2/3/5 重点：
 
-1. **PNG alpha 未保留**：loader 统一合成到白底，导出 PNG 没有 alpha 通道；与任务书“PNG 保留 alpha”存在差距。
+1. **alpha 只在导出 PNG/TIFF 中保留（8/16-bit）**：导出的 PNG/TIFF 带 alpha、JPEG 白底合成；预览、代理与 AI 分析仍为 8-bit 白底合成，预览没有透明棋盘格。16-bit 只覆盖上传解码与导出，16-bit JPEG 不支持；16-bit + 降噪会跳过降噪并给出 `denoise_skipped_for_16bit`。
 2. **无真机回归**：只做了桌面 Chromium/Edge 与窄视口；未在真实 iOS Safari / Android Chrome 上验证触控与性能。
 3. **API 无鉴权**：仅支持本机单进程；多 worker 与跨进程并发未验证，`--host` 必须为 `127.0.0.1`。
-4. **大图导出内存是估算与单机采样**：Task 8 按 11 个实测行标定、G4 又按 8 个实测行重标定估算系数（中性 45／满配方 **160**／每个启用局部 8 B/px + 150 MB 基线 + 原图解码地板）。满配方本轮最高为 131 B/px，160 仍保留约 22% 余量；同档单次采样在不同轮次仍可能漂移约 11%。默认 3072 MB 预算仍会拒绝 24 MP 满配方的全尺寸导出（估算 3812 MB、实测 2907 MB）与 40 MP 满配方（估算 6254 MB、实测 4793 MB）；前者改选导出长边 2400（估算 1180 MB、实测 794 MB）或调高 `FRAME_EXPORT_MAX_RSS_MB` 可导出。静态估算之外还有 psutil 实时可用内存门（`FRAME_EXPORT_RESERVE_MB`），但它只是采样快照，不是实时 RSS 硬限制；结果依赖 Pillow/NumPy/OpenCV 版本与机器。
+4. **大图导出内存是估算与单机采样**：Task 8 按 11 个实测行标定、G4 又按 8 个实测行重标定估算系数（中性 45／满配方 **160**／每个启用局部 8 B/px + 150 MB 基线 + 原图解码地板）；B5b 为 16-bit 源与输出各加 18 B/px。满配方 8-bit 本轮最高为 131 B/px，160 仍保留约 22% 余量；同档单次采样在不同轮次仍可能漂移约 11%。16-bit 实测峰值 24/40 MP 中性 1026/1671 MB、满配方 2801/4616 MB，同尺寸 8-bit 中性 966/1562 MB，说明 36 B/px 附加项保守；默认 3072 MB 预算仍会拒绝 24 MP 满配方、40 MP 满配方与 40 MP 中性 16-bit（后者实测 1671 MB）。改选导出长边 2400 或调高 `FRAME_EXPORT_MAX_RSS_MB` 可导出。静态估算之外还有 psutil 实时可用内存门（`FRAME_EXPORT_RESERVE_MB`），但它只是采样快照，不是实时 RSS 硬限制；结果依赖 Pillow/NumPy/OpenCV/tifffile 版本与机器。
 5. **缓存写入的 Windows 兼容处理**：预览 `os.replace` 遇到目标文件被占用时使用锁/重试与回退，代理缓存写失败则继续使用内存结果；都不是跨进程缓存一致性方案。蒙版权重缓存有 24 MB 单条上限，24 MP 画布的权重（约 91.55 MB）因此不入库、每次导出都重算。
 6. **EXIF 原图下载**：原图字节保留原始 EXIF（含 GPS）；只有导出会剥离元数据。
 7. **AI 默认是 Mock**：默认模型结果用于开发与流程验证，不代表真实模型能力；没有真实 Provider 的准确率/成本评估，也没有像素级主体蒙版。
@@ -754,7 +758,7 @@ npm run dev
 
 打开 <http://127.0.0.1:3000>。
 
-**下一阶段建议：** 先处理阶段四唯一未达成的验收项——任务书 §八 的 14 类真实照片测试集与 §8.5 的人工评估记录（需要用户授权素材，`eval-data/` 目前不存在），并按 Task 拆分提交本阶段改动。性能主线应是管线级优化（减少全图 float32 中间量、分块渲染），内存估算系数已按 11 个实测峰值标定，不建议再调。语义蒙版、高位深与 alpha 输出、可中断导出、跨进程缓存都需要独立决策与 ADR，且必须保持"AI 不直接覆盖原图、原图字节不可变"的既有约束。**阶段 4 到此停止，未获确认不进入下一阶段。**
+**下一阶段建议：** 先处理阶段四唯一未达成的验收项——任务书 §八 的 14 类真实照片测试集与 §8.5 的人工评估记录（需要用户授权素材，`eval-data/` 目前不存在），并按 Task 拆分提交本阶段改动。性能主线应是管线级优化（减少全图 float32 中间量、分块渲染），内存估算系数已按实测峰值标定，不建议再调。语义蒙版、可中断导出、跨进程缓存与 32-bit/HDR 管线仍需要独立决策与 ADR，且必须保持"AI 不直接覆盖原图、原图字节不可变"的既有约束。**阶段 4 到此停止，未获确认不进入下一阶段。**
 
 ## 阶段 5 交接
 

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
 from pathlib import Path
 
+import cv2
+import numpy as np
 import pytest
+import tifffile
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.core.config import Settings
 from app.main import create_app
@@ -18,6 +23,7 @@ from tests.conftest import image_row, make_image, upload
         ("PNG", "photo.png", "image/png", "image/png"),
         ("JPEG", "photo.jpg", "image/jpeg", "image/jpeg"),
         ("WEBP", "photo.webp", "image/webp", "image/webp"),
+        ("TIFF", "photo.tiff", "image/tiff", "image/tiff"),
     ],
 )
 def test_upload_supported_formats(
@@ -55,6 +61,86 @@ def test_upload_supported_formats(
     assert original.headers["x-content-type-options"] == "nosniff"
     assert "inline" in original.headers["content-disposition"]
     assert original.content == payload
+
+
+def _png16(size: tuple[int, int] = (64, 48)) -> bytes:
+    width, height = size
+    values = np.zeros((height, width, 3), dtype=np.uint16)
+    values[..., 0] = np.linspace(0, 65535, width, dtype=np.uint16)[None, :]
+    success, encoded = cv2.imencode(".png", np.ascontiguousarray(values[..., ::-1]))
+    assert bool(success)
+    return encoded.tobytes()
+
+
+def _tiff16(size: tuple[int, int] = (64, 48)) -> bytes:
+    width, height = size
+    values = np.zeros((height, width, 3), dtype=np.uint16)
+    values[..., 1] = np.linspace(0, 65535, width, dtype=np.uint16)[None, :]
+    buffer = io.BytesIO()
+    tifffile.imwrite(buffer, values, photometric="rgb", compression="deflate")
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "builder"),
+    [
+        ("photo16.png", "image/png", _png16),
+        ("photo16.tiff", "image/tiff", _tiff16),
+    ],
+)
+def test_upload_accepts_16_bit_png_and_tiff(
+    client: TestClient,
+    filename: str,
+    content_type: str,
+    builder,
+):
+    payload = builder()
+
+    response = upload(client, payload, filename, content_type)
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["mimeType"] == content_type
+    assert (body["width"], body["height"]) == (64, 48)
+    assert body["bytes"] == len(payload)
+    original = client.get(f"/api/v1/images/{body['imageId']}/original")
+    assert original.status_code == 200
+    assert original.content == payload
+
+
+def test_upload_rejects_unsupported_tiff_compression(client: TestClient):
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), (120, 80, 40)).save(buffer, format="TIFF", compression="tiff_lzw")
+
+    response = upload(client, buffer.getvalue(), "photo.tiff", "image/tiff")
+
+    assert response.status_code == 415
+    assert response.json()["error"]["code"] == "unsupported_tiff_compression"
+
+
+@pytest.mark.parametrize("dtype", [np.uint8, np.uint16], ids=["8-bit", "16-bit"])
+def test_upload_rejects_tiff_associated_alpha(client: TestClient, dtype):
+    values = np.full((4, 4, 4), 128, dtype=dtype)
+    buffer = io.BytesIO()
+    tifffile.imwrite(buffer, values, photometric="rgb", extrasamples=["assocalpha"])
+
+    response = upload(client, buffer.getvalue(), "premultiplied.tiff", "image/tiff")
+
+    assert response.status_code == 415
+    error = response.json()["error"]
+    assert error["code"] == "associated_alpha_not_supported"
+    assert error["details"]["extraSamples"] == [1]
+
+
+def test_upload_rejects_multi_page_tiff(client: TestClient):
+    frames = [Image.new("RGB", (8, 8), color) for color in ((255, 0, 0), (0, 255, 0))]
+    buffer = io.BytesIO()
+    frames[0].save(buffer, format="TIFF", save_all=True, append_images=frames[1:])
+
+    response = upload(client, buffer.getvalue(), "photo.tiff", "image/tiff")
+
+    assert response.status_code == 415
+    assert response.json()["error"]["code"] == "tiff_multipage_not_supported"
 
 
 def test_preview_preserves_original_bytes_and_supports_download(
@@ -142,7 +228,6 @@ def test_png_with_trailing_markup_is_served_as_nosniff_image(client: TestClient)
     [
         ("photo.gif", "image/gif", make_image("GIF")),
         ("photo.bmp", "image/bmp", make_image("BMP")),
-        ("photo.tiff", "image/tiff", make_image("TIFF")),
         (
             "vector.svg",
             "image/svg+xml",

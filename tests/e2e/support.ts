@@ -10,6 +10,8 @@ import path from "node:path";
 export const ROOT = path.resolve(__dirname, "../..");
 export const ARTIFACTS = path.join(ROOT, "tests", "e2e", ".artifacts");
 export const FIXTURE_JSON = path.join(ARTIFACTS, "fixture.json");
+export const ALPHA_FIXTURE_JSON = path.join(ARTIFACTS, "alpha-fixture.json");
+export const SIXTEEN_FIXTURE_JSON = path.join(ARTIFACTS, "sixteen-fixture.json");
 
 export function analysisFixtureJson(projectName: string): string {
   const variant = projectName.includes("mobile") ? "mobile" : "desktop";

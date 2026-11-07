@@ -6,7 +6,10 @@ import time
 from pathlib import Path
 from uuid import UUID
 
+import cv2
+import numpy as np
 import pytest
+import tifffile
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -26,6 +29,77 @@ def _session(client: TestClient, *, size: tuple[int, int] = (640, 480)) -> dict[
     return response.json()
 
 
+def _transparent_png(size: tuple[int, int] = (80, 60)) -> bytes:
+    width, height = size
+    y, x = np.mgrid[0:height, 0:width].astype(np.float32)
+    alpha = np.clip(
+        np.minimum(np.minimum(x, width - 1 - x), np.minimum(y, height - 1 - y))
+        / (min(width, height) * 0.25),
+        0.0,
+        1.0,
+    )
+    rgba = np.dstack(
+        [
+            np.full((height, width), 200.0),
+            np.full((height, width), 100.0),
+            np.full((height, width), 60.0),
+            alpha * 255.0,
+        ]
+    )
+    image = Image.fromarray(np.clip(np.rint(rgba), 0, 255).astype(np.uint8), "RGBA")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _png16(size: tuple[int, int] = (64, 48), *, alpha: bool = False) -> bytes:
+    width, height = size
+    total = width * height
+    ramp = (
+        (np.arange(total, dtype=np.uint32) * 65535 // max(total - 1, 1))
+        .astype(np.uint16)
+        .reshape(height, width)
+    )
+    rgb = np.stack([ramp, (65535 - ramp).astype(np.uint16), ramp // 2], axis=-1)
+    if alpha:
+        coverage = np.linspace(0, 65535, width, dtype=np.uint16)
+        coverage = np.repeat(coverage[None, :], height, axis=0)
+        rgba = np.dstack([rgb, coverage])
+        source = np.dstack([rgba[..., 2::-1], rgba[..., 3]])
+    else:
+        source = rgb[..., ::-1]
+    success, encoded = cv2.imencode(".png", np.ascontiguousarray(source))
+    assert bool(success)
+    return encoded.tobytes()
+
+
+def _tiff16(size: tuple[int, int] = (64, 48)) -> bytes:
+    width, height = size
+    total = width * height
+    ramp = (
+        (np.arange(total, dtype=np.uint32) * 65535 // max(total - 1, 1))
+        .astype(np.uint16)
+        .reshape(height, width)
+    )
+    values = np.stack([ramp, (65535 - ramp).astype(np.uint16), ramp // 2], axis=-1)
+    buffer = io.BytesIO()
+    tifffile.imwrite(buffer, values, photometric="rgb", compression="deflate")
+    return buffer.getvalue()
+
+
+def _session_from(
+    client: TestClient,
+    payload: bytes,
+    filename: str,
+    content_type: str,
+) -> dict[str, object]:
+    image = upload(client, payload, filename, content_type)
+    assert image.status_code == 201, image.text
+    response = client.post("/api/v1/sessions", json={"imageId": image.json()["imageId"]})
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def _submit(
     client: TestClient,
     session: dict[str, object],
@@ -33,6 +107,7 @@ def _submit(
     revision_id: object | None = None,
     image_format: str = "jpeg",
     max_edge: int | None = 320,
+    bit_depth: int | None = None,
 ):
     body: dict[str, object] = {
         "sessionId": session["sessionId"],
@@ -41,6 +116,8 @@ def _submit(
     }
     if max_edge is not None:
         body["maxEdge"] = max_edge
+    if bit_depth is not None:
+        body["bitDepth"] = bit_depth
     return client.post("/api/v1/exports", json=body)
 
 
@@ -115,6 +192,225 @@ def test_export_job_runs_to_completion_and_serves_the_result(
     assert client.delete(f"/api/v1/exports/{job_id}").status_code == 204
     assert client.delete(f"/api/v1/exports/{job_id}").status_code == 204
     assert client.get(f"/api/v1/exports/{job_id}").json()["status"] == "succeeded"
+
+
+def test_async_png_export_download_preserves_alpha(client: TestClient):
+    payload = _transparent_png()
+    image = upload(client, payload, "alpha.png", "image/png")
+    assert image.status_code == 201, image.text
+    session = client.post(
+        "/api/v1/sessions",
+        json={"imageId": image.json()["imageId"]},
+    ).json()
+
+    created = _submit(client, session, image_format="png", max_edge=None)
+    assert created.status_code == 202, created.text
+    job_id = created.json()["jobId"]
+    finished = _wait_for(client, job_id)
+
+    assert finished["status"] == "succeeded"
+    assert str(finished["filename"]).endswith(".png")
+    result = client.get(f"/api/v1/exports/{job_id}/result")
+    assert result.status_code == 200, result.text
+    assert result.headers["content-type"] == "image/png"
+    with Image.open(io.BytesIO(result.content)) as exported:
+        assert exported.mode == "RGBA"
+        assert exported.size == (80, 60)
+        alpha = np.asarray(exported.getchannel("A"), dtype=np.uint8)
+    assert alpha.min() == 0
+    assert alpha.max() == 255
+    assert 0.0 < float((alpha == 0).mean()) < 0.5
+
+
+def test_async_16_bit_png_export_is_really_16_bit(client: TestClient):
+    session = _session_from(client, _png16((64, 48)), "photo16.png", "image/png")
+
+    created = _submit(client, session, image_format="png", max_edge=None, bit_depth=16)
+
+    assert created.status_code == 202, created.text
+    assert created.json()["bitDepth"] == 16
+    job_id = created.json()["jobId"]
+    finished = _wait_for(client, job_id)
+    assert finished["status"] == "succeeded"
+    assert finished["bitDepth"] == 16
+    assert str(finished["filename"]).endswith(".png")
+
+    result = client.get(f"/api/v1/exports/{job_id}/result")
+    assert result.status_code == 200, result.text
+    assert result.headers["content-type"] == "image/png"
+    assert result.headers["x-export-bit-depth"] == "16"
+    # PNG IHDR carries bit depth 16 and truecolour, not truecolour-alpha.
+    assert result.content[24] == 16
+    assert result.content[25] == 2
+    decoded = cv2.imdecode(np.frombuffer(result.content, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    assert decoded is not None
+    assert decoded.dtype == np.uint16
+    assert decoded.shape == (48, 64, 3)
+    # An 8-bit export can only ever carry 256 levels.
+    assert np.unique(decoded).size > 1000
+
+
+def test_async_16_bit_tiff_export_is_really_16_bit(client: TestClient):
+    session = _session_from(client, _tiff16((64, 48)), "photo16.tiff", "image/tiff")
+
+    created = _submit(client, session, image_format="tiff", max_edge=None, bit_depth=16)
+
+    assert created.status_code == 202, created.text
+    assert created.json()["bitDepth"] == 16
+    job_id = created.json()["jobId"]
+    finished = _wait_for(client, job_id)
+    assert finished["status"] == "succeeded"
+    assert finished["bitDepth"] == 16
+    assert str(finished["filename"]).endswith(".tiff")
+
+    result = client.get(f"/api/v1/exports/{job_id}/result")
+    assert result.status_code == 200, result.text
+    assert result.headers["content-type"] == "image/tiff"
+    assert result.headers["x-export-bit-depth"] == "16"
+    array = tifffile.imread(io.BytesIO(result.content))
+    assert array.dtype == np.uint16
+    assert array.shape == (48, 64, 3)
+    assert np.unique(array).size > 1000
+    with tifffile.TiffFile(io.BytesIO(result.content)) as tif:
+        page = tif.pages[0]
+        assert page.compression == 32946
+        assert page.tags[34675].value  # embedded ICC profile
+        assert page.tags[258].value == (16, 16, 16)
+
+
+def test_async_16_bit_png_export_preserves_alpha(client: TestClient):
+    session = _session_from(client, _png16((80, 60), alpha=True), "alpha16.png", "image/png")
+
+    created = _submit(client, session, image_format="png", max_edge=None, bit_depth=16)
+    assert created.status_code == 202, created.text
+    job_id = created.json()["jobId"]
+    assert _wait_for(client, job_id)["status"] == "succeeded"
+    result = client.get(f"/api/v1/exports/{job_id}/result")
+    assert result.status_code == 200, result.text
+    assert result.content[24] == 16
+    assert result.content[25] == 6
+    decoded = cv2.imdecode(np.frombuffer(result.content, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    assert decoded is not None
+    assert decoded.dtype == np.uint16
+    assert decoded.shape == (60, 80, 4)
+    alpha = decoded[..., 3]
+    assert int(alpha.min()) == 0
+    assert int(alpha.max()) == 65535
+
+
+def test_async_16_bit_denoise_is_skipped_with_a_warning(client: TestClient):
+    session = _session_from(client, _png16((64, 48)), "photo16.png", "image/png")
+    revision = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/revisions",
+        json={
+            "recipe": {"adjustments": {"denoise": 50}},
+            "parentRevisionId": session["activeRevisionId"],
+        },
+    )
+    assert revision.status_code == 201, revision.text
+
+    created = _submit(
+        client,
+        session,
+        revision_id=revision.json()["activeRevisionId"],
+        image_format="png",
+        max_edge=None,
+        bit_depth=16,
+    )
+
+    assert created.status_code == 202, created.text
+    job_id = created.json()["jobId"]
+    finished = _wait_for(client, job_id)
+    assert finished["status"] == "succeeded"
+    assert finished["bitDepth"] == 16
+    assert finished["warnings"] == ["denoise_skipped_for_16bit"]
+    result = client.get(f"/api/v1/exports/{job_id}/result")
+    assert result.status_code == 200, result.text
+    assert result.headers["x-export-warning"] == "denoise_skipped_for_16bit"
+
+
+def test_16_bit_jpeg_is_rejected_before_a_job_is_created(client: TestClient):
+    session = _session_from(client, _png16((64, 48)), "photo16.png", "image/png")
+    revision_id = session["activeRevisionId"]
+
+    async_response = _submit(client, session, image_format="jpeg", bit_depth=16)
+
+    assert async_response.status_code == 422
+    assert client.app.state.export_jobs.active_sessions() == frozenset()
+
+    sync_response = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/export",
+        json={"revisionId": revision_id, "format": "jpeg", "bitDepth": 16},
+    )
+    assert sync_response.status_code == 422
+
+
+def test_16_bit_export_surcharge_pushes_it_over_the_memory_budget(tmp_path: Path):
+    eight_settings = _settings(tmp_path / "eight", export_max_rss_mb=170)
+    with TestClient(create_app(eight_settings)) as eight_client:
+        session = _session(eight_client)
+        eight = eight_client.post(
+            f"/api/v1/sessions/{session['sessionId']}/export",
+            json={"revisionId": session["activeRevisionId"], "format": "png"},
+        )
+
+    sixteen_settings = _settings(tmp_path / "sixteen", export_max_rss_mb=170)
+    with TestClient(create_app(sixteen_settings)) as sixteen_client:
+        session16 = _session_from(sixteen_client, _png16((640, 480)), "photo16.png", "image/png")
+        sixteen = sixteen_client.post(
+            f"/api/v1/sessions/{session16['sessionId']}/export",
+            json={
+                "revisionId": session16["activeRevisionId"],
+                "format": "png",
+                "bitDepth": 16,
+            },
+        )
+
+    assert eight.status_code == 200
+    assert sixteen.status_code == 413
+    assert sixteen.json()["error"]["code"] == "export_too_large"
+
+
+def test_sync_16_bit_png_export_serves_16_bit_samples(client: TestClient):
+    session = _session_from(client, _png16((64, 48)), "photo16.png", "image/png")
+
+    response = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/export",
+        json={
+            "revisionId": session["activeRevisionId"],
+            "format": "png",
+            "bitDepth": 16,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["x-export-bit-depth"] == "16"
+    assert str(response.headers["content-disposition"]).endswith('.png"')
+    decoded = cv2.imdecode(np.frombuffer(response.content, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    assert decoded is not None
+    assert decoded.dtype == np.uint16
+    assert np.unique(decoded).size > 1000
+
+
+def test_explicit_8_bit_matches_the_default_export_bytes(client: TestClient):
+    session = _session(client)
+    url = f"/api/v1/sessions/{session['sessionId']}/export"
+    revision_id = session["activeRevisionId"]
+
+    for image_format, expected_type in (("png", "image/png"), ("tiff", "image/tiff")):
+        default = client.post(url, json={"revisionId": revision_id, "format": image_format})
+        explicit = client.post(
+            url,
+            json={"revisionId": revision_id, "format": image_format, "bitDepth": 8},
+        )
+
+        assert default.status_code == 200, default.text
+        assert explicit.status_code == 200, explicit.text
+        assert default.headers["content-type"] == expected_type
+        assert default.content == explicit.content
+        assert default.headers["x-export-bit-depth"] == "8"
+        assert explicit.headers["x-export-bit-depth"] == "8"
 
 
 def test_export_job_rejects_unknown_ids_and_foreign_revisions(client: TestClient):

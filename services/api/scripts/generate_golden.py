@@ -50,7 +50,9 @@ def main() -> None:
                 quality="export",
             )
             file_name = golden_file(image_name, recipe_name)
-            (GOLDEN_DIR / file_name).write_bytes(encode_image(rendered.rgb, image_format="png"))
+            (GOLDEN_DIR / file_name).write_bytes(
+                encode_image(rendered.rgb, image_format="png", alpha=rendered.alpha)
+            )
             cases.append({"image": image_name, "recipe": recipe_name, "file": file_name})
             print(f"wrote {file_name} ({rendered.width}x{rendered.height})")
 

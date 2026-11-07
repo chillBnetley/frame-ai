@@ -10,6 +10,9 @@ function makeFile(size: number, type: string, name = "photo.png"): File {
 describe("validateUploadFile", () => {
   it("accepts supported image types within the size limit", () => {
     expect(validateUploadFile(makeFile(1024, "image/png"))).toEqual({ ok: true });
+    expect(validateUploadFile(makeFile(1024, "image/tiff", "photo.tiff"))).toEqual({
+      ok: true,
+    });
   });
 
   it("accepts a file with an empty MIME type and lets the server inspect it", () => {

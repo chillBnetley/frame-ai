@@ -15,6 +15,7 @@ from uuid import uuid4
 from app.core.errors import AppError
 from app.imaging.pipeline import RenderCancelled
 from app.models.export import (
+    ExportBitDepth,
     ExportJobError,
     ExportJobResponse,
     ExportJobStatus,
@@ -48,6 +49,7 @@ class _ExportJob:
     filename: str | None = None
     width: int | None = None
     height: int | None = None
+    bit_depth: ExportBitDepth = 8
     media_type: str | None = None
     warnings: tuple[str, ...] = ()
     error: AppError | None = None
@@ -123,6 +125,7 @@ class ExportJobManager:
             id=uuid4().hex,
             session_id=str(state.session_id),
             request=request,
+            bit_depth=request.bit_depth,
             created_at=now,
             updated_at=now,
         )
@@ -341,6 +344,7 @@ class ExportJobManager:
                 filename=job.filename,
                 width=job.width,
                 height=job.height,
+                bit_depth=job.bit_depth,
                 warnings=list(job.warnings),
                 error=error,
                 created_at=job.created_at,
@@ -398,6 +402,7 @@ class ExportJobManager:
                     job.width = result.width
                     job.height = result.height
                     job.media_type = result.media_type
+                    job.bit_depth = result.bit_depth
                     job.warnings = result.warnings
                     job.updated_at = _utcnow()
                     job.finished_at = time.time()

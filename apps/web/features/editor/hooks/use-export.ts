@@ -13,7 +13,7 @@ import {
   type ExportJob,
 } from "@/lib/api/sessions";
 import { describeEditorError, type EditorError } from "@/lib/error-messages";
-import type { ExportFormat } from "@/types/session";
+import type { ExportBitDepth, ExportFormat } from "@/types/session";
 
 export type ExportStatus = "idle" | "exporting" | "success" | "error" | "cancelled";
 
@@ -32,6 +32,7 @@ export interface ExportImageOptions {
   format: ExportFormat;
   quality?: number | null;
   maxEdge?: number | null;
+  bitDepth?: ExportBitDepth;
 }
 
 export interface UseExportResult {

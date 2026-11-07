@@ -2,6 +2,7 @@ import { ApiClientError, apiJson, apiRequest } from "@/lib/api/client";
 import type {
   CompareResponse,
   EditRecipe,
+  ExportBitDepth,
   ExportFormat,
   RenderResponse,
   RevisionListResponse,
@@ -208,7 +209,8 @@ function parseFilename(disposition: string | null, format: ExportFormat): string
   if (match?.[1]) {
     return match[1];
   }
-  return format === "png" ? "frame.png" : "frame.jpg";
+  const extension = format === "png" ? ".png" : format === "tiff" ? ".tiff" : ".jpg";
+  return `frame${extension}`;
 }
 
 function parseDimension(value: string | null): number | null {
@@ -226,6 +228,7 @@ export async function exportSession(
     format: ExportFormat;
     quality?: number | null;
     maxEdge?: number | null;
+    bitDepth?: ExportBitDepth;
   },
   signal?: AbortSignal,
 ): Promise<ExportResult> {
@@ -237,6 +240,7 @@ export async function exportSession(
       body: JSON.stringify({
         revisionId: request.revisionId,
         format: request.format,
+        bitDepth: request.bitDepth ?? 8,
         ...(request.quality === undefined || request.quality === null
           ? {}
           : { quality: request.quality }),
@@ -275,6 +279,7 @@ export interface ExportJob {
   filename: string | null;
   width: number | null;
   height: number | null;
+  bitDepth: ExportBitDepth;
   warnings: string[];
   error: ExportJobError | null;
   createdAt: string;
@@ -288,6 +293,7 @@ export async function createExportJob(
     format: ExportFormat;
     quality?: number | null;
     maxEdge?: number | null;
+    bitDepth?: ExportBitDepth;
   },
   signal?: AbortSignal,
 ): Promise<ExportJob> {
@@ -300,6 +306,7 @@ export async function createExportJob(
         sessionId,
         revisionId: request.revisionId,
         format: request.format,
+        bitDepth: request.bitDepth ?? 8,
         ...(request.quality === undefined || request.quality === null
           ? {}
           : { quality: request.quality }),

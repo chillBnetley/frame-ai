@@ -166,6 +166,7 @@ class AnalysisOrchestrator:
             loaded = load_image(
                 preprocessed.image.data,
                 max_pixels=self._settings.max_image_pixels,
+                preserve_alpha=False,
             )
             measurements = extract_features(
                 loaded,
@@ -283,6 +284,7 @@ class AnalysisOrchestrator:
         loaded = load_image(
             preprocessed.image.data,
             max_pixels=self._settings.max_image_pixels,
+            preserve_alpha=False,
         )
         return extract_features(
             loaded,

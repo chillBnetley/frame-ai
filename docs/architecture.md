@@ -95,11 +95,12 @@ POST /api/v1/sessions/{id}/undo|redo|activate|reset
 完整策略与实测数据见 [color-management.md](color-management.md)，决策见 [ADR-0004](decisions/ADR-0004-color-management.md)。摘要：
 
 - **输入**：EXIF 方向先烘焙，再在模式归一之后做配置管理。携带有效 RGB 设备空间配置的输入（`RGB`/`RGBA`/`P`/`PA`/`1`/`L`/`LA`）经 lcms2 转 sRGB（相对色度 + 黑点补偿）；配置设备空间非 RGB、配置损坏或为空时**回退按 sRGB 解释**；无配置时**按 sRGB 解释**——这是显式默认策略，不是隐含行为。不存在"把所有输入无条件当作同一色彩空间"的分支。
-- **入口分层**：上传闸门只接受 JPEG/PNG/WebP；loader 能解码更多容器（实测 TIFF），但不受入口暴露。色彩管理与容器无关。
-- **工作空间**：float32 `[0,1]` sRGB 编码值贯穿管线，只在末端量化一次。`app/imaging` 内 `astype(np.uint8)` 站点固定 4 处（末端量化、OpenCV 去噪的 8-bit 限制、8-bit 代理、分析用边缘检测），渲染阶段模块由测试禁止引入中间量化。
-- **位深**：16-bit RGB 输入在 Pillow 解码阶段降 8-bit（实测 ≤0.72 级）；16-bit 灰度直接进 float32。8-bit 代理是实测取舍：强曲线下 max 4 级 / mean 0.33 级且不产生色带，因此不升级 16-bit 代理。
-- **输出**：目标空间恒为 sRGB、8-bit，JPEG/PNG 均嵌入固定 sRGB ICC（头部时间戳 pin 死以保证跨进程字节一致），预览与导出都剥离全部元数据。原图字节不改写，`GET /images/{id}/original` 仍带原配置与原 EXIF/GPS。
-- **依赖**：实测确认 OpenCV 不参与色彩管理（`cv2.iccread` 不存在）、Pillow 无 16-bit RGB 模式、`rawpy`/`pillow-heif` 未安装 → **不新增任何依赖**；RAW、高位深管线、CMYK 正确显影、灰度配置转换、导出 PNG alpha 均为明确不支持项。
+- **入口分层**：上传闸门接受 JPEG/PNG/WebP/TIFF；TIFF 只支持单页、未压缩或 Deflate，LZW/JPEG 返回 415。色彩管理与容器无关。
+- **工作空间**：float32 `[0,1]` sRGB 编码值贯穿管线，只在末端量化一次（8-bit 或 16-bit）。`app/imaging` 内 `astype(np.uint8)` 站点固定于末端量化、OpenCV 去噪的 8-bit 限制、8-bit 代理与分析用边缘检测；渲染阶段模块由测试禁止引入中间量化。
+- **位深**：16-bit PNG 用 OpenCV `IMREAD_UNCHANGED`、16-bit TIFF 用 tifffile 解码，Pillow 只提供容器/ICC/方向元数据，因此 16-bit RGB 不再被截断。8-bit 代理仍是实测取舍：强曲线下 max 4 级 / mean 0.33 级且不产生色带，因此预览/代理不升级 16-bit；16-bit 源的代理缓存键追加 `|b16`。
+- **ICC（16-bit）**：纯 NumPy 矩阵/TRC（`curv`/`para 0–4`）经 D50 PCS 转 sRGB，float32、256 行分块；sRGB/untagged 走恒等快路径。LUT/mAB/mft 或非 RGB/XYZ 配置返回 422 `unsupported_icc_profile`，不静默降级；8-bit 路径继续 lcms2。
+- **输出**：目标空间恒为 sRGB，位深 8 或 16（JPEG 固定 8）；JPEG/PNG/TIFF 均嵌入固定 sRGB ICC（头部时间戳 pin 死以保证跨进程字节一致），预览与导出都剥离全部元数据。PNG/TIFF 可保留同深度 alpha，JPEG 与预览白底合成。原图字节不改写，`GET /images/{id}/original` 仍带原配置与原 EXIF/GPS。
+- **依赖**：OpenCV 不参与色彩管理，tifffile **2026.3.3（BSD-3-Clause）** 仅用于 16-bit TIFF；未引入 `imagecodecs`/`rawpy`/`pillow-heif`/`colorio`。仍不支持 RAW 显影、32-bit/HDR、16-bit JPEG、CMYK 正确显影、LUT ICC、TIFF LZW/JPEG 与多页。
 
 ### 全局调色数学定义
 
@@ -229,8 +230,8 @@ POST /api/v1/sessions/{id}/export
   → 并发槽位 + 在跑导出估算之和双重准入（不满足立即 503 server_busy，带 Retry-After: 2）
   → 全分辨率解码原图 → 需要时先把源缩放到 maxEdge 对应尺寸（不放大）
   → 与预览同一个 render(quality="export")（计划像素超阈值且启用降噪时带 X-Export-Warning）
-  → 剥离 EXIF/XMP/IPTC/GPS，嵌入 sRGB ICC
-  → JPEG/PNG 文件流 + X-Export-Width/Height（缩放后的实际画布）
+  → 剥离 EXIF/XMP/IPTC/GPS，嵌入 sRGB ICC，按 bitDepth 量化到 8/16-bit
+  → JPEG/PNG/TIFF 文件流 + X-Export-Width/Height/Bit-Depth（缩放后的实际画布）
 ```
 
 - 缩放发生在解码之后、管线之前：`maxEdge` 导出仍读原图字节，但参与渲染的像素数按计划尺寸计算，因此耗时与内存都显著低于全尺寸导出，构图与全尺寸一致。

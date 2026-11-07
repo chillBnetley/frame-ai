@@ -36,6 +36,7 @@ python-multipart==0.0.33
 PyYAML==6.0.3
 ruff==0.17.3
 starlette==1.10.0
+tifffile==2026.3.3
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 uvicorn==0.54.0

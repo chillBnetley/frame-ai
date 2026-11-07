@@ -5,11 +5,15 @@ from collections import OrderedDict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import cast
 from uuid import UUID
+
+import numpy as np
+from numpy.typing import NDArray
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.imaging.loader import load_proxy, proxy_cache_directory
+from app.imaging.loader import load_proxy, probe_bit_depth, proxy_cache_directory
 from app.imaging.local_masks import local_adjustment_warnings
 from app.imaging.output import JPEG_QUALITY, encode_image
 from app.imaging.params_map import DRAFT_MAX_EDGE, ENGINE_VERSION
@@ -144,7 +148,11 @@ class RenderService:
                     "A newer render request replaced this one.",
                 )
 
-            proxy_key = self.proxy_cache.key_for(record.sha256, edge)
+            proxy_key = self.proxy_cache.key_for(
+                record.sha256,
+                edge,
+                bit_depth=probe_bit_depth(path),
+            )
             proxy = self.proxy_cache.get(proxy_key)
             if proxy is None:
                 proxy = load_proxy(
@@ -176,7 +184,11 @@ class RenderService:
                 quality=request.quality,
                 max_edge=edge,
             )
-            data = encode_image(rendered.rgb, image_format="jpeg", quality=JPEG_QUALITY)
+            data = encode_image(
+                cast(NDArray[np.uint8], rendered.rgb),
+                image_format="jpeg",
+                quality=JPEG_QUALITY,
+            )
             self.previews.write(preview_id, data)
 
         return RenderResult(

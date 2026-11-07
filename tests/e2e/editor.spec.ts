@@ -5,8 +5,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  ALPHA_FIXTURE_JSON,
   ARTIFACTS,
   FIXTURE_JSON,
+  SIXTEEN_FIXTURE_JSON,
   openApp,
   requirePython,
   uploadFixture,
@@ -153,6 +155,127 @@ test("upload, adjust, compare, undo/redo/reset, and export JPEG", async ({
     () => document.documentElement.scrollWidth > window.innerWidth + 1,
   );
   expect(overflow, "page must not scroll horizontally").toBe(false);
+});
+
+test("16-bit PNG upload exports genuinely 16-bit samples", async ({
+  page,
+}, testInfo) => {
+  const sixteenFixture: Fixture = JSON.parse(
+    fs.readFileSync(SIXTEEN_FIXTURE_JSON, "utf8"),
+  );
+
+  await openApp(page);
+  await uploadFixture(page, { fixtureJson: SIXTEEN_FIXTURE_JSON });
+
+  await page.getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出图像" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole("radio", { name: /^PNG/ }).check();
+  const sixteenBit = dialog.getByRole("radio", { name: /^16-bit/ });
+  await sixteenBit.check();
+  await expect(sixteenBit).toBeChecked();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "开始导出" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.png$/);
+
+  const exportPath = path.join(ARTIFACTS, `sixteen-${testInfo.project.name}.png`);
+  await download.saveAs(exportPath);
+  await expect(page.getByText(/导出完成/)).toBeVisible({ timeout: 120_000 });
+
+  const verified = JSON.parse(
+    execFileSync(
+      requirePython(),
+      [
+        path.join(__dirname, "verify_export.py"),
+        exportPath,
+        String(sixteenFixture.width),
+        String(sixteenFixture.height),
+        "png16",
+      ],
+      { encoding: "utf8" },
+    ),
+  ) as {
+    ok: boolean;
+    bit_depth: number;
+    unique_levels: number;
+    div257_fraction: number;
+    icc_description: string;
+  };
+  expect(verified.ok).toBe(true);
+  expect(verified.bit_depth).toBe(16);
+  expect(verified.unique_levels).toBeGreaterThan(4096);
+  expect(verified.div257_fraction).toBeLessThan(0.5);
+  expect(verified.icc_description.toLowerCase()).toContain("srgb");
+});
+
+test("transparent PNG export keeps alpha and JPEG composites on white", async ({
+  page,
+}, testInfo) => {
+  const alphaFixture: Fixture = JSON.parse(
+    fs.readFileSync(ALPHA_FIXTURE_JSON, "utf8"),
+  );
+
+  await openApp(page);
+  await uploadFixture(page, { fixtureJson: ALPHA_FIXTURE_JSON });
+
+  await page.getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出图像" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole("radio", { name: /^PNG/ }).check();
+  const pngDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "开始导出" }).click();
+  const pngPath = path.join(ARTIFACTS, `alpha-${testInfo.project.name}.png`);
+  await (await pngDownload).saveAs(pngPath);
+  await expect(page.getByText(/导出完成/)).toBeVisible({ timeout: 120_000 });
+
+  const verifiedPng = JSON.parse(
+    execFileSync(
+      requirePython(),
+      [
+        path.join(__dirname, "verify_export.py"),
+        pngPath,
+        String(alphaFixture.width),
+        String(alphaFixture.height),
+        "alpha-png",
+      ],
+      { encoding: "utf8" },
+    ),
+  ) as {
+    ok: boolean;
+    mode: string;
+    alpha: { levels: number; transparent_fraction: number };
+  };
+  expect(verifiedPng.ok).toBe(true);
+  expect(verifiedPng.mode).toBe("RGBA");
+  expect(verifiedPng.alpha.levels).toBeGreaterThan(2);
+  expect(verifiedPng.alpha.transparent_fraction).toBeGreaterThan(0);
+
+  await dialog.getByRole("radio", { name: /^JPEG/ }).check();
+  const jpegDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "再次导出" }).click();
+  const jpegPath = path.join(ARTIFACTS, `alpha-${testInfo.project.name}.jpg`);
+  await (await jpegDownload).saveAs(jpegPath);
+  await expect(page.getByText(/导出完成/)).toBeVisible({ timeout: 120_000 });
+
+  const verifiedJpeg = JSON.parse(
+    execFileSync(
+      requirePython(),
+      [
+        path.join(__dirname, "verify_export.py"),
+        jpegPath,
+        String(alphaFixture.width),
+        String(alphaFixture.height),
+        "alpha-jpeg",
+      ],
+      { encoding: "utf8" },
+    ),
+  ) as { ok: boolean; mode: string };
+  expect(verifiedJpeg.ok).toBe(true);
+  expect(verifiedJpeg.mode).toBe("RGB");
 });
 
 test("cancelling an export stops polling and a later export still succeeds", async ({

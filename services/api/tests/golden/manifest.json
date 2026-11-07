@@ -4,7 +4,8 @@
   "sources": {
     "ramp": "9b15597deaa6671ee74391b1e2262615347e4513421ce69ed3cdca91ff9256e2",
     "detail": "eaed3a1be871ad6986659facfc57938ff23eff2f91b26d067834830504e0c2cd",
-    "mixed": "f3e4c1fd21840ad16c8855693c013c17fa35c4704a86e8ef879c8ff9347bb00d"
+    "mixed": "f3e4c1fd21840ad16c8855693c013c17fa35c4704a86e8ef879c8ff9347bb00d",
+    "alpha": "ab4871e545e9c16b1cb38239c2734a8aa35c18e450e0731dcd9252938144b2e3"
   },
   "cases": [
     {
@@ -141,6 +142,51 @@
       "image": "mixed",
       "recipe": "local",
       "file": "mixed__local.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "neutral",
+      "file": "alpha__neutral.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "tone",
+      "file": "alpha__tone.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "color",
+      "file": "alpha__color.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "geometry",
+      "file": "alpha__geometry.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "detail",
+      "file": "alpha__detail.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "curve",
+      "file": "alpha__curve.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "hsl",
+      "file": "alpha__hsl.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "grading",
+      "file": "alpha__grading.png"
+    },
+    {
+      "image": "alpha",
+      "recipe": "local",
+      "file": "alpha__local.png"
     }
   ]
 }

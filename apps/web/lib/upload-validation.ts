@@ -8,8 +8,14 @@ export const MAX_UPLOAD_BYTES =
     ? configuredMaxBytes
     : 20 * 1024 * 1024;
 
-export const ACCEPTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const FILE_ACCEPT_ATTRIBUTE = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
+export const ACCEPTED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/tiff",
+] as const;
+export const FILE_ACCEPT_ATTRIBUTE =
+  "image/jpeg,image/png,image/webp,image/tiff,.jpg,.jpeg,.png,.webp,.tif,.tiff";
 
 export interface UploadLimits {
   maxUploadBytes: number;
@@ -42,7 +48,7 @@ export function validateUploadFile(
     return {
       ok: false,
       code: "unsupported_media_type",
-      message: "仅支持 JPEG、PNG 与 WebP 图片。",
+      message: "仅支持 JPEG、PNG、WebP 与 TIFF 图片。",
     };
   }
   return { ok: true };

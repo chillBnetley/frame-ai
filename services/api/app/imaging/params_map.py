@@ -93,4 +93,18 @@ EXPORT_BYTES_PER_PIXEL_FULL = 160
 # plus blend temporaries.  G4 measured the peak delta of adding 3 locals at
 # +92 MB over the 24 MP full recipe (3.8 B/px), so this stays a small reserve.
 EXPORT_BYTES_PER_PIXEL_LOCAL = 8
+# Alpha-capable inputs (PNG/WebP/TIFF) add one float32 coverage plane while
+# decoding and another through geometry/render. JPEG inputs never pay this
+# reserve.
+EXPORT_BYTES_PER_PIXEL_ALPHA = 4
+# 16-bit paths. The loader holds the uint16 decode buffer next to the float32
+# pipeline image, and the 16-bit output adds a uint16 quantisation plane plus
+# the encoder's working copy.  The B5b 24/40 MP peak-RSS run measured only
+# +60/+109 MB for neutral recipes over 8-bit and identical peaks for full
+# recipes (render-bound), so 18 B/px for each side is a conservative bound, not
+# a fitted coefficient; it deliberately rejects 40 MP neutral 16-bit under the
+# default budget even though the measured peak is lower.  See
+# docs/performance.md.
+EXPORT_BYTES_PER_PIXEL_SOURCE_16 = 18
+EXPORT_BYTES_PER_PIXEL_OUTPUT_16 = 18
 EXPORT_BASELINE_MB = 150

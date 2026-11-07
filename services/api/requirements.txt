@@ -5,3 +5,4 @@ python-multipart==0.0.33
 pillow==12.3.0
 numpy==2.5.4
 opencv-python-headless==4.14.0.94
+tifffile==2026.3.3

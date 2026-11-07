@@ -3,13 +3,58 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+import numpy as np
 import pytest
+import tifffile
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.core.errors import AppError
 from app.imaging.decoder import inspect_image
 from tests.conftest import make_image, upload
+
+
+@pytest.mark.parametrize("bit_depth", [8, 16])
+@pytest.mark.parametrize("orientation", [5, 6, 7, 8])
+def test_tiff_orientation_metadata_matches_the_rendered_preview(
+    client: TestClient,
+    orientation: int,
+    bit_depth: int,
+):
+    dtype = np.uint8 if bit_depth == 8 else np.uint16
+    # Stored as 4x2 (width x height); both orientations display as 2x4.
+    pixels = np.zeros((2, 4, 3), dtype=dtype)
+    pixels[0, :, 0] = np.array([0, 80, 160, 255], dtype=dtype)
+    pixels[1, :, 1] = np.array([255, 160, 80, 0], dtype=dtype)
+    buffer = io.BytesIO()
+    tifffile.imwrite(
+        buffer,
+        pixels,
+        photometric="rgb",
+        compression="deflate",
+        extratags=[(274, "H", 1, orientation, False)],
+    )
+
+    response = upload(client, buffer.getvalue(), "rotated.tiff", "image/tiff")
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["exifOrientation"] == orientation
+    assert (body["width"], body["height"]) == (2, 4)
+
+    session = client.post("/api/v1/sessions", json={"imageId": body["imageId"]})
+    assert session.status_code == 201, session.text
+    rendered = client.post(
+        f"/api/v1/sessions/{session.json()['sessionId']}/render",
+        json={"recipe": {}, "quality": "final"},
+    )
+    assert rendered.status_code == 200, rendered.text
+    assert (rendered.json()["width"], rendered.json()["height"]) == (2, 4)
+
+    preview = client.get(str(rendered.json()["previewUrl"]))
+    assert preview.status_code == 200
+    with Image.open(io.BytesIO(preview.content)) as image:
+        assert image.size == (2, 4)
 
 
 @pytest.mark.parametrize("orientation", range(1, 9))

@@ -187,6 +187,7 @@ def export_revision(
         "Content-Disposition": f'attachment; filename="{result.filename}"',
         "X-Export-Width": str(result.width),
         "X-Export-Height": str(result.height),
+        "X-Export-Bit-Depth": str(result.bit_depth),
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
     }

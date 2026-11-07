@@ -74,7 +74,7 @@ def cancel_export_job(
     responses={
         200: {
             "description": "Rendered export bytes",
-            "content": {"image/jpeg": {}, "image/png": {}},
+            "content": {"image/jpeg": {}, "image/png": {}, "image/tiff": {}},
         },
         404: {
             "model": ErrorResponse,
@@ -96,6 +96,7 @@ def download_export_result(
         "Content-Length": str(size),
         "X-Export-Width": str(job.width or ""),
         "X-Export-Height": str(job.height or ""),
+        "X-Export-Bit-Depth": str(job.bit_depth),
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
     }

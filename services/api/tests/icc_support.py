@@ -17,6 +17,24 @@ def _curv_tag(gamma: float = 2.2) -> bytes:
     return b"curv" + b"\0\0\0\0" + struct.pack(">I", 1) + struct.pack(">H", round(gamma * 256.0))
 
 
+def _para_tag(function_type: int, *params: float) -> bytes:
+    payload = b"para" + b"\0\0\0\0" + struct.pack(">H", function_type) + b"\0\0"
+    return payload + b"".join(_s15(value) for value in params)
+
+
+def _srgb_para_tag() -> bytes:
+    # ICC parametric type 3 is exactly the sRGB decode curve:
+    # y = (a*x + b)^g for x >= d, otherwise c*x.
+    return _para_tag(
+        3,
+        2.4,
+        1.0 / 1.055,
+        0.055 / 1.055,
+        1.0 / 12.92,
+        0.04045,
+    )
+
+
 def _text_tag(text: str) -> bytes:
     return b"text" + b"\0\0\0\0" + text.encode("ascii") + b"\0"
 
@@ -98,7 +116,7 @@ def _icc_profile(tags: dict[bytes, bytes]) -> bytes:
     return bytes(output)
 
 
-def build_display_p3_like_profile() -> bytes:
+def build_display_p3_like_profile(*, description: str = "Display P3 like") -> bytes:
     """A matrix/TRC RGB profile with Display P3 primaries (D50 adapted)."""
     p3_primaries = [(0.680, 0.320), (0.265, 0.690), (0.150, 0.060)]
     d65 = (0.3127, 0.3290)
@@ -106,7 +124,7 @@ def build_display_p3_like_profile() -> bytes:
     d50_xyz = np.array([0.96422, 1.0, 0.82521], dtype=np.float64)
     adapted = _bradford(_rgb_to_xyz(p3_primaries, d65), d65_xyz, d50_xyz)
     tags = {
-        b"desc": _desc_tag("Display P3 like"),
+        b"desc": _desc_tag(description),
         b"cprt": _text_tag("public domain"),
         b"wtpt": _xyz_tag(0.9642, 1.0, 0.8249),
         b"rXYZ": _xyz_tag(*adapted[:, 0].tolist()),
@@ -116,4 +134,87 @@ def build_display_p3_like_profile() -> bytes:
         b"gTRC": _curv_tag(),
         b"bTRC": _curv_tag(),
     }
+    return _icc_profile(tags)
+
+
+def build_srgb_matrix_profile(
+    *,
+    description: str = "sRGB matrix/TRC",
+    trc: bytes | None = None,
+) -> bytes:
+    """A structurally exact sRGB matrix/TRC profile with a parametric TRC.
+
+    ``trc`` overrides the default type-3 sRGB curve so tests can exercise the
+    other parametric TRC types against the same exact matrix.
+    """
+    matrix = np.array(
+        [
+            [0.4360747, 0.3850649, 0.1430804],
+            [0.2225045, 0.7168786, 0.0606169],
+            [0.0139322, 0.0971045, 0.7141733],
+        ],
+        dtype=np.float64,
+    )
+    curve = _srgb_para_tag() if trc is None else trc
+    tags = {
+        b"desc": _desc_tag(description),
+        b"cprt": _text_tag("public domain"),
+        b"wtpt": _xyz_tag(0.9642, 1.0, 0.8249),
+        b"rXYZ": _xyz_tag(*matrix[:, 0].tolist()),
+        b"gXYZ": _xyz_tag(*matrix[:, 1].tolist()),
+        b"bXYZ": _xyz_tag(*matrix[:, 2].tolist()),
+        b"rTRC": curve,
+        b"gTRC": curve,
+        b"bTRC": curve,
+    }
+    return _icc_profile(tags)
+
+
+def build_adobe_rgb_like_profile(*, parametric: bool = False) -> bytes:
+    """An Adobe RGB (1998)-like matrix/TRC profile with gamma 2.2.
+
+    ``parametric=True`` writes a type-0 ``para`` TRC instead of ``curv``.
+    """
+    primaries = [(0.64, 0.33), (0.21, 0.71), (0.15, 0.06)]
+    d65 = (0.3127, 0.3290)
+    d65_xyz = np.array([0.95047, 1.0, 1.08883], dtype=np.float64)
+    d50_xyz = np.array([0.96422, 1.0, 0.82521], dtype=np.float64)
+    adapted = _bradford(_rgb_to_xyz(primaries, d65), d65_xyz, d50_xyz)
+    gamma = 2.19921875
+    curve = _para_tag(0, gamma) if parametric else _curv_tag(gamma)
+    tags = {
+        b"desc": _desc_tag("Adobe RGB like"),
+        b"cprt": _text_tag("public domain"),
+        b"wtpt": _xyz_tag(0.9642, 1.0, 0.8249),
+        b"rXYZ": _xyz_tag(*adapted[:, 0].tolist()),
+        b"gXYZ": _xyz_tag(*adapted[:, 1].tolist()),
+        b"bXYZ": _xyz_tag(*adapted[:, 2].tolist()),
+        b"rTRC": curve,
+        b"gTRC": curve,
+        b"bTRC": curve,
+    }
+    return _icc_profile(tags)
+
+
+def build_lut_only_profile(*, description: str = "Display P3 LUT") -> bytes:
+    """A matrix profile with an A2B0 LUT tag added, so it must be rejected."""
+    base = build_display_p3_like_profile()
+    # Rebuild with an LUT tag; the payload never has to be a usable LUT because
+    # the safe parser rejects the profile on the tag signature alone.
+    p3_primaries = [(0.680, 0.320), (0.265, 0.690), (0.150, 0.060)]
+    d65 = (0.3127, 0.3290)
+    d65_xyz = np.array([0.95047, 1.0, 1.08883], dtype=np.float64)
+    d50_xyz = np.array([0.96422, 1.0, 0.82521], dtype=np.float64)
+    adapted = _bradford(_rgb_to_xyz(p3_primaries, d65), d65_xyz, d50_xyz)
+    tags = {
+        b"desc": _desc_tag(description),
+        b"rXYZ": _xyz_tag(*adapted[:, 0].tolist()),
+        b"gXYZ": _xyz_tag(*adapted[:, 1].tolist()),
+        b"bXYZ": _xyz_tag(*adapted[:, 2].tolist()),
+        b"rTRC": _curv_tag(),
+        b"gTRC": _curv_tag(),
+        b"bTRC": _curv_tag(),
+        b"A2B0": b"mft1" + b"\0" * 12,
+    }
+    assert base
     return _icc_profile(tags)

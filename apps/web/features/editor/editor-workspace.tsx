@@ -398,9 +398,10 @@ function EditorStage({
 
   const handleExport = useCallback(
     (
-      format: "jpeg" | "png",
+      format: "jpeg" | "png" | "tiff",
       quality: number | null,
       maxEdge: number | null,
+      bitDepth: 8 | 16,
     ) => {
       if (state.activeRevisionId === null) {
         return;
@@ -410,6 +411,7 @@ function EditorStage({
         format,
         quality,
         maxEdge,
+        bitDepth,
       });
     },
     [exporter, state.activeRevisionId],

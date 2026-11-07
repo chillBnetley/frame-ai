@@ -8,21 +8,32 @@ changing silently.
 from __future__ import annotations
 
 import io
+import struct
+import zlib
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
+import tifffile
 from numpy.typing import NDArray
 from PIL import Image, ImageCms, ImageOps
 
 from app.core.errors import AppError
 from app.imaging.curves import apply_curves
+from app.imaging.icc import is_srgb_matrix_trc
 from app.imaging.loader import LoadedImage, load_image, load_proxy
+from app.imaging.output import encode_image, to_uint16
 from app.imaging.pipeline import render
 from app.imaging.tone import linear_to_srgb, srgb_to_linear
 from app.models.recipe import Adjustments, CurvePoint, CurveSet
-from tests.icc_support import build_display_p3_like_profile
+from tests.icc_support import (
+    _para_tag,
+    build_adobe_rgb_like_profile,
+    build_display_p3_like_profile,
+    build_lut_only_profile,
+    build_srgb_matrix_profile,
+)
 
 P3_BYTES = build_display_p3_like_profile()
 P3_PROFILE = ImageCms.ImageCmsProfile(io.BytesIO(P3_BYTES))
@@ -56,7 +67,9 @@ def _encode(
         options["quality"] = 100
         options["subsampling"] = 0
     if fmt == "TIFF":
-        options["compression"] = "tiff_lzw"
+        # LZW/JPEG TIFFs are outside the B5b input contract; these fixtures test
+        # colour management, so keep them on an accepted compression.
+        options["compression"] = "tiff_adobe_deflate"
     if fmt == "WEBP":
         options["lossless"] = True
     if profile is not None:
@@ -84,6 +97,43 @@ def _gradient(height: int, width: int) -> NDArray[np.float32]:
 
 def _levels(array: NDArray[np.float32]) -> NDArray[np.float32]:
     return array / LEVEL
+
+
+def _insert_iccp(payload: bytes, profile: bytes) -> bytes:
+    """Add an iCCP chunk to a PNG so 16-bit fixtures can carry a profile."""
+    data = b"FRAME AI" + b"\0" + b"\0" + zlib.compress(profile)
+    chunk = (
+        struct.pack(">I", len(data))
+        + b"iCCP"
+        + data
+        + struct.pack(">I", zlib.crc32(b"iCCP" + data) & 0xFFFFFFFF)
+    )
+    # PNG signature (8) + IHDR (25) end at byte 33, where iCCP belongs.
+    return payload[:33] + chunk + payload[33:]
+
+
+def _png16(values: NDArray[np.uint16], profile: bytes | None = None) -> bytes:
+    if values.shape[2] == 4:
+        source = np.dstack([values[..., 2::-1], values[..., 3]])
+    else:
+        source = values[..., ::-1]
+    # cv2.imwrite fails on non-ASCII Windows paths, so encode in memory.
+    success, encoded = cv2.imencode(".png", np.ascontiguousarray(source))
+    assert bool(success)
+    payload = encoded.tobytes()
+    return payload if profile is None else _insert_iccp(payload, profile)
+
+
+def _ramp16() -> NDArray[np.uint16]:
+    ramp = np.arange(65536, dtype=np.uint16).reshape(256, 256)
+    return np.stack([ramp, ramp, (65535 - ramp).astype(np.uint16)], axis=-1)
+
+
+def _precision_stats(channel: NDArray[np.uint16]) -> tuple[int, float, int]:
+    unique = int(np.unique(channel).size)
+    divisible = float(np.count_nonzero(channel.astype(np.int64) % 257 == 0))
+    steps = np.abs(np.diff(channel.astype(np.int32), axis=1))
+    return unique, divisible / channel.size * 100.0, int(steps.max())
 
 
 def test_palette_embedded_profile_is_converted_to_srgb() -> None:
@@ -216,24 +266,259 @@ def test_16_bit_gray_keeps_float_precision_without_an_8_bit_step() -> None:
     assert abs(float(loaded[1, 0, 0]) - 32768 / 65535) < 1e-4
 
 
-def test_16_bit_rgb_is_downconverted_at_decode_within_one_level(tmp_path: Path) -> None:
+def test_16_bit_rgb_keeps_its_samples_instead_of_downconverting() -> None:
     values = np.zeros((8, 8, 3), dtype=np.uint16)
     for index in range(64):
         level = index * 65535 // 63
         row, column = divmod(index, 8)
         values[row, column] = (level, 65535 - level, 32768)
-    path = tmp_path / "rgb16.png"
-    # cv2.imwrite fails on non-ASCII Windows paths, so encode in memory.
-    ok, encoded = cv2.imencode(".png", np.ascontiguousarray(values[:, :, ::-1]))
-    assert bool(ok)
-    path.write_bytes(encoded.tobytes())
-
-    with Image.open(path) as opened:
-        assert opened.mode == "RGB"  # Pillow has no 16-bit RGB mode.
-    loaded = load_image(path).rgb
+    loaded = load_image(_png16(values))
 
     reference = values.astype(np.float32) / np.float32(65535.0)
-    assert np.abs(_levels(loaded - reference)).max() <= 1.0
+    assert loaded.bit_depth == 16
+    assert loaded.rgb.dtype == np.float32
+    assert float(np.abs(loaded.rgb - reference).max()) <= 1e-6
+
+    # Pillow truncates 16-bit RGB through its 8-bit mode (511 -> 1, 1000 -> 3);
+    # these neighbouring samples must stay distinct after the B5b decode.
+    pair = np.zeros((1, 2, 3), dtype=np.uint16)
+    pair[0, 0] = (511, 1000, 32768)
+    pair[0, 1] = (512, 1001, 32769)
+    decoded = load_image(_png16(pair)).rgb
+    assert not np.array_equal(decoded[0, 0], decoded[0, 1])
+    assert abs(float(decoded[0, 0, 0]) - 511 / 65535) <= 1e-6
+    assert abs(float(decoded[0, 0, 1]) - 1000 / 65535) <= 1e-6
+
+
+def test_16_bit_adobe_rgb_ramp_keeps_more_than_60000_levels() -> None:
+    payload = _png16(_ramp16(), build_adobe_rgb_like_profile())
+
+    loaded = load_image(payload)
+    unique, divisible, step = _precision_stats(to_uint16(loaded.rgb)[..., 1])
+
+    assert loaded.bit_depth == 16
+    assert unique > 60000
+    # Fewer than 1% of the values are exact 8-bit replicas, so the output was
+    # not quantised through an 8-bit intermediate.
+    assert divisible < 1.0
+    assert step <= 2
+
+
+def test_eight_bit_intermediate_collapses_the_same_ramp_to_256_levels() -> None:
+    ramp = _ramp16()
+    eight = np.rint(ramp.astype(np.float32) / 257.0).astype(np.uint8)
+    payload = _encode(Image.fromarray(eight, "RGB"), profile=build_adobe_rgb_like_profile())
+
+    loaded = load_image(payload)
+    channel = np.clip(np.rint(loaded.rgb[..., 1] * 65535.0), 0, 65535).astype(np.uint16)
+    unique, divisible, step = _precision_stats(channel)
+
+    # This is the counterexample the 16-bit gate above must not regress to.
+    assert loaded.bit_depth == 8
+    assert unique < 300
+    assert divisible == pytest.approx(100.0)
+    assert step >= 500
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [
+        build_adobe_rgb_like_profile(),
+        build_adobe_rgb_like_profile(parametric=True),
+        P3_BYTES,
+    ],
+    ids=["adobe-curv", "adobe-para", "display-p3"],
+)
+def test_16_bit_profile_conversion_matches_lcms_within_one_level(profile: bytes) -> None:
+    colors = np.array(
+        [(200, 60, 60), (60, 200, 60), (230, 160, 120), (20, 20, 20), (250, 240, 10)],
+        dtype=np.uint16,
+    )
+    values = (colors * 257)[None, :, :]
+    payload = _png16(values, profile)
+    loaded = load_image(payload)
+
+    with Image.open(io.BytesIO(payload)) as opened:
+        assert opened.info["icc_profile"] == profile
+    reference_image = Image.fromarray(colors.astype(np.uint8)[None], "RGB")
+    reference = np.asarray(
+        ImageCms.profileToProfile(
+            reference_image,
+            ImageCms.ImageCmsProfile(io.BytesIO(profile)),
+            SRGB,
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode="RGB",
+            flags=ImageCms.Flags.BLACKPOINTCOMPENSATION,
+        ),
+        dtype=np.float32,
+    )
+
+    assert loaded.bit_depth == 16
+    assert float(np.abs(loaded.rgb * 255.0 - reference).max()) <= 1.0
+
+
+def test_16_bit_tiff_profile_is_converted_to_srgb() -> None:
+    colors = np.array([(200, 60, 60), (230, 160, 120)], dtype=np.uint16)
+    values = (colors * 257)[None, :, :]
+    buffer = io.BytesIO()
+    tifffile.imwrite(buffer, np.ascontiguousarray(values), photometric="rgb", iccprofile=P3_BYTES)
+
+    loaded = load_image(buffer.getvalue())
+    reference_image = Image.fromarray(colors.astype(np.uint8)[None], "RGB")
+    reference = np.asarray(
+        ImageCms.profileToProfile(
+            reference_image,
+            P3_PROFILE,
+            SRGB,
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode="RGB",
+            flags=ImageCms.Flags.BLACKPOINTCOMPENSATION,
+        ),
+        dtype=np.float32,
+    )
+
+    assert loaded.bit_depth == 16
+    assert float(np.abs(loaded.rgb * 255.0 - reference).max()) <= 1.0
+
+
+def test_16_bit_srgb_profile_and_untagged_inputs_are_untouched() -> None:
+    values = np.array([[[0, 511, 65535], [1000, 32768, 40000]]], dtype=np.uint16)
+    tagged = encode_image(
+        to_uint16(values.astype(np.float32) / np.float32(65535.0)),
+        image_format="png",
+        bit_depth=16,
+    )
+
+    for payload in (tagged, _png16(values)):
+        loaded = load_image(payload)
+        assert loaded.bit_depth == 16
+        assert float(np.abs(loaded.rgb - values / 65535.0).max()) <= 1e-6
+
+
+def test_16_bit_lut_profile_is_rejected_as_unsupported() -> None:
+    payload = _png16(_ramp16()[:4, :4], build_lut_only_profile())
+
+    with pytest.raises(AppError) as error:
+        load_image(payload)
+
+    assert error.value.status_code == 422
+    assert error.value.code == "unsupported_icc_profile"
+
+
+def test_srgb_description_cannot_hide_a_lut_profile() -> None:
+    profile = build_lut_only_profile(description="sRGB compatible LUT profile")
+    values = _ramp16()[:4, :4]
+    tiff = io.BytesIO()
+    tifffile.imwrite(tiff, np.ascontiguousarray(values), photometric="rgb", iccprofile=profile)
+
+    for payload in (_png16(values, profile), tiff.getvalue()):
+        with pytest.raises(AppError) as error:
+            load_image(payload)
+
+        assert error.value.status_code == 422
+        assert error.value.code == "unsupported_icc_profile"
+
+
+def test_srgb_description_does_not_shortcut_a_non_srgb_matrix_profile() -> None:
+    profile = build_display_p3_like_profile(description="sRGB compatible LUT profile")
+    colors = np.array(
+        [(200, 60, 60), (60, 200, 60), (230, 160, 120), (20, 20, 20)],
+        dtype=np.uint16,
+    )
+    values = (colors * 257)[None, :, :]
+    payload = _png16(values, profile)
+
+    loaded = load_image(payload)
+    reference = np.asarray(
+        ImageCms.profileToProfile(
+            Image.fromarray(colors.astype(np.uint8)[None], "RGB"),
+            ImageCms.ImageCmsProfile(io.BytesIO(profile)),
+            SRGB,
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode="RGB",
+            flags=ImageCms.Flags.BLACKPOINTCOMPENSATION,
+        ),
+        dtype=np.float32,
+    )
+
+    assert not np.allclose(loaded.rgb, values / 65535.0, atol=1e-6)
+    assert float(np.abs(loaded.rgb * 255.0 - reference).max()) <= 1.0
+
+
+def test_structurally_exact_srgb_profile_is_untouched_regardless_of_description() -> None:
+    profile = build_srgb_matrix_profile(description="Custom matrix profile")
+    values = np.array([[[1000, 5000, 40000], [65535, 0, 32768]]], dtype=np.uint16)
+
+    loaded = load_image(_png16(values, profile))
+
+    assert np.allclose(loaded.rgb, values / 65535.0, atol=1e-6)
+
+
+def test_lcms_srgb_profile_passes_the_structural_check() -> None:
+    profile = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    assert is_srgb_matrix_trc(profile)
+    assert not is_srgb_matrix_trc(build_lut_only_profile(description="sRGB compatible"))
+
+
+@pytest.mark.parametrize(
+    ("function_type", "params"),
+    [
+        (1, (2.2, 1.0, 0.0)),
+        (2, (2.2, 1.0, 0.0, 0.0)),
+        (4, (2.4, 1.0 / 1.055, 0.055 / 1.055, 1.0 / 12.92, 0.04045, 0.0, 0.0)),
+    ],
+    ids=["para-1", "para-2", "para-4"],
+)
+def test_parametric_trc_types_are_applied_with_endpoints_and_monotonicity(
+    function_type: int,
+    params: tuple[float, ...],
+) -> None:
+    profile = build_srgb_matrix_profile(
+        description="Custom parametric profile",
+        trc=_para_tag(function_type, *params),
+    )
+    ramp = np.linspace(0, 65535, 257, dtype=np.uint16).reshape(1, -1, 1)
+    values = np.repeat(ramp, 3, axis=-1)
+
+    loaded = load_image(_png16(values, profile))
+
+    channel = loaded.rgb[0, :, 0].astype(np.float64)
+    assert channel[0] == pytest.approx(0.0, abs=1e-7)
+    assert channel[-1] == pytest.approx(1.0, abs=1e-5)
+    assert np.all(np.diff(channel) >= -1e-6)
+    # Only the type-4 curve with sRGB parameters is structurally sRGB; the
+    # gamma-2.2 types must go through the conversion path instead of identity.
+    assert is_srgb_matrix_trc(profile) is (function_type == 4)
+    if function_type == 4:
+        assert np.allclose(channel, ramp[0, :, 0] / 65535.0, atol=2e-4)
+
+
+def _profile_variant(profile: bytes, offset: int, replacement: bytes) -> bytes:
+    mutated = bytearray(profile)
+    mutated[offset : offset + len(replacement)] = replacement
+    return bytes(mutated)
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [
+        _profile_variant(P3_BYTES, 0, struct.pack(">I", 0xFFFFFFFF)),
+        _profile_variant(P3_BYTES, 128, struct.pack(">I", 0xFFFFFFFF)),
+        _profile_variant(P3_BYTES, 136, struct.pack(">I", 0xFFFFFF00)),
+        _profile_variant(P3_BYTES, 16, b"CMYK"),
+        _profile_variant(P3_BYTES, 20, b"Lab "),
+        P3_BYTES[: len(P3_BYTES) // 3],
+    ],
+    ids=["oversized-header", "tag-count", "tag-offset", "cmyk-space", "lab-pcs", "truncated"],
+)
+def test_16_bit_malformed_profiles_fail_safely(profile: bytes) -> None:
+    payload = _png16(_ramp16()[:2, :2], profile)
+
+    with pytest.raises(AppError) as error:
+        load_image(payload)
+
+    assert error.value.status_code == 422
+    assert error.value.code == "unsupported_icc_profile"
 
 
 def test_srgb_linear_round_trip_is_lossless_at_8_bit() -> None:

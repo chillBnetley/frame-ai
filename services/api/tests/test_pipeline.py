@@ -10,7 +10,7 @@ from PIL import Image
 from app.imaging.color_grading import apply_color_grading
 from app.imaging.color_ops import apply_color
 from app.imaging.curves import apply_curves
-from app.imaging.geometry import inscribed_scale
+from app.imaging.geometry import apply_geometry, inscribed_scale
 from app.imaging.hsl import apply_hsl
 from app.imaging.loader import load_image
 from app.imaging.output import to_uint8
@@ -64,6 +64,79 @@ def _synthetic_photo(width: int, height: int) -> np.ndarray:
 
 def _load_pixels(pixels: np.ndarray):
     return load_image(_png_bytes(pixels))
+
+
+def _rgba_photo(width: int, height: int) -> np.ndarray:
+    rgb = _synthetic_photo(width, height).astype(np.float32)
+    y, x = np.mgrid[0:height, 0:width].astype(np.float32)
+    edge = np.minimum(np.minimum(x, width - 1 - x), np.minimum(y, height - 1 - y))
+    alpha = np.clip(edge / (min(width, height) * 0.2), 0.0, 1.0)
+    alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+    rgba = np.dstack([rgb, alpha * 255.0])
+    return np.clip(np.rint(rgba), 0, 255).astype(np.uint8)
+
+
+def test_rgb_only_sources_render_without_alpha_and_at_eight_bits():
+    loaded = _load_pixels(_synthetic_photo(64, 48))
+
+    rendered = render(loaded, Adjustments(), image_sha256=SHA_A, quality="export")
+
+    assert rendered.alpha is None
+    assert rendered.bit_depth == 8
+
+
+def test_alpha_is_geometry_aligned_and_byte_quantized():
+    loaded = _load_pixels(_rgba_photo(160, 120))
+    adjustments = Adjustments(
+        rotation_deg=15.0,
+        crop=Crop(x=0.15, y=0.2, w=0.6, h=0.55),
+    )
+
+    rendered = render(loaded, adjustments, image_sha256=SHA_A, quality="export")
+
+    assert loaded.alpha is not None
+    assert rendered.alpha is not None
+    assert rendered.alpha.shape == rendered.rgb.shape[:2]
+    assert rendered.alpha.dtype == np.uint8
+    expected_rgb, expected_alpha = apply_geometry(
+        loaded.rgb,
+        loaded.alpha,
+        rotation_deg=adjustments.rotation_deg,
+        crop=adjustments.crop,
+        quality="export",
+    )
+    assert expected_alpha is not None
+    expected = np.clip(np.rint(expected_alpha * 255.0), 0, 255).astype(np.uint8)
+    assert np.array_equal(rendered.alpha, expected)
+    assert rendered.bit_depth == 8
+
+
+def test_colour_adjustments_never_change_the_alpha_plane():
+    loaded = _load_pixels(_rgba_photo(120, 90))
+    adjustments = Adjustments(rotation_deg=7.5, exposure_ev=0.8, contrast=30)
+
+    neutral = render(loaded, adjustments, image_sha256=SHA_A, quality="export")
+    adjusted = render(
+        loaded,
+        adjustments.model_copy(
+            update={
+                "exposure_ev": 0.8,
+                "contrast": 30,
+                "saturation": 40,
+                "vibrance": 25,
+                "clarity": 30,
+                "sharpen": 20,
+                "vignette": 20,
+            }
+        ),
+        image_sha256=SHA_A,
+        quality="export",
+    )
+
+    assert adjusted.alpha is not None
+    assert neutral.alpha is not None
+    assert np.array_equal(adjusted.alpha, neutral.alpha)
+    assert not np.array_equal(adjusted.rgb, neutral.rgb)
 
 
 def test_neutral_recipe_is_an_identity_render():
@@ -141,6 +214,48 @@ def test_large_export_denoise_reports_a_warning():
     assert below_threshold.warnings == ()
     assert preview.warnings == ()
     assert without_denoise.warnings == ()
+
+
+def test_16_bit_render_stays_float32_and_skips_denoise():
+    loaded = _load_pixels(_synthetic_photo(64, 48))
+    adjustments = Adjustments(denoise=50)
+
+    skipped = render(
+        loaded,
+        adjustments,
+        image_sha256=SHA_A,
+        quality="export",
+        denoise_simplify_pixels=1,
+        bit_depth=16,
+    )
+    without = render(
+        loaded,
+        Adjustments(),
+        image_sha256=SHA_A,
+        quality="export",
+        denoise_simplify_pixels=1,
+        bit_depth=16,
+    )
+
+    assert skipped.bit_depth == 16
+    assert skipped.rgb.dtype == np.float32
+    assert skipped.alpha is None
+    assert skipped.warnings == ("denoise_skipped_for_16bit",)
+    # The denoise stage is skipped rather than approximated in 8 bits.
+    assert np.array_equal(skipped.rgb, without.rgb)
+
+
+def test_16_bit_render_keeps_alpha_float32():
+    loaded = _load_pixels(_rgba_photo(64, 48))
+    assert loaded.alpha is not None
+
+    rendered = render(loaded, Adjustments(), image_sha256=SHA_A, quality="export", bit_depth=16)
+
+    assert rendered.bit_depth == 16
+    assert rendered.rgb.dtype == np.float32
+    assert rendered.alpha is not None
+    assert rendered.alpha.dtype == np.float32
+    assert 0.0 <= float(rendered.alpha.min()) <= float(rendered.alpha.max()) <= 1.0
 
 
 def test_rotation_and_crop_report_the_rotated_canvas():

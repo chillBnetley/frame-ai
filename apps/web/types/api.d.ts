@@ -1416,11 +1416,17 @@ export interface components {
              * Format
              * @enum {string}
              */
-            format: "jpeg" | "png";
+            format: "jpeg" | "png" | "tiff";
             /** Quality */
             quality?: number | null;
             /** Maxedge */
             maxEdge?: number | null;
+            /**
+             * Bitdepth
+             * @default 8
+             * @enum {integer}
+             */
+            bitDepth: 8 | 16;
             /**
              * Colorspace
              * @default sRGB
@@ -1448,6 +1454,12 @@ export interface components {
             width?: number | null;
             /** Height */
             height?: number | null;
+            /**
+             * Bitdepth
+             * @default 8
+             * @enum {integer}
+             */
+            bitDepth: 8 | 16;
             /** Warnings */
             warnings?: string[];
             error?: components["schemas"]["ExportJobError"] | null;
@@ -1473,11 +1485,17 @@ export interface components {
              * Format
              * @enum {string}
              */
-            format: "jpeg" | "png";
+            format: "jpeg" | "png" | "tiff";
             /** Quality */
             quality?: number | null;
             /** Maxedge */
             maxEdge?: number | null;
+            /**
+             * Bitdepth
+             * @default 8
+             * @enum {integer}
+             */
+            bitDepth: 8 | 16;
             /**
              * Colorspace
              * @default sRGB
@@ -4420,6 +4438,7 @@ export interface operations {
                 content: {
                     "image/jpeg": unknown;
                     "image/png": unknown;
+                    "image/tiff": unknown;
                 };
             };
             /** @description Export job or result file not found */
