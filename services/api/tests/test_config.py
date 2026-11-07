@@ -59,6 +59,28 @@ def test_preview_max_bytes_defaults_and_rejects_nonpositive_values():
         Settings(preview_max_bytes=0)
 
 
+def test_provider_endpoint_policy_defaults_to_public_https():
+    settings = Settings(_env_file=None)
+
+    assert settings.provider_url_policy == "public-only"
+    assert settings.provider_allow_insecure_http is False
+
+
+def test_provider_endpoint_policy_reads_environment(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("FRAME_PROVIDER_URL_POLICY", "allow-local")
+    monkeypatch.setenv("FRAME_PROVIDER_ALLOW_INSECURE_HTTP", "true")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.provider_url_policy == "allow-local"
+    assert settings.provider_allow_insecure_http is True
+
+
+def test_provider_endpoint_policy_rejects_unknown_values():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, provider_url_policy="legacy")
+
+
 def test_config_endpoint_exposes_runtime_limits(client: TestClient, settings: Settings):
     response = client.get("/api/v1/config")
 

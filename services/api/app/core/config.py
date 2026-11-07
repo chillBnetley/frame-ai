@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     planner_max_retries: int | None = Field(default=None, ge=0, le=10)
     planner_repair_attempts: int | None = Field(default=None, ge=0, le=3)
 
+    provider_url_policy: Literal["public-only", "allow-local"] = "public-only"
+    provider_allow_insecure_http: bool = False
+
     mock_scenario: str = "generic"
 
     analysis_max_edge: int = Field(default=1024, ge=512, le=2048)

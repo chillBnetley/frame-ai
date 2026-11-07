@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import socket
 import threading
 import urllib.request
 from collections.abc import Iterator, Mapping
@@ -11,10 +12,12 @@ from typing import Any
 import pytest
 
 from app.ai.errors import ProviderError
+from app.ai.net_policy import ProviderEndpointPolicy
 from app.ai.transport import (
     MAX_RESPONSE_BYTES,
     HttpResponse,
     JsonHttpClient,
+    PinnedHttpTransport,
     UrllibJsonTransport,
     _SameOriginRedirectHandler,
 )
@@ -305,3 +308,308 @@ def test_https_to_http_downgrade_is_rejected_before_following():
     assert excinfo.value.code == "provider_endpoint_error"
     assert excinfo.value.retryable is False
     assert "provider.test" not in str(excinfo.value)
+
+
+LOCAL_POLICY = ProviderEndpointPolicy(allow_local=True, allow_insecure_http=True)
+PUBLIC_POLICY = ProviderEndpointPolicy()
+
+
+@contextlib.contextmanager
+def pinned_server(
+    *,
+    location: str | None = None,
+    redirect_status: int = 307,
+) -> Iterator[tuple[str, list[dict[str, Any]]]]:
+    requests: list[dict[str, Any]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def _handle(self, method: str) -> None:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length else b""
+            requests.append(
+                {
+                    "method": method,
+                    "path": self.path,
+                    "headers": dict(self.headers),
+                    "body": body,
+                }
+            )
+            if location is not None and self.path != "/final":
+                status = redirect_status
+            else:
+                status = 200
+            payload = b'{"ok":true}'
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            if location is not None:
+                self.send_header("Location", location)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def do_POST(self) -> None:  # noqa: N802
+            self._handle("POST")
+
+        def do_GET(self) -> None:  # noqa: N802
+            self._handle("GET")
+
+        def log_message(self, *args: Any) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/chat/completions", requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def local_resolver(*addresses: str):
+    def resolve(host: str, port: int, **kwargs: object):
+        return [
+            (
+                socket.AF_INET6 if ":" in address else socket.AF_INET,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                (address, port),
+            )
+            for address in addresses
+        ]
+
+    return resolve
+
+
+def test_pinned_transport_round_trip_against_local_server():
+    with pinned_server() as (url, requests):
+        client = JsonHttpClient(PinnedHttpTransport(LOCAL_POLICY))
+
+        result = client.post_json(url, {"ping": True}, HEADERS, timeout=5, max_retries=0)
+
+    assert result == {"ok": True}
+    assert len(requests) == 1
+    assert requests[0]["method"] == "POST"
+    assert requests[0]["headers"]["Host"] == url.split("/")[2]
+    assert requests[0]["headers"]["Authorization"] == "Bearer test-key"
+
+
+def test_pinned_transport_connects_to_the_validated_ip(monkeypatch: pytest.MonkeyPatch):
+    seen: list[tuple[str, int]] = []
+    real_create = socket.create_connection
+
+    def recording(address, timeout=None, source_address=None):
+        seen.append(address)
+        return real_create(address, timeout, source_address)
+
+    monkeypatch.setattr(socket, "create_connection", recording)
+
+    with pinned_server() as (url, requests):
+        target = url.replace("127.0.0.1", "rebind.example.test")
+        transport = PinnedHttpTransport(
+            LOCAL_POLICY,
+            resolver=local_resolver("127.0.0.1"),
+        )
+        result = JsonHttpClient(transport).post_json(
+            target,
+            {"ping": True},
+            HEADERS,
+            timeout=5,
+            max_retries=0,
+        )
+
+    assert result == {"ok": True}
+    assert len(seen) == 1
+    assert seen[0][0] == "127.0.0.1"
+    port = url.split(":")[2].split("/")[0]
+    assert requests[0]["headers"]["Host"] == f"rebind.example.test:{port}"
+
+
+def test_pinned_transport_rejects_a_rebound_answer_before_connecting(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    connections: list[tuple[str, int]] = []
+    real_create = socket.create_connection
+
+    def recording(address, timeout=None, source_address=None):
+        connections.append(address)
+        return real_create(address, timeout, source_address)
+
+    monkeypatch.setattr(socket, "create_connection", recording)
+    answers = [("127.0.0.1",), ("192.0.2.1",)]
+
+    def resolver(host: str, port: int, **kwargs: object):
+        return local_resolver(*answers.pop(0))(host, port, **kwargs)
+
+    with pinned_server() as (url, requests):
+        target = url.replace("127.0.0.1", "rebind.example.test")
+        transport = PinnedHttpTransport(LOCAL_POLICY, resolver=resolver)
+        client = JsonHttpClient(transport)
+
+        assert client.post_json(target, {}, HEADERS, timeout=5, max_retries=0) == {"ok": True}
+        with pytest.raises(ProviderError) as excinfo:
+            client.post_json(target, {}, HEADERS, timeout=5, max_retries=0)
+
+    assert excinfo.value.code == "provider_endpoint_error"
+    assert len(connections) == 1
+    assert len(requests) == 1
+
+
+def test_pinned_transport_ignores_environment_proxies(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:1")
+    monkeypatch.setenv("https_proxy", "http://127.0.0.1:1")
+
+    with pinned_server() as (url, requests):
+        result = JsonHttpClient(PinnedHttpTransport(LOCAL_POLICY)).post_json(
+            url,
+            {"ping": True},
+            HEADERS,
+            timeout=5,
+            max_retries=0,
+        )
+
+    assert result == {"ok": True}
+    assert len(requests) == 1
+
+
+def test_pinned_transport_preserves_body_on_307_redirect():
+    with pinned_server(location="/final", redirect_status=307) as (url, requests):
+        result = JsonHttpClient(PinnedHttpTransport(LOCAL_POLICY)).post_json(
+            url,
+            {"ping": True},
+            HEADERS,
+            timeout=5,
+            max_retries=0,
+        )
+
+    assert result == {"ok": True}
+    assert [request["method"] for request in requests] == ["POST", "POST"]
+    assert requests[0]["body"] == requests[1]["body"]
+    assert json.loads(requests[1]["body"]) == {"ping": True}
+
+
+def test_pinned_transport_converts_302_to_get_without_body():
+    with pinned_server(location="/final", redirect_status=302) as (url, requests):
+        result = JsonHttpClient(PinnedHttpTransport(LOCAL_POLICY)).post_json(
+            url,
+            {"ping": True},
+            HEADERS,
+            timeout=5,
+            max_retries=0,
+        )
+
+    assert result == {"ok": True}
+    assert [request["method"] for request in requests] == ["POST", "GET"]
+    assert requests[1]["body"] == b""
+    assert "Content-Type" not in requests[1]["headers"]
+
+
+def test_pinned_transport_rejects_cross_origin_redirect_without_forwarding_headers():
+    with pinned_server() as (victim_url, victim_requests):
+        with pinned_server(location=victim_url) as (attacker_url, attacker_requests):
+            with pytest.raises(ProviderError) as excinfo:
+                JsonHttpClient(PinnedHttpTransport(LOCAL_POLICY)).post_json(
+                    attacker_url,
+                    {},
+                    HEADERS,
+                    timeout=5,
+                    max_retries=0,
+                )
+
+    assert victim_requests == []
+    assert len(attacker_requests) == 1
+    assert attacker_requests[0]["headers"]["Authorization"] == "Bearer test-key"
+    assert excinfo.value.code == "provider_endpoint_error"
+    assert excinfo.value.retryable is False
+    assert "test-key" not in str(excinfo.value)
+    assert "127.0.0.1" not in str(excinfo.value)
+
+
+def test_pinned_transport_rejects_https_to_http_downgrade(monkeypatch: pytest.MonkeyPatch):
+    transport = PinnedHttpTransport(
+        PUBLIC_POLICY,
+        resolver=local_resolver("8.8.8.8"),
+    )
+    calls: list[str] = []
+
+    def fake_send(endpoint, pinned, method, body, headers, timeout):
+        calls.append(endpoint.scheme)
+        return HttpResponse(
+            status=302,
+            body=b"",
+            headers={"Location": "http://provider.test/v2/chat/completions"},
+        )
+
+    monkeypatch.setattr(transport, "_send", fake_send)
+
+    with pytest.raises(ProviderError) as excinfo:
+        transport.post(
+            "https://provider.test/v1/chat/completions",
+            b"{}",
+            HEADERS,
+            timeout=5,
+        )
+
+    assert calls == ["https"]
+    assert excinfo.value.code == "provider_endpoint_error"
+    assert excinfo.value.retryable is False
+    assert "provider.test" not in str(excinfo.value)
+
+
+def test_pinned_transport_stops_after_five_redirects():
+    with pinned_server(location="/loop", redirect_status=307) as (url, requests):
+        with pytest.raises(ProviderError) as excinfo:
+            JsonHttpClient(PinnedHttpTransport(LOCAL_POLICY)).post_json(
+                url,
+                {},
+                HEADERS,
+                timeout=5,
+                max_retries=0,
+            )
+
+    assert excinfo.value.code == "provider_endpoint_error"
+    assert len(requests) == 6
+
+
+def test_pinned_transport_rejects_private_literal_before_connecting(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fail(*args: object, **kwargs: object):
+        raise AssertionError("no connection may be attempted")
+
+    monkeypatch.setattr(socket, "create_connection", fail)
+
+    with pytest.raises(ProviderError) as excinfo:
+        PinnedHttpTransport(PUBLIC_POLICY).post(
+            "https://10.9.8.7/v1/chat/completions",
+            b"{}",
+            HEADERS,
+            timeout=5,
+        )
+
+    assert excinfo.value.code == "provider_endpoint_error"
+    assert excinfo.value.retryable is False
+    assert "10.9.8.7" not in str(excinfo.value)
+    assert "test-key" not in str(excinfo.value)
+
+
+def test_pinned_transport_reports_resolution_failure_as_retryable():
+    def fail(host: str, port: int, **kwargs: object):
+        raise socket.gaierror(-2, "Name or service not known")
+
+    with pytest.raises(ProviderError) as excinfo:
+        PinnedHttpTransport(PUBLIC_POLICY, resolver=fail).post(
+            "https://provider.test/v1/chat/completions",
+            b"{}",
+            HEADERS,
+            timeout=5,
+        )
+
+    assert excinfo.value.code == "provider_unavailable"
+    assert excinfo.value.retryable is True
+    assert "provider.test" not in str(excinfo.value)
+    assert "test-key" not in str(excinfo.value)

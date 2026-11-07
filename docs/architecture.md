@@ -257,7 +257,7 @@ DELETE /api/v1/analysis/{id}       → 运行中返回 409，否则删除任务�
 ```
 
 - 视觉 Provider 只收到内存 JPEG 副本；决策 Provider 只收到结构化测量、语义与候选问题，**不收到图片**。
-- Mock Provider 完全离线；真实 Provider 通过 OpenAI 兼容适配与标准库 HTTP 传输，带超时、有限重试与安全错误映射；每次调用记录 provider/model/阶段/尝试/token/延迟，不记录 prompt、图片或 Base64。
+- Mock Provider 完全离线；真实 Provider 通过 OpenAI 兼容适配与 `PinnedHttpTransport` 传输，带超时、有限重试与安全错误映射；出站默认只允许公网 HTTPS，DNS 结果逐个校验并固定连接 IP，不读取环境代理；每次调用记录 provider/model/阶段/尝试/token/延迟，不记录 prompt、图片或 Base64。
 - `unknown` 是合法枚举值，不确定信息进入 `limitations`；后端校验决策不得新增候选之外的问题。关闭任一 `AnalysisOptions` 时对应结果退化为 `unknown`/空数组并记录限制，`qualityDiagnosis=false` 时不输出问题与建议。
 - 报告包含色彩协调、构图遮挡、主体面积占比、问题级建议；测量包含 RGB/HSV 直方图与饱和度分布。
 - 主体与区域只有归一化边界框和区域引用，`regions[].mask` 恒为 `null`；不伪造像素蒙版。
@@ -280,6 +280,8 @@ POST /api/v1/settings/providers/reset → 删除覆盖文件 → 按环境变量
 - `AnalysisTaskService.update_providers` 在同一把锁内替换 Provider 与 Orchestrator；已提交的任务持有旧 Orchestrator 并继续执行，新任务读取新快照。去重键仍由生效 Provider 类型、模型与提示词版本生成。
 - 覆盖文件包含明文 API Key，Unix 上尽力 `chmod 0600`；GET、错误、日志与测试结果均不含密钥或上游响应正文。测试连接只发送文本提示，不发送图片。
 - 本机覆盖文件与 `.env` 都是服务端配置，前端只持有脱敏视图；修改后无需重启 API。
+- Provider 出站边界由 `ai/net_policy.py` 与 `ai/transport.py::PinnedHttpTransport` 执行：保存/启动只做 URL 语法与字面 IP 分类（不联网），请求前解析 DNS 并校验**每个**结果，任一地址被拒即 fail-closed；连接固定到已校验 IP，HTTPS 仍以原始主机名做 SNI/证书校验，Host 头保留原始主机（非默认端口带端口、IPv6 加方括号）。默认 `public-only` + 禁明文 `http`，本机 Provider 需 `FRAME_PROVIDER_URL_POLICY=allow-local`（明文再加 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`）；元数据/链路本地/组播/保留/未指定地址始终拒绝。传输不经 urllib opener，因此环境代理不能改变请求路径。重定向手写循环最多 5 跳、每跳重新校验，只允许同源；301/302/303 转 GET，307/308 保留 body，`Authorization` 不跨源。
+- 策略拒绝映射为不可重试的 `provider_endpoint_error`，DNS 失败映射为可重试的 `provider_unavailable`；错误文案为固定文本，不含 URL/host/IP/key。`UrllibJsonTransport` 仅为旧测试/显式注入保留，默认工厂不再使用。
 
 ### AI 摄影师（阶段 5）
 
@@ -354,6 +356,7 @@ data/
 - 日志不记录图片字节、Base64、原始文件名、配方内容、分析报告正文或密钥；阶段五另加：不记录对话指令原文（只记录长度）、不记录反馈评分明细。
 - 默认 Mock Provider 完全离线；只有显式选择 `openai` 时才会把 1024 px JPEG 副本发给视觉服务，决策服务只收结构化数据；摄影师的 Planner 任何模式下都不接收图片。
 - Provider 错误统一包装为安全错误码与文案；响应/任务错误不包含密钥、原始模型响应、图片字节或绝对路径。
+- Provider 出站默认只允许公网 HTTPS；私网/回环需显式 `allow-local`，链路本地/云元数据/组播/保留/未指定地址始终拒绝。DNS 每个结果在连接前校验并固定 IP，环境代理不能改变请求路径；重定向同源且最多 5 跳；错误/日志不含 URL/host/IP/key。
 - 反馈表结构上没有自由文本字段，照片、指令与文件名无法写入；用户可单条删除，图片/会话删除时级联清除。
 - API 无鉴权，只绑定 `127.0.0.1`（D-13）。
 

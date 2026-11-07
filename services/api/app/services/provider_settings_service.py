@@ -12,6 +12,12 @@ from pydantic import SecretStr, ValidationError
 
 from app.ai.errors import ProviderConfigurationError, ProviderError
 from app.ai.factory import ProviderBundle, build_provider_bundle
+from app.ai.net_policy import (
+    EndpointPolicyError,
+    ProviderEndpointPolicy,
+    parse_endpoint,
+    validate_for_save,
+)
 from app.ai.transport import JsonHttpClient
 from app.core.config import Settings
 from app.core.errors import AppError, FieldIssue, field_error_details, field_names
@@ -249,7 +255,7 @@ class ProviderSettingsService:
             if patch is None:
                 continue
             entry = (getattr(candidate, kind) or StoredProviderEntry()).model_copy(deep=True)
-            issues.extend(_apply_entry_patch(kind, entry, patch))
+            issues.extend(_apply_entry_patch(kind, entry, patch, self._policy()))
             setattr(candidate, kind, entry)
         if issues:
             raise AppError(
@@ -259,6 +265,12 @@ class ProviderSettingsService:
                 details=field_error_details(issues),
             )
         return candidate
+
+    def _policy(self) -> ProviderEndpointPolicy:
+        return ProviderEndpointPolicy(
+            allow_local=self._base.provider_url_policy == "allow-local",
+            allow_insecure_http=self._base.provider_allow_insecure_http,
+        )
 
     def _effective_settings(self, stored: StoredProviderSettings) -> Settings:
         updates: dict[str, Any] = {}
@@ -362,8 +374,17 @@ class ProviderSettingsService:
                     issues.append((f"{kind}.baseUrl", "missing", "A value is required."))
                 if not entry.api_key:
                     issues.append((f"{kind}.apiKey", "missing", "A value is required."))
-            if entry.base_url and not entry.base_url.startswith(("http://", "https://")):
-                issues.append((f"{kind}.baseUrl", "invalid_url", "Must be an http(s) URL."))
+            if entry.base_url:
+                try:
+                    validate_for_save(parse_endpoint(entry.base_url), self._policy())
+                except EndpointPolicyError:
+                    issues.append(
+                        (
+                            f"{kind}.baseUrl",
+                            "invalid_url",
+                            "Must be an allowed http(s) URL.",
+                        )
+                    )
             if any(character in entry.model for character in "\r\n"):
                 issues.append((f"{kind}.model", "invalid_characters", "Must not contain newlines."))
             if any(character in entry.api_key for character in "\r\n"):
@@ -442,6 +463,7 @@ def _apply_entry_patch(
     kind: str,
     entry: StoredProviderEntry,
     patch: ProviderEntryUpdate,
+    policy: ProviderEndpointPolicy,
 ) -> list[FieldIssue]:
     issues: list[FieldIssue] = []
     if patch.provider is not None:
@@ -458,8 +480,17 @@ def _apply_entry_patch(
             entry.api_key = secret
     if entry.model and any(character in entry.model for character in "\r\n"):
         issues.append((f"{kind}.model", "invalid_characters", "Must not contain newlines."))
-    if entry.base_url and not entry.base_url.startswith(("http://", "https://")):
-        issues.append((f"{kind}.baseUrl", "invalid_url", "Must be an http(s) URL."))
+    if entry.base_url:
+        try:
+            validate_for_save(parse_endpoint(entry.base_url), policy)
+        except EndpointPolicyError:
+            issues.append(
+                (
+                    f"{kind}.baseUrl",
+                    "invalid_url",
+                    "Must be an allowed http(s) URL.",
+                )
+            )
     if entry.api_key and any(character in entry.api_key for character in "\r\n"):
         issues.append((f"{kind}.apiKey", "invalid_characters", "Must not contain newlines."))
     return issues

@@ -28,6 +28,8 @@ const webServer = [
       FRAME_ALLOWED_ORIGINS:
         process.env.E2E_FRAME_ALLOWED_ORIGINS ?? BASE_URL,
       FRAME_MOCK_SCENARIO: process.env.E2E_MOCK_SCENARIO ?? "backlit",
+      FRAME_PROVIDER_URL_POLICY: "allow-local",
+      FRAME_PROVIDER_ALLOW_INSECURE_HTTP: "true",
       PYTHONUNBUFFERED: "1",
     },
     url: `${API_URL}/api/v1/health`,

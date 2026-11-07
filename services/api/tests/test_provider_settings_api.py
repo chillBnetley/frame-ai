@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -348,7 +349,7 @@ def test_test_endpoint_checks_an_independent_planner_provider(
         payload = {"choices": [{"message": {"content": '{"ok": true}'}}]}
         return HttpResponse(status=200, body=json.dumps(payload).encode("utf-8"))
 
-    monkeypatch.setattr("app.ai.transport.UrllibJsonTransport.post", fake_post)
+    monkeypatch.setattr("app.ai.transport.PinnedHttpTransport.post", fake_post)
 
     response = client.post(f"{PREFIX}/test", json={"planner": _OPENAI_PLANNER})
 
@@ -526,7 +527,7 @@ def test_test_endpoint_sends_text_only_requests_and_reports_success(
         return HttpResponse(status=200, body=json.dumps(payload).encode("utf-8"))
 
     monkeypatch.setattr(
-        "app.ai.transport.UrllibJsonTransport.post",
+        "app.ai.transport.PinnedHttpTransport.post",
         fake_post,
     )
 
@@ -574,7 +575,7 @@ def test_test_endpoint_reports_provider_failures(
         )
 
     monkeypatch.setattr(
-        "app.ai.transport.UrllibJsonTransport.post",
+        "app.ai.transport.PinnedHttpTransport.post",
         fake_post,
     )
 
@@ -609,7 +610,7 @@ def test_test_endpoint_does_not_persist_candidate_settings(
         return HttpResponse(status=200, body=json.dumps(payload).encode("utf-8"))
 
     monkeypatch.setattr(
-        "app.ai.transport.UrllibJsonTransport.post",
+        "app.ai.transport.PinnedHttpTransport.post",
         fake_post,
     )
 
@@ -645,3 +646,134 @@ def test_incomplete_saved_openai_settings_fail_startup(settings: Settings):
     with pytest.raises(ProviderConfigurationError):
         with TestClient(create_app(settings)):
             pass
+
+
+def _local_openai(
+    base_url: str = "http://127.0.0.1:11434/v1",
+    api_key: str = "local-secret-key",
+) -> dict[str, Any]:
+    return {
+        "provider": "openai",
+        "model": "local-model",
+        "baseUrl": base_url,
+        "apiKey": api_key,
+    }
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://10.0.0.5/v1",
+        "http://127.0.0.1:11434/v1",
+        "https://169.254.169.254/latest",
+        "https://[::ffff:127.0.0.1]/v1",
+        "https://192.168.1.10/v1",
+        "https://[fe80::1]/v1",
+    ],
+)
+def test_disallowed_provider_urls_are_rejected_without_saving(
+    client: TestClient,
+    settings: Settings,
+    base_url: str,
+):
+    response = client.post(
+        PREFIX,
+        json={"vision": _local_openai(base_url)},
+    )
+
+    assert response.status_code == 422, response.text
+    error = response.json()["error"]
+    assert error["code"] == "invalid_provider_settings"
+    fields = error["details"]["fields"]
+    assert [entry["field"] for entry in fields] == ["vision.baseUrl"]
+    assert fields[0]["rule"] == "invalid_url"
+    assert base_url not in response.text
+    assert not _saved_path(settings).exists()
+
+
+def test_rejected_provider_url_is_not_logged(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    with caplog.at_level(logging.INFO):
+        response = client.post(
+            PREFIX,
+            json={"vision": _local_openai("https://10.0.0.5/v1")},
+        )
+
+    assert response.status_code == 422, response.text
+    assert "10.0.0.5" not in caplog.text
+    assert "local-secret-key" not in caplog.text
+
+
+def test_local_provider_urls_are_accepted_when_policy_allows(tmp_path: Path):
+    settings = _settings(
+        tmp_path,
+        provider_url_policy="allow-local",
+        provider_allow_insecure_http=True,
+    )
+
+    with TestClient(create_app(settings)) as client:
+        response = client.post(PREFIX, json={"vision": _local_openai()})
+
+        assert response.status_code == 200, response.text
+        assert response.json()["vision"]["baseUrl"] == "http://127.0.0.1:11434/v1"
+
+
+def test_allow_local_still_requires_https_unless_insecure_http_is_enabled(tmp_path: Path):
+    settings = _settings(tmp_path, provider_url_policy="allow-local")
+
+    with TestClient(create_app(settings)) as client:
+        rejected = client.post(PREFIX, json={"vision": _local_openai()})
+        assert rejected.status_code == 422, rejected.text
+        assert rejected.json()["error"]["details"]["fields"][0]["field"] == "vision.baseUrl"
+
+        accepted = client.post(
+            PREFIX,
+            json={"vision": _local_openai("https://127.0.0.1:11434/v1")},
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["vision"]["baseUrl"] == "https://127.0.0.1:11434/v1"
+
+
+def test_saved_local_provider_fails_startup_under_public_only(settings: Settings):
+    _write_saved(
+        settings,
+        {
+            "version": 1,
+            "vision": {
+                "provider": "openai",
+                "model": "local-model",
+                "base_url": "http://127.0.0.1:11434/v1",
+                "api_key": "saved-local-secret",
+            },
+        },
+    )
+
+    with pytest.raises(ProviderConfigurationError) as error:
+        with TestClient(create_app(settings)):
+            pass
+
+    message = str(error.value)
+    assert "127.0.0.1" not in message
+    assert "saved-local-secret" not in message
+    assert "vision.baseUrl" in message
+
+
+def test_test_endpoint_rejects_disallowed_candidate_url(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fail(*args: Any, **kwargs: Any) -> HttpResponse:
+        raise AssertionError("the endpoint policy must reject before any request")
+
+    monkeypatch.setattr("app.ai.transport.PinnedHttpTransport.post", fail)
+
+    response = client.post(
+        f"{PREFIX}/test",
+        json={"vision": _local_openai("https://10.0.0.5/v1")},
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "invalid_provider_settings"
+    assert "10.0.0.5" not in response.text

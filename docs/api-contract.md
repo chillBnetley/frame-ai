@@ -547,10 +547,11 @@ B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD
 | `analysis_input_too_large` | 内存 JPEG 副本超过 `FRAME_ANALYSIS_MAX_INPUT_BYTES` |
 | `analysis_timeout` | 整任务超过 `FRAME_ANALYSIS_TIMEOUT_SECONDS`，在阶段边界检查并中止 |
 | `original_changed` | 原图在分析开始/完成前发生变化 |
-| `provider_auth_error` / `provider_endpoint_error` / `provider_error` | Provider 配置/请求错误 |
+| `provider_auth_error` / `provider_error` | Provider 拒绝凭据或请求 |
+| `provider_endpoint_error` | Base URL/重定向被网络策略拒绝、地址非法或端点不存在；不可重试 |
 | `provider_rate_limited` | Provider 返回 429 |
 | `provider_timeout` | Provider 超时 |
-| `provider_unavailable` | Provider 网络不可用或 5xx |
+| `provider_unavailable` | DNS 解析失败、网络不可用或 5xx；可重试 |
 | `provider_response_too_large` | Provider 响应体超限 |
 
 ### 4.7 模型设置（阶段 3 补充）
@@ -576,7 +577,8 @@ B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD
 
 - `apiKeySource ∈ {saved, environment, none}`；任何响应都不会包含 API Key 本身。
 - 保存请求可只带一个 Provider。字段缺省或 `null` 表示保持当前值；`apiKey` 为空字符串表示保持已保存密钥；`clearApiKey=true` 删除本地保存的密钥。`apiKey` 非空与 `clearApiKey=true` 同时出现返回 422 `validation_error`。
-- 选择 `openai` 时，模型名、Base URL 与 API Key 必须有值（本地保存或环境变量）；Base URL 必须是 `http(s)` 绝对地址；缺失/非法字段返回 422 `invalid_provider_settings`，`details.fields` 与请求体校验同构（对象数组 `{field, rule, limit, message}`，`rule ∈ {missing, invalid_url, invalid_characters}`），不改变已生效配置。
+- 选择 `openai` 时，模型名、Base URL 与 API Key 必须有值（本地保存或环境变量）；Base URL 必须是 `http(s)` 绝对地址，且通过 Provider 网络策略：默认只允许公网 HTTPS，拒绝私网/回环/链路本地/云元数据/`0.0.0.0/8`/组播/保留/未指定地址、userinfo、query/fragment、非法端口与 CR/LF/空白。字面 IP 在保存时分类；DNS 名保存时只做语法校验，不触发网络。本机 Provider 需在服务端设置 `FRAME_PROVIDER_URL_POLICY=allow-local`，明文 `http://127.0.0.1:...` 还需 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`；放行本机后元数据/链路本地/组播/保留地址仍被拒绝。缺失/非法字段返回 422 `invalid_provider_settings`，`details.fields` 与请求体校验同构（对象数组 `{field, rule, limit, message}`，`rule ∈ {missing, invalid_url, invalid_characters}`），响应不回显 Base URL 或 IP，不改变已生效配置。
+- 请求期会重新解析并校验 DNS 的**每个**结果（任一被拒即失败），连接固定到已校验 IP，防止 DNS 重绑定；环境代理 `HTTP_PROXY`/`HTTPS_PROXY` 不生效。重定向最多 5 跳且只允许同源：跨源与 `https → http` 降级返回不可重试的 `provider_endpoint_error`，`Authorization` 不跨源；301/302/303 转 GET，307/308 保留 body。DNS 解析失败返回可重试的 `provider_unavailable`。
 - **`planner` 逐字段回退决策 Provider**：没有保存过 planner 字段时，`planner` 视图的 `provider`、`model`、`baseUrl`、`apiKey` 分别跟随**当前生效的 decision**（含已保存的 decision 覆盖），而不是只读环境变量；`planner.apiKeySource` 因此可能显示 `saved`/`environment`/`none`，与 decision 一致。只保存 `planner.model` 时其余字段仍逐项回退；清空 planner 字段（提交空字符串）恢复为跟随 decision；显式保存 `planner.provider="mock"` 不会被 decision 的 `openai` 覆盖，此时模型名为 `mock-planner`（除非显式保存了 planner 模型名）。planner 独立配置的数值项（超时、重试、修复次数）同理优先 `FRAME_PLANNER_*`，否则跟随 `FRAME_DECISION_*`。
 - 顶层 `isMock` 仍只由 vision/decision 的 Mock 状态决定；planner 是否 Mock 以 `planner.provider` 为准（planner 独立为 `mock` 不会把整个分析链标成 Mock）。
 - 保存成功后原子写入 `<FRAME_DATA_DIR>/provider-settings.json`（明文，尽力 `chmod 0600`），并热替换 Provider：新创建的分析任务使用新配置，已开始的任务继续使用旧 Provider。保存失败不会替换运行时配置。旧版覆盖文件没有 `planner` 分组时按“未配置”读取，行为与此前复用 decision 时一致。

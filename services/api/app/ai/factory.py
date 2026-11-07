@@ -10,6 +10,7 @@ from app.ai.base import (
     VisionProvider,
 )
 from app.ai.errors import ProviderConfigurationError
+from app.ai.net_policy import ProviderEndpointPolicy
 from app.ai.providers.mock import (
     MockDecisionProvider,
     MockPlannerProvider,
@@ -20,7 +21,7 @@ from app.ai.providers.openai_compatible import (
     OpenAICompatiblePlannerProvider,
     OpenAICompatibleVisionProvider,
 )
-from app.ai.transport import JsonHttpClient, UrllibJsonTransport
+from app.ai.transport import JsonHttpClient, PinnedHttpTransport
 from app.core.config import Settings, get_settings
 
 
@@ -55,7 +56,7 @@ def build_vision_provider(
         raise ProviderConfigurationError(_missing_message("vision", missing))
 
     return OpenAICompatibleVisionProvider(
-        client or _default_client(),
+        client or _default_client(resolved),
         base_url=resolved.vision_api_base_url,
         api_key=resolved.vision_api_key.get_secret_value(),
         model=resolved.vision_model,
@@ -88,7 +89,7 @@ def build_decision_provider(
         raise ProviderConfigurationError(_missing_message("decision", missing))
 
     return OpenAICompatibleDecisionProvider(
-        client or _default_client(),
+        client or _default_client(resolved),
         base_url=resolved.decision_api_base_url,
         api_key=resolved.decision_api_key.get_secret_value(),
         model=resolved.decision_model,
@@ -130,7 +131,7 @@ def build_planner_provider(
         raise ProviderConfigurationError(_missing_message("planner", missing))
 
     return OpenAICompatiblePlannerProvider(
-        client or _default_client(),
+        client or _default_client(resolved),
         base_url=base_url,
         api_key=api_key,
         model=model,
@@ -178,8 +179,12 @@ def build_provider_bundle(
     )
 
 
-def _default_client() -> JsonHttpClient:
-    return JsonHttpClient(UrllibJsonTransport())
+def _default_client(settings: Settings) -> JsonHttpClient:
+    policy = ProviderEndpointPolicy(
+        allow_local=settings.provider_url_policy == "allow-local",
+        allow_insecure_http=settings.provider_allow_insecure_http,
+    )
+    return JsonHttpClient(PinnedHttpTransport(policy))
 
 
 def _secret_value(secret: SecretStr | None) -> str:

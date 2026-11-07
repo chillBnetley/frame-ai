@@ -284,6 +284,13 @@ npm run dev                  # Turbopack
 
 使用真实 OpenAI 兼容视觉/决策/规划服务时，可直接在页面顶栏打开“模型设置”，填写 Provider、模型名、Base URL 与 API Key 后“保存并应用”；规划模型留空的字段逐项跟随决策模型。也可以继续用 `.env` 设置 `FRAME_VISION_PROVIDER=openai`、`FRAME_DECISION_PROVIDER=openai`（可选 `FRAME_PLANNER_PROVIDER=openai`）及对应 `*_API_KEY`、`*_MODEL`、`*_API_BASE_URL`。本地保存的字段优先于环境变量，点击“恢复环境变量配置”会删除覆盖文件（包括规划覆盖）。缺少必需配置时启动或保存失败，不会静默回退到 Mock。密钥只留在服务端的本机覆盖文件或环境变量中，不会回显到页面、日志或前端构建产物，禁止提交到版本库。
 
+Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例如 Base URL `http://127.0.0.1:11434/v1`）时，默认保存会返回 422 `invalid_url`，已保存的本地地址会导致启动失败。迁移步骤：
+
+1. 在启动 API 的进程环境中设置 `FRAME_PROVIDER_URL_POLICY=allow-local`（E2E/自动化栈也要设置）。
+2. Base URL 是明文 `http://` 时，再设置 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`；能用 `https://` 时不要开启。
+3. 重启 API 后重新保存本机 Provider，或在 `.env` 中修正配置；保存/启动都会按新策略校验。
+4. 即使放行本机，`169.254.0.0/16`（含云元数据 `169.254.169.254`）、链路本地、组播、保留、未指定地址与 `0.0.0.0/8` 仍会被拒绝；恢复默认只需删除这两个变量。
+
 ## 环境变量
 
 后端读取 `FRAME_` 前缀变量，优先级：进程环境 > `services/api/.env` > 根目录 `.env` > 默认值。
@@ -333,6 +340,8 @@ npm run dev                  # Turbopack
 | `FRAME_PLANNER_TIMEOUT` | 空 | 单次规划请求超时秒数；空 = 跟随 `FRAME_DECISION_TIMEOUT` |
 | `FRAME_PLANNER_MAX_RETRIES` | 空 | 规划请求最大重试次数；空 = 跟随 `FRAME_DECISION_MAX_RETRIES` |
 | `FRAME_PLANNER_REPAIR_ATTEMPTS` | 空 | 规划 JSON 校验失败后的修复尝试次数；空 = 跟随 `FRAME_DECISION_REPAIR_ATTEMPTS` |
+| `FRAME_PROVIDER_URL_POLICY` | `public-only` | Provider 出站地址策略：`public-only` 仅公网；`allow-local` 额外放行私网/回环（链路本地/元数据/组播/保留地址始终拒绝） |
+| `FRAME_PROVIDER_ALLOW_INSECURE_HTTP` | `false` | 是否允许 Provider 使用明文 `http://`；默认只允许 HTTPS |
 | `FRAME_MOCK_SCENARIO` | `generic` | Mock 场景：`generic/portrait/landscape/low_light/backlit` |
 | `FRAME_ANALYSIS_MAX_EDGE` | `1024` | 发送给视觉 Provider 的内存副本最长边；范围 512–2048 |
 | `FRAME_ANALYSIS_MAX_CONCURRENCY` | `2` | 后台分析线程池大小 |

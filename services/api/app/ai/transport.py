@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import http.client
 import json
 import random
+import socket
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -11,11 +14,28 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from app.ai.errors import ProviderError
+from app.ai.net_policy import (
+    EndpointPolicyError,
+    EndpointResolutionError,
+    ParsedEndpoint,
+    PinnedEndpoint,
+    ProviderEndpointPolicy,
+    parse_endpoint,
+    resolve_and_validate,
+)
 
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_BACKOFF_SECONDS = 8.0
+MAX_REDIRECTS = 5
 
 _DEFAULT_PORTS = {"http": 80, "https": 443}
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_GET_REDIRECT_STATUSES = frozenset({301, 302, 303})
+_HOP_HEADERS = frozenset({"host", "content-length", "transfer-encoding", "connection"})
+_ENTITY_HEADERS = frozenset({"content-type", "content-length", "transfer-encoding"})
+_ENDPOINT_MESSAGE = "The configured model provider endpoint is not allowed."
+_UNAVAILABLE_MESSAGE = "The model provider could not be reached."
+_TIMEOUT_MESSAGE = "The model provider did not respond before the timeout."
 
 
 def _origin(url: str) -> tuple[str, str, int]:
@@ -135,6 +155,254 @@ class UrllibJsonTransport:
                 "The model provider could not be reached.",
                 retryable=True,
             ) from exc
+
+
+class PinnedHttpTransport:
+    """JSON transport that validates and pins provider addresses.
+
+    Unlike ``UrllibJsonTransport`` this implementation uses ``http.client``
+    directly. It therefore ignores ``HTTP_PROXY``/``HTTPS_PROXY`` and always
+    connects to an address that was checked against the endpoint policy.
+    """
+
+    def __init__(
+        self,
+        policy: ProviderEndpointPolicy,
+        *,
+        resolver: Callable[..., list[tuple[Any, ...]]] | None = None,
+        connector: Callable[..., socket.socket] | None = None,
+    ) -> None:
+        self._policy = policy
+        self._resolver = resolver
+        self._connector = connector
+
+    def post(
+        self,
+        url: str,
+        body: bytes,
+        headers: Mapping[str, str],
+        timeout: float,
+    ) -> HttpResponse:
+        try:
+            return self._post(url, body, headers, timeout)
+        except EndpointPolicyError as exc:
+            raise ProviderError(
+                "provider_endpoint_error",
+                _ENDPOINT_MESSAGE,
+                retryable=False,
+            ) from exc
+        except EndpointResolutionError as exc:
+            raise ProviderError(
+                "provider_unavailable",
+                _UNAVAILABLE_MESSAGE,
+                retryable=True,
+            ) from exc
+
+    def _post(
+        self,
+        url: str,
+        body: bytes,
+        headers: Mapping[str, str],
+        timeout: float,
+    ) -> HttpResponse:
+        endpoint = parse_endpoint(url)
+        method = "POST"
+        payload: bytes | None = body
+        request_headers = dict(headers)
+        redirects = 0
+
+        while True:
+            if self._resolver is None:
+                pinned = resolve_and_validate(endpoint, self._policy)
+            else:
+                pinned = resolve_and_validate(endpoint, self._policy, self._resolver)
+            response = self._send(
+                endpoint,
+                pinned,
+                method,
+                payload,
+                request_headers,
+                timeout,
+            )
+            location = _header_value(response.headers, "location")
+            if response.status not in _REDIRECT_STATUSES:
+                return response
+            if not location or redirects >= MAX_REDIRECTS:
+                raise EndpointPolicyError(_ENDPOINT_MESSAGE)
+            redirects += 1
+            endpoint = _redirect_endpoint(endpoint, location)
+            if response.status in _GET_REDIRECT_STATUSES:
+                method = "GET"
+                payload = None
+                request_headers = _without_entity_headers(request_headers)
+
+    def _send(
+        self,
+        endpoint: ParsedEndpoint,
+        pinned: PinnedEndpoint,
+        method: str,
+        body: bytes | None,
+        headers: Mapping[str, str],
+        timeout: float,
+    ) -> HttpResponse:
+        connection: http.client.HTTPConnection
+        if endpoint.scheme == "https":
+            connection = _PinnedHTTPSConnection(
+                endpoint.host,
+                endpoint.port,
+                pinned.addresses,
+                self._connector,
+                context=ssl.create_default_context(),
+                timeout=timeout,
+            )
+        else:
+            connection = _PinnedHTTPConnection(
+                endpoint.host,
+                endpoint.port,
+                pinned.addresses,
+                self._connector,
+                timeout=timeout,
+            )
+        try:
+            connection.request(
+                method,
+                endpoint.path,
+                body=body,
+                headers=_request_headers(headers),
+            )
+            raw = connection.getresponse()
+            try:
+                status = int(raw.status)
+                payload = _read_limited(raw)
+                response_headers = dict(raw.getheaders())
+            finally:
+                raw.close()
+            return HttpResponse(status=status, body=payload, headers=response_headers)
+        except ProviderError:
+            raise
+        except TimeoutError:
+            raise ProviderError(
+                "provider_timeout",
+                _TIMEOUT_MESSAGE,
+                retryable=True,
+            ) from None
+        except (ssl.SSLError, OSError, http.client.HTTPException, UnicodeError, ValueError):
+            raise ProviderError(
+                "provider_unavailable",
+                _UNAVAILABLE_MESSAGE,
+                retryable=True,
+            ) from None
+        finally:
+            connection.close()
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        addresses: tuple[str, ...],
+        connector: Callable[..., socket.socket] | None,
+        *,
+        timeout: float,
+    ) -> None:
+        super().__init__(host, port, timeout=timeout)
+        self._pinned_addresses = addresses
+        self._connector = connector
+
+    def connect(self) -> None:
+        self.sock = _connect_pinned_socket(
+            self._pinned_addresses,
+            self.port,
+            self.timeout,
+            self._connector,
+        )
+        try:
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        addresses: tuple[str, ...],
+        connector: Callable[..., socket.socket] | None,
+        *,
+        context: ssl.SSLContext,
+        timeout: float,
+    ) -> None:
+        super().__init__(host, port, timeout=timeout, context=context)
+        self._pinned_addresses = addresses
+        self._connector = connector
+        self._secure_context = context
+
+    def connect(self) -> None:
+        self.sock = _connect_pinned_socket(
+            self._pinned_addresses,
+            self.port,
+            self.timeout,
+            self._connector,
+        )
+        self.sock = self._secure_context.wrap_socket(self.sock, server_hostname=self.host)
+
+
+def _connect_pinned_socket(
+    addresses: tuple[str, ...],
+    port: int,
+    timeout: float | None,
+    connector: Callable[..., socket.socket] | None,
+) -> socket.socket:
+    create = connector or socket.create_connection
+    last_error: OSError | None = None
+    for address in addresses:
+        try:
+            return create((address, port), timeout)
+        except OSError as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    raise OSError(_UNAVAILABLE_MESSAGE)
+
+
+def _redirect_endpoint(current: ParsedEndpoint, location: str) -> ParsedEndpoint:
+    if not location or any(
+        character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
+        for character in location
+    ):
+        raise EndpointPolicyError(_ENDPOINT_MESSAGE)
+    try:
+        joined = urllib.parse.urljoin(_endpoint_url(current), location)
+    except ValueError:
+        raise EndpointPolicyError(_ENDPOINT_MESSAGE) from None
+    target = parse_endpoint(joined)
+    current_origin = (current.scheme, current.host.lower(), current.port)
+    target_origin = (target.scheme, target.host.lower(), target.port)
+    if target_origin != current_origin:
+        raise EndpointPolicyError(_ENDPOINT_MESSAGE)
+    return target
+
+
+def _endpoint_url(endpoint: ParsedEndpoint) -> str:
+    return f"{endpoint.scheme}://{endpoint.host_header}{endpoint.path}"
+
+
+def _header_value(headers: Mapping[str, str], name: str) -> str | None:
+    wanted = name.lower()
+    for key, value in headers.items():
+        if key.lower() == wanted:
+            return value
+    return None
+
+
+def _request_headers(headers: Mapping[str, str]) -> dict[str, str]:
+    return {key: value for key, value in headers.items() if key.lower() not in _HOP_HEADERS}
+
+
+def _without_entity_headers(headers: Mapping[str, str]) -> dict[str, str]:
+    return {key: value for key, value in headers.items() if key.lower() not in _ENTITY_HEADERS}
 
 
 class JsonHttpClient:
@@ -280,6 +548,8 @@ __all__ = [
     "HttpResponse",
     "JsonHttpClient",
     "JsonTransport",
+    "MAX_REDIRECTS",
     "MAX_RESPONSE_BYTES",
+    "PinnedHttpTransport",
     "UrllibJsonTransport",
 ]
