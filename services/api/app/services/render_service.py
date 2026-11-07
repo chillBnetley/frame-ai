@@ -57,6 +57,7 @@ class RenderService:
         self.previews = previews or PreviewStore(
             settings.preview_dir,
             ttl_seconds=settings.preview_ttl_seconds,
+            max_bytes=settings.preview_max_bytes,
         )
         self.proxy_cache = proxy_cache or DecodedProxyCache(
             settings.proxy_cache_mb * 1024 * 1024,

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     preview_dirname: str = "tmp/previews"
     preview_ttl_seconds: int = Field(default=3600, gt=0)
     preview_cleanup_interval_seconds: int = Field(default=600, gt=0)
+    preview_max_bytes: int = Field(default=2 * 1024 * 1024 * 1024, gt=0)
     render_max_edge_default: int = Field(default=1600, gt=0)
     render_max_edge_limit: int = Field(default=2560, gt=0)
     proxy_cache_mb: int = Field(default=64, ge=0)

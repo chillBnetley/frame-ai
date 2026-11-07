@@ -25,6 +25,8 @@ class CleanupReport:
     skipped_symlinks: int = 0
     errors: int = 0
     deleted_names: tuple[str, ...] = field(default_factory=tuple)
+    deleted_bytes: int = 0
+    skipped: int = 0
 
     @property
     def removed_any(self) -> bool:
@@ -34,9 +36,16 @@ class CleanupReport:
 class PreviewStore:
     """Content-addressed preview files confined to a single directory."""
 
-    def __init__(self, directory: Path, *, ttl_seconds: int) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        ttl_seconds: int,
+        max_bytes: int | None = None,
+    ) -> None:
         self.directory = directory
         self.ttl_seconds = ttl_seconds
+        self.max_bytes = max_bytes
         self._write_lock = threading.Lock()
 
     def ensure_ready(self) -> None:
@@ -55,6 +64,19 @@ class PreviewStore:
         if path.is_symlink() or not path.is_file():
             return None
         return path
+
+    def touch(self, path: Path) -> None:
+        """Renew the idle TTL of a served preview file.
+
+        Read-only filesystems and permission errors must not break serving:
+        the preview is still valid, it just keeps its previous mtime.
+        """
+        try:
+            os.utime(path, None)
+        except FileNotFoundError:
+            return
+        except OSError:
+            logger.debug("preview_touch_failed path=%s", path)
 
     def dimensions(self, preview_id: str) -> tuple[int, int] | None:
         path = self.resolve(preview_id)
@@ -103,13 +125,22 @@ class PreviewStore:
         return destination
 
     def cleanup(self, *, now: float | None = None) -> CleanupReport:
-        """Delete expired render files in the preview directory and proxy cache."""
-        cutoff = (time.time() if now is None else now) - self.ttl_seconds
+        """Delete idle render files, then enforce the capacity budget.
+
+        The TTL pass removes files whose mtime is older than the idle window;
+        served previews and proxy hits refresh mtime, so actively viewed
+        sessions survive. The capacity pass then evicts the oldest remaining
+        files (previews and proxies together) until the byte budget is met.
+        """
+        current = time.time() if now is None else now
+        cutoff = current - self.ttl_seconds
         deleted: list[str] = []
+        deleted_bytes = 0
+        skipped_symlinks = 0
         skipped = 0
         errors = 0
-        directories = [self.directory, proxy_cache_directory(self.directory)]
-        for directory in directories:
+        files: list[tuple[Path, os.stat_result]] = []
+        for directory in (self.directory, proxy_cache_directory(self.directory)):
             entries, scan_failed = self._scan(directory)
             if scan_failed:
                 errors += 1
@@ -117,32 +148,75 @@ class PreviewStore:
             for entry in entries:
                 try:
                     if entry.is_symlink():
-                        skipped += 1
+                        skipped_symlinks += 1
                         continue
                     if not entry.is_file(follow_symlinks=False):
                         continue
-                    if entry.stat(follow_symlinks=False).st_mtime >= cutoff:
-                        continue
-                    os.unlink(entry.path)
-                    deleted.append(entry.name)
+                    stat = entry.stat(follow_symlinks=False)
                 except FileNotFoundError:
                     continue
                 except OSError:
                     errors += 1
-                    logger.warning("preview_cleanup_unlink_failed path=%s", entry.path)
+                    logger.warning("preview_cleanup_stat_failed path=%s", entry.path)
+                    continue
+                files.append((Path(entry.path), stat))
+
+        remaining: list[tuple[Path, os.stat_result]] = []
+        for path, stat in files:
+            if stat.st_mtime >= cutoff:
+                remaining.append((path, stat))
+                continue
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                skipped += 1
+                logger.warning("preview_cleanup_unlink_failed path=%s", path)
+                remaining.append((path, stat))
+                continue
+            deleted.append(path.name)
+            deleted_bytes += stat.st_size
+
+        if self.max_bytes is not None:
+            total = sum(stat.st_size for _, stat in remaining)
+            if total > self.max_bytes:
+                for path, stat in sorted(
+                    remaining,
+                    key=lambda item: (item[1].st_mtime, item[0].name),
+                ):
+                    if total <= self.max_bytes:
+                        break
+                    try:
+                        os.unlink(path)
+                    except FileNotFoundError:
+                        total -= stat.st_size
+                        continue
+                    except OSError:
+                        skipped += 1
+                        logger.warning("preview_cleanup_unlink_failed path=%s", path)
+                        continue
+                    total -= stat.st_size
+                    deleted.append(path.name)
+                    deleted_bytes += stat.st_size
 
         if deleted:
             logger.info(
-                "preview_cleanup deleted=%s skipped_symlinks=%s errors=%s",
+                "preview_cleanup deleted=%s deleted_bytes=%s skipped=%s "
+                "skipped_symlinks=%s errors=%s",
                 len(deleted),
+                deleted_bytes,
                 skipped,
+                skipped_symlinks,
                 errors,
             )
         return CleanupReport(
             deleted=len(deleted),
-            skipped_symlinks=skipped,
+            skipped_symlinks=skipped_symlinks,
             errors=errors,
             deleted_names=tuple(sorted(deleted)),
+            deleted_bytes=deleted_bytes,
+            skipped=skipped,
         )
 
     @staticmethod

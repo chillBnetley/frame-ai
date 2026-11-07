@@ -337,6 +337,41 @@ def test_expired_preview_returns_404_and_rerenders(
     assert client.get(str(second["previewUrl"])).status_code == 200
 
 
+def test_serving_a_preview_renews_its_idle_deadline(
+    client: TestClient,
+    settings: Settings,
+):
+    session = _session(client)
+    rendered = _render(client, session)
+    preview_id = PREVIEW_PATH.fullmatch(str(rendered["previewUrl"])).group(1)  # type: ignore[union-attr]
+    path = settings.preview_dir / f"{preview_id}.jpg"
+    old = time.time() - 600
+    os.utime(path, (old, old))
+
+    response = client.get(str(rendered["previewUrl"]))
+
+    assert response.status_code == 200
+    assert path.stat().st_mtime > old + 1
+
+
+def test_preview_touch_failure_still_serves_the_preview(
+    client: TestClient,
+    monkeypatch,
+):
+    session = _session(client)
+    rendered = _render(client, session)
+
+    def readonly_utime(_path: str, _times: object) -> None:
+        raise OSError("read-only filesystem")
+
+    monkeypatch.setattr("app.services.preview_store.os.utime", readonly_utime)
+
+    response = client.get(str(rendered["previewUrl"]))
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"\xff\xd8")
+
+
 def test_startup_cleanup_sweeps_expired_previews_and_proxies(
     settings: Settings,
     tmp_path: Path,

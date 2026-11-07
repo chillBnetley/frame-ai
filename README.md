@@ -290,8 +290,9 @@ npm run dev                  # Turbopack
 | `FRAME_LOG_LEVEL` | `INFO` | `DEBUG/INFO/WARNING/ERROR/CRITICAL` |
 | `FRAME_DATA_DIR` | `<repo>/data` | 本地数据目录；相对路径按仓库根目录解析，与启动目录无关 |
 | `FRAME_DATABASE_FILENAME` | `frame.db` | SQLite 文件名，位于数据目录下 |
-| `FRAME_PREVIEW_TTL_SECONDS` | `3600` | 预览缓存与 `previews/proxies/` 代理磁盘缓存的有效秒数（按 mtime，命中会刷新）；过期后 `GET /previews/{id}` 返回 404 |
+| `FRAME_PREVIEW_TTL_SECONDS` | `3600` | 预览缓存与 `previews/proxies/` 代理磁盘缓存的空闲秒数（按 mtime；`GET /previews/{id}` 与代理命中会刷新）；空闲超时或容量淘汰后 `GET /previews/{id}` 返回 404 |
 | `FRAME_PREVIEW_CLEANUP_INTERVAL_SECONDS` | `600` | 运行期预览清理间隔秒数；启动时另清一次 |
+| `FRAME_PREVIEW_MAX_BYTES` | `2147483648` | 预览目录 + `previews/proxies/` 合计容量上限（字节）；超出后按 mtime 最旧优先淘汰到上限内 |
 | `FRAME_PROXY_CACHE_MB` | `64` | 解码后渲染代理的进程内 LRU 预算（MB），0 关闭；只缓存可无损转为 8-bit 的数组，开关不影响输出字节 |
 | `FRAME_MASK_CACHE_MB` | `64` | 蒙版权重的进程内 LRU 预算（MB），0 关闭；单条超过 24 MB 不入库（24 MP 画布权重约 91.55 MB） |
 | `FRAME_RENDER_MAX_EDGE_DEFAULT` | `1600` | `final` 预览默认最长边 |

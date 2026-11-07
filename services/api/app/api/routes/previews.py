@@ -29,6 +29,7 @@ def get_preview(
             "preview_expired",
             "The preview is no longer available; render it again.",
         )
+    service.previews.touch(path)
     headers = {
         "Cache-Control": f"private, max-age={service.previews.ttl_seconds}",
         "Content-Security-Policy": "default-src 'none'; sandbox",

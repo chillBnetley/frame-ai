@@ -7,6 +7,7 @@ import sys
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.core.config import REPO_ROOT, Settings
 from app.services.image_service import ImageService
@@ -48,6 +49,14 @@ def test_relative_data_dir_resolves_against_repo_root(tmp_path, monkeypatch):
 
     assert settings.data_dir == (REPO_ROOT / "relative-data").resolve()
     assert settings.data_dir.is_absolute()
+
+
+def test_preview_max_bytes_defaults_and_rejects_nonpositive_values():
+    settings = Settings()
+
+    assert settings.preview_max_bytes == 2 * 1024 * 1024 * 1024
+    with pytest.raises(ValidationError):
+        Settings(preview_max_bytes=0)
 
 
 def test_config_endpoint_exposes_runtime_limits(client: TestClient, settings: Settings):

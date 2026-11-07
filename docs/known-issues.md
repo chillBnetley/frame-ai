@@ -16,8 +16,8 @@
 ## 预览与导出
 
 - **导出 PNG 没有 alpha 通道。** 任务书要求 PNG 保留 alpha、JPEG 合成白底；当前 loader 对所有带 alpha 的输入统一合成到白底并转 RGB，因此 PNG 导出语义等同于白底合成。这是已记录的实现缺口，修复需要区分导出格式或在管线中保留 alpha 蒙版。
-- 预览缓存根目录文件按 mtime 超过 `FRAME_PREVIEW_TTL_SECONDS` 清理；正在被读取的文件可能先被删除，前端会收到 `404 preview_expired` 并自动重渲染。阶段四起 `previews/proxies/` 也纳入同一轮清理（同样按 mtime、同一 TTL，命中时刷新 mtime），因此长时间不打开的会话会重新解码原图；清理依旧只删普通文件、跳过符号链接与子目录。
-  - **读取预览不会延长寿命**：只有写入（渲染）会刷新预览文件的 mtime，`GET /previews/{id}` 不做 `os.utime`。Task 8 实测：编辑器开着但不改动满 1 小时（默认 TTL 3600 s、清理间隔 600 s），下一次挂载同一 URL 的 `<img>` 就会拿到 `404 preview_expired`，随后由 `PreviewImage.onError → retry()` 重新渲染并写回同一文件，自动恢复（实测 200→404→200，重渲染耗时与缓存未命中一致）。没有改成“按最后访问过期”，因为这会让 TTL 变成不设上限的空闲计时，磁盘清理承诺反而消失。
+- 预览缓存按**空闲时间 + 容量上限**清理：`tmp/previews/` 与 `previews/proxies/` 中 mtime 超过 `FRAME_PREVIEW_TTL_SECONDS` 的文件在启动时和每个清理间隔删除；`GET /previews/{id}` 成功返回时用 `os.utime` 续期，代理命中时也刷新 mtime，因此持续查看的会话不会被 TTL 删除。清理只删普通文件、跳过符号链接与子目录；若文件已被外部删除或容量淘汰，仍返回 `404 preview_expired`，前端 `PreviewImage.onError → retry()` 自动重渲染恢复。
+  - **容量上限**：预览目录与代理目录合计超过 `FRAME_PREVIEW_MAX_BYTES`（默认 2 GB）时，按 mtime 最旧优先淘汰到上限内（LRU）。因此“按访问续期”不会让磁盘无限增长；长期积累的旧缓存仍受总容量约束。只读文件系统导致 `os.utime` 失败时忽略续期，不影响预览返回；Windows 文件占用等删除失败会跳过并计入 `skipped`，在下一轮清理重试。
   - 蒙版画布的参考图（`局部蒙版预览`）不是 `PreviewImage`，没有重渲染入口：Task 8 起在加载失败时改为显示“参考图已过期”说明并保持画布可框选，任何新的渲染（URL 变化）都会自动恢复它。
 - 两层进程内缓存（解码代理 `FRAME_PROXY_CACHE_MB`、蒙版权重 `FRAME_MASK_CACHE_MB`）只在服务运行期间存在，服务重启即全部失效；单进程预算默认各 64 MB，按条目大小计数而**不统计进程真实 RSS**，缓存占用也不从导出准入的预算里扣除。导出准入使用"静态估算 + psutil 实时可用内存"两道门（见下），是另外两套机制。蒙版权重单条超过 24 MB 不入库：24 MP 画布的权重约 91.55 MB，因此大导出每次都重新计算权重，缓存对它没有收益（实测见 `docs/performance.md`）。
 - Windows 上 `os.replace` 目标被浏览器/杀毒软件占用时会失败。`PreviewStore` 使用进程内锁、短重试与“回退到已存在目标”兜底；这不是跨进程一致性方案。
