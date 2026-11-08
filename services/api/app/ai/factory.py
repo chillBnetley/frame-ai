@@ -23,6 +23,8 @@ from app.ai.providers.openai_compatible import (
 )
 from app.ai.transport import JsonHttpClient, PinnedHttpTransport
 from app.core.config import Settings, get_settings
+from app.models.provider_settings import SecretKind
+from app.services.usage_meter import UsageMeter
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,14 +57,16 @@ def build_vision_provider(
     if missing:
         raise ProviderConfigurationError(_missing_message("vision", missing))
 
+    meter = _usage_meter(resolved, "vision")
     return OpenAICompatibleVisionProvider(
-        client or _default_client(resolved),
+        client or _default_client(resolved, meter),
         base_url=resolved.vision_api_base_url,
         api_key=resolved.vision_api_key.get_secret_value(),
         model=resolved.vision_model,
         timeout=resolved.vision_timeout,
         max_retries=resolved.vision_max_retries,
         repair_attempts=resolved.vision_repair_attempts,
+        usage_meter=meter,
     )
 
 
@@ -88,14 +92,16 @@ def build_decision_provider(
     if missing:
         raise ProviderConfigurationError(_missing_message("decision", missing))
 
+    meter = _usage_meter(resolved, "decision")
     return OpenAICompatibleDecisionProvider(
-        client or _default_client(resolved),
+        client or _default_client(resolved, meter),
         base_url=resolved.decision_api_base_url,
         api_key=resolved.decision_api_key.get_secret_value(),
         model=resolved.decision_model,
         timeout=resolved.decision_timeout,
         max_retries=resolved.decision_max_retries,
         repair_attempts=resolved.decision_repair_attempts,
+        usage_meter=meter,
     )
 
 
@@ -130,8 +136,9 @@ def build_planner_provider(
     if missing:
         raise ProviderConfigurationError(_missing_message("planner", missing))
 
+    meter = _usage_meter(resolved, "planner")
     return OpenAICompatiblePlannerProvider(
-        client or _default_client(resolved),
+        client or _default_client(resolved, meter),
         base_url=base_url,
         api_key=api_key,
         model=model,
@@ -179,12 +186,29 @@ def build_provider_bundle(
     )
 
 
-def _default_client(settings: Settings) -> JsonHttpClient:
+def _default_client(settings: Settings, meter: UsageMeter | None = None) -> JsonHttpClient:
     policy = ProviderEndpointPolicy(
         allow_local=settings.provider_url_policy == "allow-local",
         allow_insecure_http=settings.provider_allow_insecure_http,
     )
-    return JsonHttpClient(PinnedHttpTransport(policy))
+    return JsonHttpClient(
+        PinnedHttpTransport(policy, on_attempt=None if meter is None else meter.reserve)
+    )
+
+
+def _usage_meter(settings: Settings, kind: SecretKind) -> UsageMeter:
+    # Imported lazily: the repository depends on app.ai.errors, whose package
+    # __init__ imports this factory, so a module-level import closes a cycle.
+    from app.repositories.provider_usage_repo import ProviderUsageRepository
+
+    return UsageMeter(
+        kind,
+        ProviderUsageRepository(
+            settings.database_path,
+            request_limit=settings.provider_daily_request_limit,
+            token_limit=settings.provider_daily_token_limit,
+        ),
+    )
 
 
 def _secret_value(secret: SecretStr | None) -> str:

@@ -587,6 +587,10 @@ B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD
 - **新增错误码 `secret_store_error`（HTTP 500）**：保存期加密失败（主密钥不可用/损坏、密文校验不通过等）时返回，文案固定且不含密文或密钥，运行时配置与磁盘文件都不变；写盘失败仍是 500 `provider_settings_write_failed`。启动期同类失败表现为 API 启动失败（不是 HTTP 响应）。前端 `describeSettingsError` 对未知 code 回落到该安全 message，无需改动。
 - `test` 使用“当前生效配置 + 请求内临时修改”，不写入文件。真实 Provider 只发送一条纯文本 Chat Completions 提示，不发送用户图片；每项返回 `{ok, provider, model, latencyMs, code, message}`，失败码为安全的 `provider_*`/`provider_test_failed`，不返回上游响应正文。
 - `reset` 删除覆盖文件并恢复环境变量配置（planner 随之回到逐字段跟随 decision）；没有覆盖文件时同样返回 200。
+- **每日成本上限（L14/B6c）**：`FRAME_PROVIDER_DAILY_REQUEST_LIMIT` / `FRAME_PROVIDER_DAILY_TOKEN_LIMIT` 默认 0（不限制但继续计数）。只有通过出站策略与 DNS 解析、即将真实发送的 HTTP 尝试才计数；重试每次、重定向每跳各计 1，Mock Provider 不计量。token 口径：`usage.total_tokens` 非空优先，`total` 空但 prompt/completion 均有取两者和，否则按 `ceil((请求体 JSON 字节 + 响应体 JSON 字节)/4)` 估算，两者不重复计。
+  - 分析入队在额度用尽时返回 **429**：`{"error":{"code":"provider_budget_exceeded","message":"The daily model usage limit has been reached.","details":{"limit":N,"used":N,"remaining":0,"resetAt":"<次日 UTC 零点>"}}}`。入队预检是只读的，被拒请求不会增加计数；队列内任务在真实发送时中止并落 `provider_budget_exceeded` 任务错误码（任务表无 details 通道）。**设置页 `POST /settings/providers/test` 始终返回 200**，逐 Provider 在 `ProviderTestResult`（`{ok, provider, model, latencyMs, code, message}`）中给出 `ok:false` 与 `code:"provider_budget_exceeded"`，不改变 200 形状。
+  - 用量账本不可读写时 fail-closed：分析入队返回 **503 `provider_usage_unavailable`**，usage 查询端点同样返回 503；设置页测试连接仍返回 200，并以 `ProviderTestResult.code = "provider_usage_unavailable"` 报告；摄影师链路返回 429 `photographer_budget_exceeded`（`details` 为 `{retryable:false, limit, used, remaining, resetAt}`）或 503 `photographer_usage_unavailable`。
+  - 只读端点 `GET /api/v1/settings/providers/usage` 返回 `{date, requestLimit, tokenLimit, resetAt, entries:[{provider,date,requests,tokensEstimated,tokensReported,updatedAt}]}`，三个 Provider 缺失行按 0 补齐；不触发 Provider 调用，也不包含任何 prompt/响应/图片/密钥内容。
 
 ### 4.8 AI 摄影师（阶段 5）
 

@@ -77,6 +77,25 @@ class ProviderTestResponse(ProviderSettingsModel):
     planner: ProviderTestResult
 
 
+class ProviderUsageEntry(ProviderSettingsModel):
+    provider: SecretKind
+    date: str
+    requests: int
+    tokens_estimated: int
+    tokens_reported: int
+    updated_at: str | None = None
+
+
+class ProviderUsageView(ProviderSettingsModel):
+    """Read-only daily counters; no prompt, response, image or key content."""
+
+    date: str
+    request_limit: int
+    token_limit: int
+    reset_at: str
+    entries: list[ProviderUsageEntry]
+
+
 class StoredProviderEntry(BaseModel):
     """Legacy v1 entry. Also used as the in-memory domain shape.
 
@@ -153,6 +172,8 @@ __all__ = [
     "ProviderSettingsView",
     "ProviderTestResponse",
     "ProviderTestResult",
+    "ProviderUsageEntry",
+    "ProviderUsageView",
     "SecretKind",
     "StoredProviderEntry",
     "StoredProviderEntryV2",

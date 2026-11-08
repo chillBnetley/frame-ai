@@ -840,6 +840,20 @@ def _map_provider_error(error: ProviderError) -> AppError:
             break
 
     details = {"retryable": error.retryable}
+    if suffix == "provider_budget_exceeded":
+        return AppError(
+            429,
+            "photographer_budget_exceeded",
+            "The daily model usage limit has been reached.",
+            {"retryable": False, **error.details},
+        )
+    if suffix == "provider_usage_unavailable":
+        return AppError(
+            503,
+            "photographer_usage_unavailable",
+            "Usage tracking is temporarily unavailable.",
+            {"retryable": False},
+        )
     if suffix == "provider_timeout":
         return AppError(
             504,

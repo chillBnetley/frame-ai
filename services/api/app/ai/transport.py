@@ -171,10 +171,12 @@ class PinnedHttpTransport:
         *,
         resolver: Callable[..., list[tuple[Any, ...]]] | None = None,
         connector: Callable[..., socket.socket] | None = None,
+        on_attempt: Callable[[], None] | None = None,
     ) -> None:
         self._policy = policy
         self._resolver = resolver
         self._connector = connector
+        self._on_attempt = on_attempt
 
     def post(
         self,
@@ -216,6 +218,11 @@ class PinnedHttpTransport:
                 pinned = resolve_and_validate(endpoint, self._policy)
             else:
                 pinned = resolve_and_validate(endpoint, self._policy, self._resolver)
+            # The attempt hook runs only after the address passed the policy and
+            # resolved, so blocked or DNS-failed calls are never billed. It runs
+            # once per hop, i.e. a redirect chain counts each real send.
+            if self._on_attempt is not None:
+                self._on_attempt()
             response = self._send(
                 endpoint,
                 pinned,

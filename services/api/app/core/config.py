@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     provider_url_policy: Literal["public-only", "allow-local"] = "public-only"
     provider_allow_insecure_http: bool = False
     provider_settings_encryption: Literal["required", "off"] = "required"
+    provider_daily_request_limit: int = Field(default=0, ge=0)
+    provider_daily_token_limit: int = Field(default=0, ge=0)
 
     mock_scenario: str = "generic"
 

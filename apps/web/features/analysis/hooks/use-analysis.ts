@@ -8,6 +8,7 @@ import {
   fetchAnalysisStatus,
 } from "@/lib/api/analysis";
 import { ApiClientError } from "@/lib/api/client";
+import { analysisFailureMessage } from "@/lib/error-messages";
 import type {
   AnalysisReport,
   AnalysisStatusResponse,
@@ -74,7 +75,7 @@ function toAnalysisError(error: unknown): AnalysisError {
   if (error instanceof ApiClientError) {
     return {
       code: error.code,
-      message: error.message,
+      message: analysisFailureMessage(error.code, error.message),
       requestId: error.requestId,
     };
   }
@@ -293,7 +294,7 @@ class AnalysisController {
         error: response.error
           ? {
               code: response.error.code,
-              message: response.error.message,
+              message: analysisFailureMessage(response.error.code, response.error.message),
               requestId: null,
             }
           : DEFAULT_FAILURE,

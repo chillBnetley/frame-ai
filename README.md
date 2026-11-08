@@ -82,7 +82,7 @@
 - 几何编辑（裁剪/旋转/扩图/删除物体/换背景）不由 AI 发起；方案不生成裁切或旋转。
 - 真实视觉/规划模型的准确率、成本与稳定性评估；本机没有授权标注集与真实密钥，默认 Mock Provider 未调用第三方。评估框架与冒烟脚本已提供，但正式指标仍为未测量。
 - 预览、代理与 AI 分析仍为 8-bit 白底 RGB；16-bit 只用于上传解码与导出，没有 HDR/32-bit 管线，16-bit JPEG 不支持；TIFF 只接受单页、未压缩或 Deflate（见 [known-issues.md](docs/known-issues.md)）。
-- 删除后的回收站/撤销、跨进程一致性与配额、多用户。
+- 删除后的回收站/撤销、跨进程一致性、多用户；Provider 侧计费/配额管理（应用侧仅有本地每日用量上限，见上文 L14）。
 - 鉴权、限流、公网部署加固；API 仅限本机（D-13）。
 - 真实 iOS Safari / Android Chrome 真机回归。
 
@@ -343,6 +343,8 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 | `FRAME_PROVIDER_URL_POLICY` | `public-only` | Provider 出站地址策略：`public-only` 仅公网；`allow-local` 额外放行私网/回环（链路本地/元数据/组播/保留地址始终拒绝） |
 | `FRAME_PROVIDER_ALLOW_INSECURE_HTTP` | `false` | 是否允许 Provider 使用明文 `http://`；默认只允许 HTTPS |
 | `FRAME_PROVIDER_SETTINGS_ENCRYPTION` | `required` | 覆盖文件加密开关：`required` 写 v2 加密格式（AES-256-GCM + 系统主密钥）；`off` 仅用于回退/救援，写明文 v1 并在启动与每次保存打 WARNING。`off` 读取已存在的 v2 文件仍需主密钥 |
+| `FRAME_PROVIDER_DAILY_REQUEST_LIMIT` | `0` | 每个 Provider 每日（UTC）真实 HTTP 尝试上限；`0` = 不限制但仍计数 |
+| `FRAME_PROVIDER_DAILY_TOKEN_LIMIT` | `0` | 每个 Provider 每日（UTC）token 上限（reported 优先、缺失时按响应体估算）；`0` = 不限制但仍计数 |
 | `FRAME_MOCK_SCENARIO` | `generic` | Mock 场景：`generic/portrait/landscape/low_light/backlit` |
 | `FRAME_ANALYSIS_MAX_EDGE` | `1024` | 发送给视觉 Provider 的内存副本最长边；范围 512–2048 |
 | `FRAME_ANALYSIS_MAX_CONCURRENCY` | `2` | 后台分析线程池大小 |
@@ -376,6 +378,14 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 - 支持矩阵之外的平台（如 BSD）沿用 POSIX 文件后端：仍强制 `0600` 并在读取时复检权限，无法建立私有权限即失败，不存在明文回落；这是有意的回落决策，不是平台白名单。
 - `off` 只是回退/救援开关：写明文 v1 并在启动与每次保存打 WARNING，读取 v2 仍需要主密钥。它不是长期运行模式。
 - Windows 上 `chmod` 不改变 DACL，因此安全性来自 DPAPI + 用户目录 ACL，而不是文件模式位。
+
+### 每日成本上限（L14）
+
+- **计数口径**：只有通过 Provider 出站策略与 DNS 解析、即将真实发送的 HTTP 尝试才计数；被策略/DNS 拦截的调用不计数。`post_json` 内每次重试、重定向的每一跳都是一次真实发送，各计 1；Mock Provider 不走 HTTP，不计量。
+- **token 口径**：响应带 `usage` 且 `total_tokens` 非空 → 记 `tokens_reported`；`total_tokens` 为空但 prompt/completion 都有 → 记两者之和；否则按 `ceil((请求体 JSON 字节 + 响应体 JSON 字节)/4)` 记 `tokens_estimated`。两者不会重复计。用量只存计数，不存 prompt、响应、图片或密钥。
+- **强制点**：分析入队在额度用尽时返回 `429 provider_budget_exceeded`，`details` 为 `{limit, used, remaining, resetAt}`（`resetAt` 是次日 UTC 零点）；设置页“测试连接”始终返回 200，逐 Provider 在 `ProviderTestResult` 里用 `ok:false` + `code=provider_budget_exceeded` 报告。队列内任务在真实发送时中止并落 `provider_budget_exceeded` 任务错误码。摄影师接口映射为 429 `photographer_budget_exceeded`；usage 子系统故障时分析入队映射 503，测试连接以 `ProviderTestResult.code=provider_usage_unavailable` 报告。
+- **只读查询**：`GET /api/v1/settings/providers/usage` 返回今天的三个 Provider 计数与限额，缺失的行按 0 补齐；不触发任何 Provider 调用。
+- **失败语义**：用量账本不可读写时 fail-closed（503 `provider_usage_unavailable`），不会放行无界流量。两个限额设为 `0` 即停止强制，但计数继续记录；旧数据按 UTC 日期保留。
 
 前端读取（放在 `apps/web/.env.local` 或 shell 环境）：
 

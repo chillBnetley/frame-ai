@@ -11,7 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.ai.base import DecisionRequest, PatchRequest, PlannerRequest, VisionRequest
 from app.ai.contracts import DecisionResult, UsageInfo, VisionResult
-from app.ai.errors import ProviderError
+from app.ai.errors import ProviderBudgetExceeded, ProviderError, ProviderUsageUnavailable
 from app.ai.prompts import (
     DECISION_PROMPT_VERSION,
     PLANNER_PROMPT_VERSION,
@@ -24,6 +24,8 @@ from app.ai.prompts import (
 )
 from app.ai.transport import JsonHttpClient
 from app.models.photographer import PatchDraft, PlannerDraft
+from app.models.provider_settings import SecretKind
+from app.services.usage_meter import UsageMeter
 
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
@@ -42,6 +44,8 @@ class _OpenAICompatibleBase:
         max_retries: int,
         repair_attempts: int,
         prompt_version: str,
+        kind: SecretKind,
+        usage_meter: UsageMeter | None = None,
     ) -> None:
         self._client = client
         self._base_url = base_url.rstrip("/")
@@ -53,6 +57,8 @@ class _OpenAICompatibleBase:
         self.model = model
         self.name = "openai-compatible"
         self.is_mock = False
+        self.kind = kind
+        self._usage_meter = usage_meter
 
     def _post(
         self,
@@ -74,15 +80,26 @@ class _OpenAICompatibleBase:
             "Accept": "application/json",
         }
         try:
-            return self._client.post_json(
+            response = self._client.post_json(
                 f"{self._base_url}/chat/completions",
                 payload,
                 headers,
                 timeout=timeout if timeout is not None else self._timeout,
                 max_retries=self._max_retries,
             )
+        except (ProviderBudgetExceeded, ProviderUsageUnavailable):
+            # A budget stop or a broken usage ledger is a provider-wide failure:
+            # keep the code unprefixed and the subclass intact.
+            raise
         except ProviderError as exc:
             raise exc.prefixed(prefix) from exc
+        if self._usage_meter is not None:
+            self._usage_meter.record(
+                _extract_usage(response),
+                request_bytes=_json_size(payload),
+                response_bytes=_json_size(response),
+            )
+        return response
 
     def check_connection(self, *, timeout: float | None = None) -> int:
         messages = [
@@ -192,6 +209,8 @@ class OpenAICompatibleVisionProvider(_OpenAICompatibleBase):
         timeout: float,
         max_retries: int,
         repair_attempts: int,
+        kind: SecretKind = "vision",
+        usage_meter: UsageMeter | None = None,
     ) -> None:
         super().__init__(
             client,
@@ -202,6 +221,8 @@ class OpenAICompatibleVisionProvider(_OpenAICompatibleBase):
             max_retries=max_retries,
             repair_attempts=repair_attempts,
             prompt_version=VISION_PROMPT_VERSION,
+            kind=kind,
+            usage_meter=usage_meter,
         )
 
     def analyze(self, request: VisionRequest) -> VisionResult:
@@ -222,6 +243,8 @@ class OpenAICompatibleDecisionProvider(_OpenAICompatibleBase):
         timeout: float,
         max_retries: int,
         repair_attempts: int,
+        kind: SecretKind = "decision",
+        usage_meter: UsageMeter | None = None,
     ) -> None:
         super().__init__(
             client,
@@ -232,6 +255,8 @@ class OpenAICompatibleDecisionProvider(_OpenAICompatibleBase):
             max_retries=max_retries,
             repair_attempts=repair_attempts,
             prompt_version=DECISION_PROMPT_VERSION,
+            kind=kind,
+            usage_meter=usage_meter,
         )
 
     def diagnose(self, request: DecisionRequest) -> DecisionResult:
@@ -250,6 +275,8 @@ class OpenAICompatiblePlannerProvider(_OpenAICompatibleBase):
         timeout: float,
         max_retries: int,
         repair_attempts: int,
+        kind: SecretKind = "planner",
+        usage_meter: UsageMeter | None = None,
     ) -> None:
         super().__init__(
             client,
@@ -260,6 +287,8 @@ class OpenAICompatiblePlannerProvider(_OpenAICompatibleBase):
             max_retries=max_retries,
             repair_attempts=repair_attempts,
             prompt_version=PLANNER_PROMPT_VERSION,
+            kind=kind,
+            usage_meter=usage_meter,
         )
 
     def plan(self, request: PlannerRequest) -> PlannerDraft:
@@ -341,6 +370,13 @@ def _extract_usage(response: dict[str, Any]) -> UsageInfo | None:
         return UsageInfo.model_validate(usage)
     except ValidationError:
         return None
+
+
+def _json_size(value: object) -> int:
+    try:
+        return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    except (TypeError, ValueError):
+        return 0
 
 
 __all__ = [

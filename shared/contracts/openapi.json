@@ -86,7 +86,7 @@
             }
           },
           "503": {
-            "description": "Provider settings service is not ready",
+            "description": "Provider settings or usage service is not ready",
             "content": {
               "application/json": {
                 "schema": {
@@ -145,7 +145,58 @@
             }
           },
           "503": {
-            "description": "Provider settings service is not ready",
+            "description": "Provider settings or usage service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/providers/usage": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Read Provider Usage",
+        "operationId": "read_provider_usage_api_v1_settings_providers_usage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderUsageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Provider settings are incomplete or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider settings could not be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider settings or usage service is not ready",
             "content": {
               "application/json": {
                 "schema": {
@@ -206,7 +257,7 @@
             }
           },
           "503": {
-            "description": "Provider settings service is not ready",
+            "description": "Provider settings or usage service is not ready",
             "content": {
               "application/json": {
                 "schema": {
@@ -257,7 +308,7 @@
             }
           },
           "503": {
-            "description": "Provider settings service is not ready",
+            "description": "Provider settings or usage service is not ready",
             "content": {
               "application/json": {
                 "schema": {
@@ -643,6 +694,16 @@
               }
             }
           },
+          "429": {
+            "description": "Daily provider budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Analysis failed",
             "content": {
@@ -766,6 +827,16 @@
               }
             }
           },
+          "429": {
+            "description": "Daily provider budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Analysis failed",
             "content": {
@@ -872,6 +943,16 @@
           },
           "413": {
             "description": "Analysis input copy exceeded the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Daily provider budget exhausted",
             "content": {
               "application/json": {
                 "schema": {
@@ -995,6 +1076,16 @@
           },
           "413": {
             "description": "Analysis input copy exceeded the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Daily provider budget exhausted",
             "content": {
               "application/json": {
                 "schema": {
@@ -7411,6 +7502,94 @@
           "latencyMs"
         ],
         "title": "ProviderTestResult"
+      },
+      "ProviderUsageEntry": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "vision",
+              "decision",
+              "planner"
+            ],
+            "title": "Provider"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "requests": {
+            "type": "integer",
+            "title": "Requests"
+          },
+          "tokensEstimated": {
+            "type": "integer",
+            "title": "Tokensestimated"
+          },
+          "tokensReported": {
+            "type": "integer",
+            "title": "Tokensreported"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "date",
+          "requests",
+          "tokensEstimated",
+          "tokensReported"
+        ],
+        "title": "ProviderUsageEntry"
+      },
+      "ProviderUsageView": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "requestLimit": {
+            "type": "integer",
+            "title": "Requestlimit"
+          },
+          "tokenLimit": {
+            "type": "integer",
+            "title": "Tokenlimit"
+          },
+          "resetAt": {
+            "type": "string",
+            "title": "Resetat"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderUsageEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "requestLimit",
+          "tokenLimit",
+          "resetAt",
+          "entries"
+        ],
+        "title": "ProviderUsageView",
+        "description": "Read-only daily counters; no prompt, response, image or key content."
       },
       "RecommendationCategory": {
         "type": "string",

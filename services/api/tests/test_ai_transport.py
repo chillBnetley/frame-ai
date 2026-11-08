@@ -613,3 +613,99 @@ def test_pinned_transport_reports_resolution_failure_as_retryable():
     assert excinfo.value.retryable is True
     assert "provider.test" not in str(excinfo.value)
     assert "test-key" not in str(excinfo.value)
+
+
+def test_attempt_hook_runs_after_resolution_and_before_send(monkeypatch: pytest.MonkeyPatch):
+    events: list[str] = []
+    transport = PinnedHttpTransport(
+        LOCAL_POLICY,
+        on_attempt=lambda: events.append("attempt"),
+    )
+
+    def fake_send(self, endpoint, pinned, method, body, headers, timeout):  # noqa: ANN001
+        events.append("send")
+        return HttpResponse(status=200, body=b"{}")
+
+    monkeypatch.setattr(PinnedHttpTransport, "_send", fake_send)
+
+    transport.post("http://127.0.0.1:1/v1/chat/completions", b"{}", HEADERS, timeout=5)
+
+    assert events == ["attempt", "send"]
+
+
+def test_attempt_hook_does_not_count_policy_or_dns_failures():
+    calls: list[int] = []
+
+    def hook() -> None:
+        calls.append(1)
+
+    blocked = PinnedHttpTransport(PUBLIC_POLICY, on_attempt=hook)
+    with pytest.raises(ProviderError) as policy_error:
+        blocked.post("http://127.0.0.1:1/v1/chat/completions", b"{}", HEADERS, timeout=5)
+    assert policy_error.value.code == "provider_endpoint_error"
+
+    def empty_resolver(host: str, port: int, **kwargs: object):
+        return []
+
+    unresolved = PinnedHttpTransport(
+        LOCAL_POLICY,
+        resolver=empty_resolver,
+        on_attempt=hook,
+    )
+    with pytest.raises(ProviderError) as dns_error:
+        unresolved.post("http://provider.test/v1/chat/completions", b"{}", HEADERS, timeout=5)
+    assert dns_error.value.code == "provider_unavailable"
+
+    assert calls == []
+
+
+def test_attempt_hook_counts_each_retry(monkeypatch: pytest.MonkeyPatch):
+    events: list[int] = []
+    outcomes = [
+        HttpResponse(status=503, body=b"{}"),
+        HttpResponse(status=200, body=b'{"ok": true}'),
+    ]
+
+    def fake_send(self, endpoint, pinned, method, body, headers, timeout):  # noqa: ANN001
+        return outcomes.pop(0)
+
+    monkeypatch.setattr(PinnedHttpTransport, "_send", fake_send)
+    transport = PinnedHttpTransport(LOCAL_POLICY, on_attempt=lambda: events.append(1))
+    client = JsonHttpClient(transport, sleep=lambda _: None, jitter=lambda: 0.5)
+
+    result = client.post_json(
+        "http://127.0.0.1:1/v1/chat/completions",
+        {},
+        HEADERS,
+        timeout=5,
+        max_retries=1,
+    )
+
+    assert result == {"ok": True}
+    assert len(events) == 2
+
+
+def test_attempt_hook_counts_each_redirect_hop(monkeypatch: pytest.MonkeyPatch):
+    events: list[int] = []
+    outcomes = [
+        HttpResponse(status=307, body=b"", headers={"Location": "/final"}),
+        HttpResponse(status=200, body=b'{"ok": true}'),
+    ]
+
+    def fake_send(self, endpoint, pinned, method, body, headers, timeout):  # noqa: ANN001
+        return outcomes.pop(0)
+
+    monkeypatch.setattr(PinnedHttpTransport, "_send", fake_send)
+    transport = PinnedHttpTransport(LOCAL_POLICY, on_attempt=lambda: events.append(1))
+    client = JsonHttpClient(transport, sleep=lambda _: None, jitter=lambda: 0.5)
+
+    result = client.post_json(
+        "http://127.0.0.1:1/v1/chat/completions",
+        {},
+        HEADERS,
+        timeout=5,
+        max_retries=0,
+    )
+
+    assert result == {"ok": True}
+    assert len(events) == 2

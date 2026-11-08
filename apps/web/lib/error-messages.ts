@@ -47,6 +47,8 @@ const EDITOR_MESSAGES: Record<string, string> = {
   photographer_unavailable: "AI 摄影师暂时不可用，请稍后重试。",
   photographer_provider_error: "AI 服务返回错误，请检查 Provider 设置。",
   photographer_busy: "AI 摄影师正在处理其他请求，请稍后重试。",
+  photographer_budget_exceeded: "已达到今日模型调用上限，请明天再试，或调高每日限额。",
+  photographer_usage_unavailable: "用量统计暂时不可用，请稍后重试。",
   style_required: "请先选择摄影风格。",
   style_not_found: "找不到所选风格，请重新选择。",
 };
@@ -103,6 +105,15 @@ export function editorErrorMessage(
   const codeSuffix = code && code !== "unknown_error" ? `（错误码：${code}）` : "";
   const requestSuffix = requestId ? `（请求 ID：${shortRequestId(requestId)}）` : "";
   return `发生未知错误，请稍后重试。${codeSuffix}${requestSuffix}`;
+}
+
+const ANALYSIS_FAILURE_MESSAGES: Record<string, string> = {
+  provider_budget_exceeded: "已达到今日模型调用上限，请明天再试或调高每日限额。",
+  provider_usage_unavailable: "用量统计暂时不可用，请稍后重试。",
+};
+
+export function analysisFailureMessage(code: string, fallback: string): string {
+  return ANALYSIS_FAILURE_MESSAGES[code] ?? fallback;
 }
 
 export function isSilentEditorError(code: string): boolean {

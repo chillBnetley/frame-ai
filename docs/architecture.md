@@ -310,6 +310,14 @@ write_private_document(path, payload)                    # 原子 + 私有权限
 - **开关与错误**：`FRAME_PROVIDER_SETTINGS_ENCRYPTION=required|off`，默认 `required`；`off` 写明文 v1 并在启动与每次保存打 WARNING（仅回退/救援），读 v2 仍需主密钥。启动/迁移/解密失败 → `ProviderConfigurationError`；保存期加密失败 → HTTP 500 `secret_store_error`，写盘失败 → 500 `provider_settings_write_failed`，运行时配置与磁盘文件都不变。API 视图仍只有 `hasApiKey`/`apiKeySource`，前端无需改动（`describeSettingsError` 对未知 code 回落到安全 message）。
 - **测试分层**：单元层用 `InMemoryMasterKeyStore` 与 fake DPAPI 函数 / fake Keychain bridge，不触碰真实系统密钥库；API 集成层用平台默认后端（Windows 上是真实 DPAPI）。POSIX 权限断言在 Windows 上 skip，Windows DPAPI blob 断言在其他平台 skip，不互相伪通过。「v2 有密文 + 主密钥缺失 → 拒绝创建」与「无密文 → 正常创建首把密钥」两条回归覆盖三后端：Windows 上真实 DPAPI 分支实跑，POSIX / Keychain 用 fake 后端加参数化平台断言。macOS Keychain **未实机验证**。
 
+### Provider 用量与每日上限（L14 / B6c）
+
+- **表**：迁移 `0006_provider_usage` 建 `provider_usage(date, provider, requests, tokens_estimated, tokens_reported, updated_at)`，主键 `(date, provider)`，CHECK 限定 provider 为 `vision/decision/planner` 且计数非负；不存 prompt/响应/图片/密钥。
+- **仓储**：`repositories/provider_usage_repo.py`。`precheck_and_reserve` 在 `BEGIN IMMEDIATE` 内完成「读累计 → 限额判断 → `requests+1`」，超限回滚且不计数；`check_available` 只读预检；`add_tokens` 用预检捕获的 date 累加；`snapshot` 供只读端点。所有 `sqlite3.Error` 统一转 `ProviderUsageUnavailable`（静态文案，不泄露路径/SQL）。
+- **计量钩子**：`PinnedHttpTransport.__init__(on_attempt=...)` 在 `resolve_and_validate` 成功之后、`_send` 之前调用，因此策略/DNS 拦截不计数；`post_json` 每次重试与重定向每一跳都各计 1。`UsageMeter(kind, repo, clock)` 每个 Provider 一个：`reserve` 把预检 date 存线程本地，`record` 在响应后用同一 date 累加 token（跨 UTC 午夜仍记在发起日）；post-add 失败只 WARNING，不丢弃已成功的 Provider 结果；Mock Provider 不构造 meter。
+- **错误与映射**：`ProviderBudgetExceeded`、`ProviderUsageUnavailable` 继承 `ProviderError`（`retryable=False`）。`_OpenAICompatibleBase._post` 对两者原样 re-raise，不加 `vision_/check_/patch_` 前缀且不丢子类。分析入队返回 429（结构化 `limit/used/remaining/resetAt`）或 503 `provider_usage_unavailable`；设置页测试连接始终返回 200，由 `ProviderTestResult.code` 报告失败；队列内任务由 transport 中止并落 `provider_budget_exceeded` 任务码（任务表只有 code/message，前端轮询按 code 映射中文）；摄影师映射 429/503。
+- **入口**：分析 `create` 在去重命中之后、重试与新建两个 `_submit` 入口之前做只读预检（mock Provider 跳过）；`recover` 不预检，靠队列内强制。端点 `GET /api/v1/settings/providers/usage` 用 `get_app_settings` 构造 repo，缺失行按 0 补齐，不改 `main.py`/middleware/proxy。
+
 ### AI 摄影师（阶段 5）
 
 ```text

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ApiClientError } from "@/lib/api/client";
 import { describeUploadError } from "@/lib/api/errors";
 import {
+  analysisFailureMessage,
   describeEditorError,
   editorErrorMessage,
   isSilentEditorError,
@@ -37,6 +38,24 @@ describe("describeUploadError", () => {
   });
 });
 
+describe("analysisFailureMessage", () => {
+  it.each([
+    [
+      "provider_budget_exceeded",
+      "已达到今日模型调用上限，请明天再试或调高每日限额。",
+    ],
+    ["provider_usage_unavailable", "用量统计暂时不可用，请稍后重试。"],
+  ])("maps %s to Chinese copy", (code, expected) => {
+    expect(analysisFailureMessage(code, "server message")).toBe(expected);
+  });
+
+  it("keeps the backend message for other codes", () => {
+    expect(analysisFailureMessage("analysis_timeout", "server message")).toBe(
+      "server message",
+    );
+  });
+});
+
 describe("describeEditorError", () => {
   it.each([
     ["revision_conflict", "编辑状态已更新，已为你刷新。"],
@@ -47,6 +66,11 @@ describe("describeEditorError", () => {
     ["server_busy", "服务器内存不足或正在处理另一张高清导出，请稍后几秒再试。"],
     ["network_error", "无法连接后端服务。请确认已启动 API。"],
     ["not_found", "服务接口不存在，可能是后端版本过旧。请重启 API 后重试。"],
+    [
+      "photographer_budget_exceeded",
+      "已达到今日模型调用上限，请明天再试，或调高每日限额。",
+    ],
+    ["photographer_usage_unavailable", "用量统计暂时不可用，请稍后重试。"],
   ])("maps %s to Chinese copy", (code, expected) => {
     const result = describeEditorError(new ApiClientError(code, "raw server message"));
 

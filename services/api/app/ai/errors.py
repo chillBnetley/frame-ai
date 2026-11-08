@@ -35,8 +35,30 @@ class ProviderError(Exception):
         )
 
 
+class ProviderBudgetExceeded(ProviderError):
+    """The configured daily provider budget is exhausted.
+
+    ``details`` carries the structured ``limit/used/remaining/resetAt`` snapshot
+    for synchronous 429 responses. The code is never prefixed with the calling
+    stage: a budget stop is a property of the provider, not of vision/check/etc.
+    """
+
+
+class ProviderUsageUnavailable(ProviderError):
+    """The usage ledger could not be read or written.
+
+    Raised by the repository and surfaced as a fail-closed provider error so a
+    broken ledger never turns into unbounded provider traffic.
+    """
+
+
 class ProviderConfigurationError(RuntimeError):
     """Raised at startup when a selected provider is missing configuration."""
 
 
-__all__ = ["ProviderConfigurationError", "ProviderError"]
+__all__ = [
+    "ProviderBudgetExceeded",
+    "ProviderConfigurationError",
+    "ProviderError",
+    "ProviderUsageUnavailable",
+]

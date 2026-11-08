@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/providers/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Provider Usage */
+        get: operations["read_provider_usage_api_v1_settings_providers_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/providers/test": {
         parameters: {
             query?: never;
@@ -2252,6 +2269,40 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** ProviderUsageEntry */
+        ProviderUsageEntry: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "vision" | "decision" | "planner";
+            /** Date */
+            date: string;
+            /** Requests */
+            requests: number;
+            /** Tokensestimated */
+            tokensEstimated: number;
+            /** Tokensreported */
+            tokensReported: number;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
+        /**
+         * ProviderUsageView
+         * @description Read-only daily counters; no prompt, response, image or key content.
+         */
+        ProviderUsageView: {
+            /** Date */
+            date: string;
+            /** Requestlimit */
+            requestLimit: number;
+            /** Tokenlimit */
+            tokenLimit: number;
+            /** Resetat */
+            resetAt: string;
+            /** Entries */
+            entries: components["schemas"]["ProviderUsageEntry"][];
+        };
         /**
          * RecommendationCategory
          * @enum {string}
@@ -2807,7 +2858,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Provider settings service is not ready */
+            /** @description Provider settings or usage service is not ready */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -2858,7 +2909,54 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Provider settings service is not ready */
+            /** @description Provider settings or usage service is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_provider_usage_api_v1_settings_providers_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderUsageView"];
+                };
+            };
+            /** @description Provider settings are incomplete or invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings could not be saved */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider settings or usage service is not ready */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -2909,7 +3007,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Provider settings service is not ready */
+            /** @description Provider settings or usage service is not ready */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -2956,7 +3054,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Provider settings service is not ready */
+            /** @description Provider settings or usage service is not ready */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -3291,6 +3389,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description Daily provider budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Analysis failed */
             500: {
                 headers: {
@@ -3394,6 +3501,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description Daily provider budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Analysis failed */
             500: {
                 headers: {
@@ -3493,6 +3609,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Daily provider budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Analysis failed */
@@ -3596,6 +3721,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Daily provider budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Analysis failed */

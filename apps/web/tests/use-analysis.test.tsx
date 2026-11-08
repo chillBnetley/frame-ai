@@ -259,6 +259,28 @@ describe("useAnalysis", () => {
     expect(createCalls[1]?.body).toEqual({ imageId: IMAGE_ID, force: false });
   });
 
+  it("maps a queued budget failure code to Chinese copy", async () => {
+    const failed = analysisStatus({
+      status: "failed",
+      stage: "failed",
+      error: {
+        code: "provider_budget_exceeded",
+        message: "The daily model usage limit has been reached.",
+      },
+    });
+    const { calls } = installApi({ statuses: [failed] });
+    const hook = renderHook(() => useAnalysis(IMAGE_ID));
+
+    await start(hook);
+    await tick(ANALYSIS_FAST_POLL_MS);
+
+    expect(count(calls, "status")).toBeGreaterThan(0);
+    expect(hook.result.current.error?.code).toBe("provider_budget_exceeded");
+    expect(hook.result.current.error?.message).toBe(
+      "已达到今日模型调用上限，请明天再试或调高每日限额。",
+    );
+  });
+
   it("keeps the previous report visible while a forced rerun is running", async () => {
     const { calls } = installApi({
       statuses: [

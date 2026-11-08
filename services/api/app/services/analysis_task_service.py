@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from pydantic import ValidationError
 
 from app.ai.contracts import AnalysisOptions
+from app.ai.errors import ProviderBudgetExceeded, ProviderUsageUnavailable
 from app.ai.factory import ProviderBundle
 from app.analysis.diagnosis import DIAGNOSIS_VERSION, build_candidates
 from app.analysis.features import FEATURE_SET_VERSION
@@ -30,10 +31,12 @@ from app.models.analysis_task import (
     TaskStage,
     TaskStatus,
 )
+from app.models.provider_settings import SecretKind
 from app.repositories.analysis_repo import (
     DuplicateAnalysisTaskError,
     SqliteAnalysisRepository,
 )
+from app.repositories.provider_usage_repo import ProviderUsageRepository
 from app.services.image_service import ImageService
 
 logger = logging.getLogger("frame_ai.analysis")
@@ -67,12 +70,18 @@ class AnalysisTaskService:
         repository: SqliteAnalysisRepository,
         *,
         candidate_builder: CandidateBuilder = build_candidates,
+        usage: ProviderUsageRepository | None = None,
     ) -> None:
         self.settings = settings
         self.images = images
         self.providers = providers
         self.repository = repository
         self._candidate_builder = candidate_builder
+        self.usage = usage or ProviderUsageRepository(
+            settings.database_path,
+            request_limit=settings.provider_daily_request_limit,
+            token_limit=settings.provider_daily_token_limit,
+        )
         self._lock = threading.RLock()
         self.orchestrator = self._build_orchestrator(providers)
         self._executor = ThreadPoolExecutor(
@@ -113,6 +122,9 @@ class AnalysisTaskService:
             if existing is not None:
                 if existing.status is not TaskStatus.FAILED:
                     return CreateOutcome(task=existing, deduplicated=True)
+                # Check before re-arming: reset_for_retry would otherwise leave the
+                # task pending/queued with nothing submitted when the budget rejects.
+                self._precheck_budget(providers)
                 retried = self.repository.reset_for_retry(existing.id)
                 if retried is None:
                     # Another caller already re-armed this task; do not queue a second run.
@@ -123,6 +135,7 @@ class AnalysisTaskService:
                 self._submit(retried.id)
                 return CreateOutcome(task=retried, deduplicated=True)
 
+        self._precheck_budget(providers)
         queued = self.repository.count_queued()
         if queued >= self.settings.analysis_queue_max:
             raise AppError(
@@ -177,6 +190,32 @@ class AnalysisTaskService:
             providers.is_mock,
         )
         return CreateOutcome(task=task, deduplicated=False)
+
+    def _precheck_budget(self, providers: ProviderBundle) -> None:
+        """Refuse to queue work the daily budget already makes impossible.
+
+        This is read-only: the atomic reservation still happens per real HTTP
+        attempt inside the transport, which also covers workers that start after
+        recovery. Mock providers never call out, so they are not checked.
+        """
+
+        now = datetime.now(UTC)
+        kinds: list[SecretKind] = []
+        if not providers.vision.is_mock:
+            kinds.append("vision")
+        if not providers.decision.is_mock:
+            kinds.append("decision")
+        try:
+            for kind in kinds:
+                self.usage.check_available(kind, now)
+        except ProviderBudgetExceeded as exc:
+            raise AppError(429, exc.code, exc.message, details=exc.details) from None
+        except ProviderUsageUnavailable as exc:
+            raise AppError(
+                503,
+                "provider_usage_unavailable",
+                exc.message,
+            ) from None
 
     def status(self, task_id: str) -> AnalysisTaskStatusResponse:
         task = self._require(task_id)

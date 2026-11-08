@@ -22,6 +22,7 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
         404: "Analysis task or image not found",
         409: "Result not ready or task still processing",
         413: "Analysis input copy exceeded the size limit",
+        429: "Daily provider budget exhausted",
         500: "Analysis failed",
         502: "Provider returned invalid output",
         503: "Provider not configured or unavailable",
