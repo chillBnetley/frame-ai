@@ -33,6 +33,22 @@ export function requirePython(): string {
   return PYTHON;
 }
 
+/** Token file headers for direct FastAPI calls that bypass the Next proxy. */
+export function apiHeaders(): Record<string, string> {
+  const explicit = process.env.FRAME_API_TOKEN_FILE?.trim();
+  const dataDir = process.env.E2E_DATA_DIR?.trim();
+  const file = explicit || (dataDir ? path.join(dataDir, "api-token") : "");
+  if (!file) {
+    return {};
+  }
+  try {
+    const token = fs.readFileSync(file, "utf8").trim();
+    return token ? { "X-FRAME-Token": token } : {};
+  } catch {
+    return {};
+  }
+}
+
 const UPLOAD_PATH = "/api/v1/images";
 const UPLOAD_RESPONSE_TIMEOUT = 90_000;
 

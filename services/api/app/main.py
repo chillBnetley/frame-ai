@@ -12,9 +12,11 @@ from app.api.errors import register_exception_handlers
 from app.api.routes import analysis, config, exports, health, images, previews, sessions
 from app.api.routes import photographer as photographer_routes
 from app.api.routes import settings as settings_routes
+from app.core.auth import ApiTokenService
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.middleware import (
+    ApiAuthMiddleware,
     CorsPreflightGuardMiddleware,
     LocalOriginGuardMiddleware,
     RequestContextMiddleware,
@@ -51,9 +53,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings.log_level)
     configure_mask_cache(resolved_settings.mask_cache_mb * 1024 * 1024)
+    token_service = ApiTokenService(resolved_settings.api_token_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if resolved_settings.api_auth_enabled:
+            token_service.ensure_token()
         service = ImageService(resolved_settings)
         service.ensure_ready()
         service.scan_consistency()
@@ -136,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = resolved_settings
+    app.state.api_token_service = token_service
 
     register_exception_handlers(app)
 
@@ -150,7 +156,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=resolved_settings.allowed_origin_list,
         allow_credentials=False,
         allow_methods=ALLOWED_CORS_METHODS,
-        allow_headers=["Content-Type", "X-Request-ID", "X-Render-Seq", "Idempotency-Key"],
+        allow_headers=[
+            "Content-Type",
+            "X-Request-ID",
+            "X-Render-Seq",
+            "Idempotency-Key",
+            "X-FRAME-Token",
+        ],
         expose_headers=[
             "X-Request-ID",
             "X-Export-Width",
@@ -165,6 +177,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CorsPreflightGuardMiddleware,
         allowed_origins=resolved_settings.allowed_origin_list,
         allowed_methods=ALLOWED_CORS_METHODS,
+    )
+    app.add_middleware(
+        ApiAuthMiddleware,
+        enabled=resolved_settings.api_auth_enabled,
+        tokens=token_service,
+        rate_limits=resolved_settings.api_rate_limits,
     )
     app.add_middleware(
         LocalOriginGuardMiddleware,

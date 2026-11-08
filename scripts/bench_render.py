@@ -335,6 +335,10 @@ class ApiServer:
             timeout=httpx.Timeout(240.0, connect=15.0),
         )
         self._wait_ready()
+        assert self.client is not None
+        token = _api_token(self.data_dir)
+        if token is not None:
+            self.client.headers["X-FRAME-Token"] = token
         if self.api_pid is None:
             self.api_pid = _find_pid_for_port(int(self.base_url.rsplit(":", 1)[1]))
         return self
@@ -387,6 +391,20 @@ def _find_pid_for_port(port: int) -> int:
         ):
             return int(connection.pid)
     raise RuntimeError(f"could not find the API process listening on port {port}")
+
+
+def _api_token(data_dir: Path | None) -> str | None:
+    explicit = os.environ.get("FRAME_API_TOKEN_FILE")
+    if explicit:
+        candidate = Path(explicit)
+    else:
+        base = data_dir or Path(os.environ.get("FRAME_DATA_DIR") or ROOT / "data")
+        candidate = base / "api-token"
+    try:
+        token = candidate.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return token or None
 
 
 def _expect(response: httpx.Response, expected: int) -> httpx.Response:

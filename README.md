@@ -319,6 +319,15 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 | `FRAME_CONTENT_LENGTH_ALLOWANCE` | `1048576` | Content-Length 预检给 multipart 的余量 |
 | `FRAME_ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | 允许直接跨域写入 API 的来源 |
 | `FRAME_ALLOWED_HOSTS` | `127.0.0.1,localhost,::1` | 接受的 Host 头（防 DNS 重绑定）；留空则跳过校验 |
+| `FRAME_API_AUTH_ENABLED` | `true` | 本地 API token 鉴权与限流总开关；`false` 回滚为匿名访问（Host/Origin 校验保留） |
+| `FRAME_API_TOKEN_FILE` | 空 | token 文件路径覆盖；空 = `<FRAME_DATA_DIR>/api-token` |
+| `FRAME_RATE_LIMIT_UPLOAD` | `0` | 上传写请求每分钟上限；`0` = 不限（其余类别同理） |
+| `FRAME_RATE_LIMIT_EXPORT` | `0` | 导出写请求每分钟上限 |
+| `FRAME_RATE_LIMIT_ANALYSIS` | `0` | 分析写请求每分钟上限 |
+| `FRAME_RATE_LIMIT_PHOTOGRAPHER` | `0` | AI 摄影师写请求每分钟上限 |
+| `FRAME_RATE_LIMIT_SETTINGS` | `0` | 模型设置写请求每分钟上限 |
+| `FRAME_RATE_LIMIT_RENDER` | `0` | 渲染/预览写请求每分钟上限 |
+| `FRAME_RATE_LIMIT_DEFAULT` | `0` | 其他写请求每分钟上限 |
 | `FRAME_VISION_PROVIDER` | `mock` | 视觉 Provider：`mock` 或 `openai` |
 | `FRAME_VISION_API_KEY` | 空 | 视觉 Provider 密钥；仅服务端读取，禁止提交 |
 | `FRAME_VISION_MODEL` | 空 | 视觉模型名 |
@@ -386,6 +395,14 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 - **强制点**：分析入队在额度用尽时返回 `429 provider_budget_exceeded`，`details` 为 `{limit, used, remaining, resetAt}`（`resetAt` 是次日 UTC 零点）；设置页“测试连接”始终返回 200，逐 Provider 在 `ProviderTestResult` 里用 `ok:false` + `code=provider_budget_exceeded` 报告。队列内任务在真实发送时中止并落 `provider_budget_exceeded` 任务错误码。摄影师接口映射为 429 `photographer_budget_exceeded`；usage 子系统故障时分析入队映射 503，测试连接以 `ProviderTestResult.code=provider_usage_unavailable` 报告。
 - **只读查询**：`GET /api/v1/settings/providers/usage` 返回今天的三个 Provider 计数与限额，缺失的行按 0 补齐；不触发任何 Provider 调用。
 - **失败语义**：用量账本不可读写时 fail-closed（503 `provider_usage_unavailable`），不会放行无界流量。两个限额设为 `0` 即停止强制，但计数继续记录；旧数据按 UTC 日期保留。
+
+### 本地 API 鉴权与限流（L7 / B6d）
+
+- **Token**：API 每次启动生成新的 64 位十六进制 token（32 随机字节），写入 `<FRAME_DATA_DIR>/api-token`（可用 `FRAME_API_TOKEN_FILE` 覆盖）；POSIX 上强制 `0600`，Windows 上尽力用 `icacls` 收紧到当前用户。文件只含 token，不会出现在日志、OpenAPI 或前端构建产物里。`FRAME_API_TOKEN_FILE` **必须使用绝对路径**：API 侧会 resolve，而 Next `proxy.ts` 按原样读取且不展开 `~`；相对路径会让两侧指向不同文件并表现为 401。默认路径不受影响。
+- **鉴权**：`FRAME_API_AUTH_ENABLED=true`（默认）时，所有 `/api/v1` 请求必须带 `X-FRAME-Token`；缺失或错误统一返回 401 `unauthorized`。`OPTIONS` 预检与 `GET /api/v1/health` 不需要 token，根路径 `/` 也不受保护。Host 校验（400）与跨站写校验（403）先于鉴权，401/429 在读取请求体之前返回。
+- **前端路径**：Next `proxy.ts` **每个请求**读取同一个 token 文件并注入请求头；API 重启轮换 token 后无需重启 Next。默认文件是 `<仓库>/data/api-token`，Playwright/临时栈通过 `FRAME_DATA_DIR` 指向临时目录；**API 与 Next 必须指向同一个文件**（同时设置相同的 `FRAME_DATA_DIR`，或给 Next 设置 `FRAME_API_TOKEN_FILE`）。`NEXT_PUBLIC_API_BASE_URL` 直连模式绕过该代理，因此鉴权开启时**不支持直连**；只有在 `FRAME_API_AUTH_ENABLED=false` 时才可用。
+- **限流**：默认所有类别阈值都是 `0`（机制已交付、**默认不强制**，避免误伤既有 bench/eval/E2E）；设为正数后，超限的写请求返回 429 `rate_limited` + `Retry-After`，`details={category,retryAfterSeconds}`。GET/HEAD 不计数。类别：upload/export/analysis/photographer/settings/render/default。
+- **命令行**：`curl -H "X-FRAME-Token: $(cat data/api-token)" http://127.0.0.1:8000/api/v1/health`；bench/eval 脚本会自动从 `FRAME_API_TOKEN_FILE` 或 `FRAME_DATA_DIR/api-token` 读取。回滚用 `FRAME_API_AUTH_ENABLED=false`（鉴权与限流同时关闭）。
 
 前端读取（放在 `apps/web/.env.local` 或 shell 环境）：
 
@@ -514,12 +531,12 @@ data/
 | `POST /ai/photographer/critique/apply` | 把单条点评建议转成配方补丁并校验 |
 | `POST /ai/photographer/feedback`, `GET /ai/photographer/feedback`, `DELETE /ai/photographer/feedback/{id}` | 记录/查询/删除用户决策与可选评分；汇总含固定 disclaimer |
 
-所有响应包含 `X-Request-ID`。除任务书状态码外，还使用 `400 invalid_host`/`400 invalid_analysis_options`（本机 Host 防护、分析选项全关）、`403 origin_not_allowed`/`cors_origin_denied`（本机来源防护）、`405 cors_method_denied`（CORS 预检请求了未允许的方法）、`409`（revision/幂等冲突、无可撤销/重做步骤、过期渲染、分析未完成或分析仍在运行、删除目标正在分析/导出 `resource_busy`、导出作业未就绪/已取消/已失败）、`413 export_too_large`/`analysis_input_too_large`（内存预算）/`payload_too_large`（请求体分档上限）、`500 storage_error`（任务写入失败）、`503 server_busy`（导出/渲染槽位耗尽、异步导出队列已满，或待分析队列达到 `FRAME_ANALYSIS_QUEUE_MAX`）。导出作业另有 `404 export_not_found`/`export_result_missing`、`409 export_not_ready`/`export_cancelled`/`export_failed`、`500 export_storage_error`。请求体中的未知字段一律返回 422 `validation_error`（不做静默忽略）。分析任务不存在返回 `404 analysis_not_found`；任务执行失败时 HTTP 查询仍为 200，`status=failed`，`error.code` 为 `analysis_failed`、`analysis_timeout`、`analysis_invalid_output` 或 `provider_*`（如 `provider_timeout`、`provider_unavailable`）。阶段 5 另用 `style_not_found`/`plan_not_found`/`feedback_not_found`（404）、`style_required`/`photographer_recipe_invalid`（422）、`analysis_required`/`image_analysis_mismatch`/`plan_session_mismatch`（409）、`photographer_busy`/`photographer_unavailable`（503）、`photographer_timeout`（504）、`photographer_invalid_output`/`photographer_provider_error`（502）与 `critique_invalid`（500）；完整清单见 [docs/api-contract.md](docs/api-contract.md)。
+所有响应包含 `X-Request-ID`。除任务书状态码外，还使用 `400 invalid_host`/`400 invalid_analysis_options`（本机 Host 防护、分析选项全关）、`401 unauthorized`（缺少或错误的本地 `X-FRAME-Token`）、`403 origin_not_allowed`/`cors_origin_denied`（本机来源防护）、`405 cors_method_denied`（CORS 预检请求了未允许的方法）、`409`（revision/幂等冲突、无可撤销/重做步骤、过期渲染、分析未完成或分析仍在运行、删除目标正在分析/导出 `resource_busy`、导出作业未就绪/已取消/已失败）、`413 export_too_large`/`analysis_input_too_large`（内存预算）/`payload_too_large`（请求体分档上限）、`429 rate_limited`（本地限流，带 `Retry-After`）、`500 storage_error`（任务写入失败）、`503 server_busy`（导出/渲染槽位耗尽、异步导出队列已满，或待分析队列达到 `FRAME_ANALYSIS_QUEUE_MAX`）。导出作业另有 `404 export_not_found`/`export_result_missing`、`409 export_not_ready`/`export_cancelled`/`export_failed`、`500 export_storage_error`。请求体中的未知字段一律返回 422 `validation_error`（不做静默忽略）。分析任务不存在返回 `404 analysis_not_found`；任务执行失败时 HTTP 查询仍为 200，`status=failed`，`error.code` 为 `analysis_failed`、`analysis_timeout`、`analysis_invalid_output` 或 `provider_*`（如 `provider_timeout`、`provider_unavailable`）。阶段 5 另用 `style_not_found`/`plan_not_found`/`feedback_not_found`（404）、`style_required`/`photographer_recipe_invalid`（422）、`analysis_required`/`image_analysis_mismatch`/`plan_session_mismatch`（409）、`photographer_busy`/`photographer_unavailable`（503）、`photographer_timeout`（504）、`photographer_invalid_output`/`photographer_provider_error`（502）与 `critique_invalid`（500）；完整清单见 [docs/api-contract.md](docs/api-contract.md)。
 
 ## 隐私与安全边界
 
-- **仅本机**：API 无鉴权、无限流，必须绑定 `127.0.0.1`（D-13）；不得暴露公网或反向代理到公网。
-- **Host/Origin 防护**：校验 `FRAME_ALLOWED_HOSTS`，并拒绝不在 `FRAME_ALLOWED_ORIGINS` 的写入 Origin 与 `Sec-Fetch-Site: cross-site`，降低 DNS 重绑定和浏览器跨站写入风险；这不是鉴权。
+- **仅本机**：默认要求本地 `X-FRAME-Token` 鉴权（L7），限流可按类别配置（默认 0 不强制）；仍只应绑定 `127.0.0.1`，且不是多用户安全边界；不得暴露公网或反向代理到公网。
+- **Host/Origin 防护**：校验 `FRAME_ALLOWED_HOSTS`，并拒绝不在 `FRAME_ALLOWED_ORIGINS` 的写入 Origin 与 `Sec-Fetch-Site: cross-site`，降低 DNS 重绑定和浏览器跨站写入风险；此外默认要求本地 `X-FRAME-Token`（L7），但同一 OS 用户仍可读取 token 文件，因此不是多用户安全边界。
 - 原图、SQLite 与预览只保存在本机数据目录，不上传第三方存储。
 - 默认 Mock Provider 完全离线，不调用任何外部服务；仅当显式选择 `openai` Provider 时，才会把最长边 1024 px 的 JPEG 副本发送到配置的服务端，并把结构化测量/语义/候选问题发送给决策 Provider（**不发送图片**）。
 - **阶段 5 的 Planner 不接收图片**：方案、对话与点评只读取已完成的分析报告、图片尺寸、当前配方与用户偏好；Planner 默认逐字段跟随决策 Provider 配置（也可在“模型设置”中独立配置），收到的是结构化摘要，因此不会产生第二次图片外传。点评完全由本地确定性规则生成，不调用模型。
@@ -767,7 +784,7 @@ SQLite 记录仍存在但文件被移动/删除时，预览接口返回 `404 ima
 
 1. **alpha 只在导出 PNG/TIFF 中保留（8/16-bit）**：导出的 PNG/TIFF 带 alpha、JPEG 白底合成；预览、代理与 AI 分析仍为 8-bit 白底合成，预览没有透明棋盘格。16-bit 只覆盖上传解码与导出，16-bit JPEG 不支持；16-bit + 降噪会跳过降噪并给出 `denoise_skipped_for_16bit`。
 2. **无真机回归**：只做了桌面 Chromium/Edge 与窄视口；未在真实 iOS Safari / Android Chrome 上验证触控与性能。
-3. **API 无鉴权**：仅支持本机单进程；多 worker 与跨进程并发未验证，`--host` 必须为 `127.0.0.1`。
+3. **本地 token 鉴权默认开启（L7），限流可选（默认 0 不强制）**：仅支持本机单进程；多 worker 与跨进程并发未验证，`--host` 必须为 `127.0.0.1`，且不是多用户安全边界。
 4. **大图导出内存是估算与单机采样**：Task 8 按 11 个实测行标定、G4 又按 8 个实测行重标定估算系数（中性 45／满配方 **160**／每个启用局部 8 B/px + 150 MB 基线 + 原图解码地板）；B5b 为 16-bit 源与输出各加 18 B/px。满配方 8-bit 本轮最高为 131 B/px，160 仍保留约 22% 余量；同档单次采样在不同轮次仍可能漂移约 11%。16-bit 实测峰值 24/40 MP 中性 1026/1671 MB、满配方 2801/4616 MB，同尺寸 8-bit 中性 966/1562 MB，说明 36 B/px 附加项保守；默认 3072 MB 预算仍会拒绝 24 MP 满配方、40 MP 满配方与 40 MP 中性 16-bit（后者实测 1671 MB）。改选导出长边 2400 或调高 `FRAME_EXPORT_MAX_RSS_MB` 可导出。静态估算之外还有 psutil 实时可用内存门（`FRAME_EXPORT_RESERVE_MB`），但它只是采样快照，不是实时 RSS 硬限制；结果依赖 Pillow/NumPy/OpenCV/tifffile 版本与机器。
 5. **缓存写入的 Windows 兼容处理**：预览 `os.replace` 遇到目标文件被占用时使用锁/重试与回退，代理缓存写失败则继续使用内存结果；都不是跨进程缓存一致性方案。蒙版权重缓存有 24 MB 单条上限，24 MP 画布的权重（约 91.55 MB）因此不入库、每次导出都重算。
 6. **EXIF 原图下载**：原图字节保留原始 EXIF（含 GPS）；只有导出会剥离元数据。

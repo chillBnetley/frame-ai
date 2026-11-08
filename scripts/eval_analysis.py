@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import time
@@ -27,6 +28,7 @@ from typing import Any
 import httpx
 
 DEFAULT_API_URL = "http://127.0.0.1:8000"
+ROOT = Path(__file__).resolve().parents[1]
 TERMINAL_STATUSES = {"completed", "failed"}
 CONTENT_TYPES = {
     ".jpg": "image/jpeg",
@@ -168,6 +170,20 @@ def load_manifest(path: Path) -> dict[str, Any]:
         "notes": data.get("notes") if isinstance(data.get("notes"), str) else None,
         "cases": cases,
     }
+
+
+def _api_token() -> str | None:
+    explicit = os.environ.get("FRAME_API_TOKEN_FILE")
+    if explicit:
+        candidate = Path(explicit)
+    else:
+        base = Path(os.environ.get("FRAME_DATA_DIR") or ROOT / "data")
+        candidate = base / "api-token"
+    try:
+        token = candidate.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return token or None
 
 
 def _error_message(response: httpx.Response) -> str:
@@ -385,6 +401,9 @@ def run(
     latencies: list[float] = []
 
     with httpx.Client(base_url=api_url, timeout=60.0) as client:
+        token = _api_token()
+        if token is not None:
+            client.headers["X-FRAME-Token"] = token
         try:
             health = client.get("/api/v1/health")
         except httpx.HTTPError as exc:

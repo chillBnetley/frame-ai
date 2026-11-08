@@ -12,6 +12,7 @@ const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${WEB_PORT}`;
 const CHANNEL = process.env.E2E_BROWSER_CHANNEL || undefined;
 const DATA_DIR =
   process.env.E2E_DATA_DIR ?? fs.mkdtempSync(path.join(os.tmpdir(), "frame-ai-e2e-"));
+process.env.E2E_DATA_DIR = DATA_DIR;
 
 const webCommand =
   process.platform === "win32"
@@ -30,9 +31,10 @@ const webServer = [
       FRAME_MOCK_SCENARIO: process.env.E2E_MOCK_SCENARIO ?? "backlit",
       FRAME_PROVIDER_URL_POLICY: "allow-local",
       FRAME_PROVIDER_ALLOW_INSECURE_HTTP: "true",
+      FRAME_API_AUTH_ENABLED: "true",
       PYTHONUNBUFFERED: "1",
     },
-    url: `${API_URL}/api/v1/health`,
+    url: `${API_URL}/`,
     reuseExistingServer: false,
     timeout: 120_000,
   },
@@ -45,6 +47,7 @@ if (!process.env.E2E_BASE_URL) {
     env: {
       API_INTERNAL_URL: API_URL,
       NEXT_TELEMETRY_DISABLED: "1",
+      FRAME_DATA_DIR: DATA_DIR,
     },
     url: BASE_URL,
     reuseExistingServer: false,

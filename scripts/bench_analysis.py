@@ -105,6 +105,14 @@ def measure_source(
     }
 
 
+def _api_token(path: Path) -> str | None:
+    try:
+        token = path.read_text(encoding="ascii").strip()
+    except OSError:
+        return None
+    return token or None
+
+
 def measure_mock_end_to_end(iterations: int) -> dict[str, object]:
     from fastapi.testclient import TestClient
 
@@ -124,6 +132,9 @@ def measure_mock_end_to_end(iterations: int) -> dict[str, object]:
     )
     samples: list[float] = []
     with TestClient(create_app(settings)) as client:
+        token = _api_token(settings.api_token_path)
+        if token is not None:
+            client.headers["X-FRAME-Token"] = token
         upload = client.post(
             "/api/v1/images",
             files={"file": ("mock.jpg", image_path.read_bytes(), "image/jpeg")},

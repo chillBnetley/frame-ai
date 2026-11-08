@@ -318,6 +318,14 @@ write_private_document(path, payload)                    # 原子 + 私有权限
 - **错误与映射**：`ProviderBudgetExceeded`、`ProviderUsageUnavailable` 继承 `ProviderError`（`retryable=False`）。`_OpenAICompatibleBase._post` 对两者原样 re-raise，不加 `vision_/check_/patch_` 前缀且不丢子类。分析入队返回 429（结构化 `limit/used/remaining/resetAt`）或 503 `provider_usage_unavailable`；设置页测试连接始终返回 200，由 `ProviderTestResult.code` 报告失败；队列内任务由 transport 中止并落 `provider_budget_exceeded` 任务码（任务表只有 code/message，前端轮询按 code 映射中文）；摄影师映射 429/503。
 - **入口**：分析 `create` 在去重命中之后、重试与新建两个 `_submit` 入口之前做只读预检（mock Provider 跳过）；`recover` 不预检，靠队列内强制。端点 `GET /api/v1/settings/providers/usage` 用 `get_app_settings` 构造 repo，缺失行按 0 补齐，不改 `main.py`/middleware/proxy。
 
+### 本地 API 鉴权与限流（L7 / B6d）
+
+- **Token 生命周期**：`core/auth.py` 的 `ApiTokenService` 在 lifespan 中生成 64 位十六进制（32 随机字节）并写入 `<FRAME_DATA_DIR>/api-token`（`FRAME_API_TOKEN_FILE` 可覆盖，**必须使用绝对路径**：API 会 resolve，Next 按原样读取且不展开 `~`）；`os.open(..., 0o600)` 建临时文件 → fsync → `os.replace`，Windows 上尽力 `icacls /inheritance:r /grant:r <user>:(R,W)`。每次启动轮换；token 不写日志、不进 OpenAPI/浏览器 bundle。`matches()` 用 `secrets.compare_digest`，非 ASCII 输入直接判不匹配。鉴权关闭时不生成 token。
+- **中间件**：`ApiAuthMiddleware` 只处理 `/api/v1`（含精确前缀），`OPTIONS` 与 `GET /api/v1/health` 放行；缺失/错误 token 统一 401 `unauthorized`。装配顺序 `BodyLimit → CORS → CorsPreflight → Auth → LocalOrigin → RequestContext`，执行由外到内为 `RequestContext → LocalOrigin → Auth → CorsPreflight → CORS → BodyLimit`：Host/Origin 的 400/403 先判，鉴权先于读取 body，因此 401/429 不消耗上传体；CORS 在 Auth 内层，401 响应不带 CORS 头（前端走同源 Next 代理）。
+- **限流**：`RateLimiter` 为线程安全内存 token bucket（60 秒窗口、按类别独立），只对 `POST/PUT/PATCH/DELETE` 生效；类别 upload/export/analysis/photographer/settings/render/default，阈值 0 = 不建桶不强制（当前默认）。超限 429 `rate_limited`，`Retry-After` 与 `details.retryAfterSeconds` 一致；GET/HEAD 不计数。
+- **前端注入**：Next 16 的 `proxy.ts` **始终运行在 Node.js runtime**（本地 `next/dist/build/analysis/get-page-static-info.js:598-601` 明确 "Proxy always runs on Node.js runtime"，且禁止 `runtime` 段配置），因此可安全使用 `node:fs`。`readApiToken()` 每个请求读取 `FRAME_API_TOKEN_FILE` 或 `FRAME_DATA_DIR`（默认 `<repo>/data`）下的 `api-token`，不做模块顶层缓存；API 重启轮换后下一次请求即用新值。E2E 的 `playwright.config.ts` 把临时 `FRAME_DATA_DIR` 同时传给 API 与 web 进程。
+- **直连模式**：`NEXT_PUBLIC_API_BASE_URL` 绕过 Next 代理，无法安全注入 token；鉴权开启时不支持，仅 `FRAME_API_AUTH_ENABLED=false` 时可用。
+
 ### AI 摄影师（阶段 5）
 
 ```text
@@ -393,7 +401,7 @@ data/
 - Provider 错误统一包装为安全错误码与文案；响应/任务错误不包含密钥、原始模型响应、图片字节或绝对路径。
 - Provider 出站默认只允许公网 HTTPS；私网/回环需显式 `allow-local`，链路本地/云元数据/组播/保留/未指定地址始终拒绝。DNS 每个结果在连接前校验并固定 IP，环境代理不能改变请求路径；重定向同源且最多 5 跳；错误/日志不含 URL/host/IP/key。
 - 反馈表结构上没有自由文本字段，照片、指令与文件名无法写入；用户可单条删除，图片/会话删除时级联清除。
-- API 无鉴权，只绑定 `127.0.0.1`（D-13）。
+- API 默认要求本地 `X-FRAME-Token` 鉴权（L7），限流可按类别配置（默认 0 不强制）；只应绑定 `127.0.0.1`，且不是多用户安全边界。
 
 ## 测试布局（对任务书 §3 的有记录偏离）
 

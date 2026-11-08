@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     allowed_hosts: str = "127.0.0.1,localhost,::1"
 
+    api_auth_enabled: bool = True
+    api_token_file: Path | None = None
+    rate_limit_upload: int = Field(default=0, ge=0)
+    rate_limit_export: int = Field(default=0, ge=0)
+    rate_limit_analysis: int = Field(default=0, ge=0)
+    rate_limit_photographer: int = Field(default=0, ge=0)
+    rate_limit_settings: int = Field(default=0, ge=0)
+    rate_limit_render: int = Field(default=0, ge=0)
+    rate_limit_default: int = Field(default=0, ge=0)
+
     vision_provider: Literal["mock", "openai"] = "mock"
     vision_api_key: SecretStr = SecretStr("")
     vision_model: str = ""
@@ -150,6 +160,24 @@ class Settings(BaseSettings):
     @property
     def database_path(self) -> Path:
         return self.data_dir / self.database_filename
+
+    @property
+    def api_token_path(self) -> Path:
+        if self.api_token_file is not None:
+            return self.api_token_file.expanduser().resolve()
+        return self.data_dir / "api-token"
+
+    @property
+    def api_rate_limits(self) -> dict[str, int]:
+        return {
+            "upload": self.rate_limit_upload,
+            "export": self.rate_limit_export,
+            "analysis": self.rate_limit_analysis,
+            "photographer": self.rate_limit_photographer,
+            "settings": self.rate_limit_settings,
+            "render": self.rate_limit_render,
+            "default": self.rate_limit_default,
+        }
 
     @property
     def preview_dir(self) -> Path:

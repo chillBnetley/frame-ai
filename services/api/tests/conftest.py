@@ -15,6 +15,25 @@ from app.main import create_app
 from app.repositories.db import connect
 
 
+@pytest.fixture(autouse=True, scope="session")
+def default_auth_off_for_tests() -> Iterator[None]:
+    """Keep legacy tests token-free; auth tests opt back in via Settings kwargs.
+
+    Settings priority is init kwargs > environment > dotenv, so a test that
+    constructs ``Settings(api_auth_enabled=True, ...)`` still gets auth.
+    """
+
+    previous = os.environ.get("FRAME_API_AUTH_ENABLED")
+    os.environ["FRAME_API_AUTH_ENABLED"] = "false"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("FRAME_API_AUTH_ENABLED", None)
+        else:
+            os.environ["FRAME_API_AUTH_ENABLED"] = previous
+
+
 @pytest.fixture(autouse=True)
 def isolated_mask_cache() -> Iterator[None]:
     # The weight cache is process-global and create_app() sizes it from

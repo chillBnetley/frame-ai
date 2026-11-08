@@ -2,20 +2,36 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
+import threading
 import time
+from collections.abc import Callable, Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.core.auth import ApiTokenService
 from app.models.schemas import error_content
 
 logger = logging.getLogger("frame_ai.http")
 
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_RATE_LIMITED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_PUBLIC_GET_PATHS = frozenset({"/api/v1/health"})
+_UNAUTHORIZED_MESSAGE = "The API token is missing or invalid."
+_RATE_LIMITED_MESSAGE = "Too many requests. Try again later."
+_CATEGORY_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("upload", "/api/v1/images"),
+    ("export", "/api/v1/exports"),
+    ("analysis", "/api/v1/analysis"),
+    ("photographer", "/api/v1/ai/photographer"),
+    ("settings", "/api/v1/settings"),
+)
+_RATE_LIMIT_WINDOW_SECONDS = 60.0
 
 
 async def _send_error(
@@ -224,3 +240,125 @@ class LocalOriginGuardMiddleware:
                 return
 
         await self.app(scope, receive, send)
+
+
+def rate_limit_category(path: str) -> str:
+    for category, prefix in _CATEGORY_PREFIXES:
+        if path.startswith(prefix):
+            return category
+    if path.endswith("/export"):
+        return "export"
+    if path.endswith("/render") or path.startswith("/api/v1/previews"):
+        return "render"
+    return "default"
+
+
+class RateLimiter:
+    """Thread-safe per-category token buckets.
+
+    A capacity of 0 disables the category without allocating any state. Buckets
+    refill linearly over ``window_seconds``; ``consume`` returns the number of
+    seconds to wait when the bucket is empty, or ``None`` when a request is
+    allowed.
+    """
+
+    def __init__(
+        self,
+        capacities: Mapping[str, int],
+        *,
+        window_seconds: float = _RATE_LIMIT_WINDOW_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be positive")
+        self._capacities = {key: max(0, int(value)) for key, value in capacities.items()}
+        self._window_seconds = window_seconds
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._buckets: dict[str, tuple[float, float]] = {}
+
+    def consume(self, category: str) -> int | None:
+        capacity = self._capacities.get(category, 0)
+        if capacity <= 0:
+            return None
+        refill_per_second = capacity / self._window_seconds
+        now = self._clock()
+        with self._lock:
+            tokens, updated = self._buckets.get(category, (float(capacity), now))
+            elapsed = max(0.0, now - updated)
+            tokens = min(float(capacity), tokens + elapsed * refill_per_second)
+            if tokens < 1.0:
+                self._buckets[category] = (tokens, now)
+                return max(1, math.ceil((1.0 - tokens) / refill_per_second))
+            self._buckets[category] = (tokens - 1.0, now)
+        return None
+
+
+class ApiAuthMiddleware:
+    """Require a matching token on ``/api/v1`` and apply the write rate limits.
+
+    Runs before the body limiter, so a rejected request never consumes an
+    upload. ``OPTIONS`` and the public health probe bypass both checks; root and
+    other non-API paths are untouched.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        enabled: bool,
+        tokens: ApiTokenService,
+        rate_limits: Mapping[str, int],
+        limiter: RateLimiter | None = None,
+    ) -> None:
+        self.app = app
+        self._enabled = enabled
+        self._tokens = tokens
+        self._limiter = limiter or RateLimiter(rate_limits)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not self._enabled:
+            await self.app(scope, receive, send)
+            return
+
+        method = str(scope.get("method", "")).upper()
+        path = str(scope.get("path", ""))
+        if (
+            not _is_api_path(path)
+            or method == "OPTIONS"
+            or (method in {"GET", "HEAD"} and path in _PUBLIC_GET_PATHS)
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        provided = Headers(scope=scope).get("x-frame-token")
+        if not self._tokens.matches(provided):
+            await _send_error(
+                scope,
+                send,
+                status=401,
+                code="unauthorized",
+                message=_UNAUTHORIZED_MESSAGE,
+            )
+            return
+
+        if method in _RATE_LIMITED_METHODS:
+            category = rate_limit_category(path)
+            retry_after = self._limiter.consume(category)
+            if retry_after is not None:
+                await _send_error(
+                    scope,
+                    send,
+                    status=429,
+                    code="rate_limited",
+                    message=_RATE_LIMITED_MESSAGE,
+                    details={"category": category, "retryAfterSeconds": retry_after},
+                    extra_headers=[(b"retry-after", str(retry_after).encode("ascii"))],
+                )
+                return
+
+        await self.app(scope, receive, send)
+
+
+def _is_api_path(path: str) -> bool:
+    return path == "/api/v1" or path.startswith("/api/v1/")

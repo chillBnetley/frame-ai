@@ -82,6 +82,7 @@
 - **透明图**：带 alpha 的输入在分析副本中按白底合成，原图不变；报告 `limitations` 会说明这一点，不做透明背景语义分析。
 - **Provider 侧无配额，应用侧有本地每日上限**：上游 Provider 本身没有按用户/日期的费用配额；应用只在本机按 UTC 日期统计真实 HTTP 请求与 token，由 `FRAME_PROVIDER_DAILY_REQUEST_LIMIT` / `FRAME_PROVIDER_DAILY_TOKEN_LIMIT` 控制（默认 0 = 不强制但仍记录，细节见下一条 L14）。选择 `openai` 前仍需自行评估费用与数据合规；应用内“测试连接”会发起一次真实的最小纯文本请求（不发送图片），既计入 Provider 侧 token 用量与费用，也计入本地额度。
 - **API Key 加密存储不是多用户密钥保险箱（L5 已整改）**：页面内保存的配置写入 `<FRAME_DATA_DIR>/provider-settings.json`，默认是 **v2 加密格式**：非密钥字段可读，API Key 以 AES-256-GCM 密文存放在 `secrets` 分组（每次保存新 12 字节 nonce、16 字节 tag、base64 存储），文件里没有 `api_key` 明文字段。32 字节主密钥单独存在 `<FRAME_DATA_DIR>/provider-master-key`，由系统机制保护。旧 v1 明文文件在首次以 v2 启动时自动迁移（读 v1 → 校验生效配置 → 构建 Provider → 再原子写 v2，成功记 `provider_settings_migrated from=1 to=2`）；迁移失败时 v1 字节完全不变、临时文件清理、启动明确失败，不会以明文继续运行。密文通过 AAD `frame-ai/provider-settings/v2/<kind>` 绑定 provider 角色，改任一字节或跨 provider 挪动密文都会 fail-closed；主密钥丢失/损坏时启动失败并提示重新输入 API Key，不静默回退明文，**也不会自动生成替代主密钥**——只要 v2 文件里还有 `secrets`，缺失的主密钥只会报错，磁盘/钥匙串里不会被写入一把解不开旧数据的新密钥（首次使用、v2 尚无 `secrets`、以及 v1 迁移仍正常创建第一把密钥）。剩余风险：**以同一 OS 用户身份运行的本机进程仍可调用 DPAPI/Keychain 解密**，因此这不是多用户隔离的保险箱；进程内存中仍短暂持有明文 key；`FRAME_PROVIDER_SETTINGS_ENCRYPTION=off` 会退回明文 v1（仅回退/救援用，启动与每次保存打 WARNING）。
+- **本地 token 不是多用户安全边界（L7 已实现）**：`<FRAME_DATA_DIR>/api-token` 每次启动轮换，POSIX `0600`、Windows 尽力 `icacls`；但同一 OS 用户下的进程仍可读取该文件，因此只挡未经授权的其他用户/浏览器跨站调用，不构成多用户隔离。`FRAME_API_TOKEN_FILE` 必须为**绝对路径**（API 会 resolve，Next 按原样读取且不展开 `~`；相对路径会让两侧指向不同文件并表现为 401）。API 仍只应绑定 `127.0.0.1`。`FRAME_API_AUTH_ENABLED=false` 会同时关闭鉴权与限流（Host/Origin 校验保留）。限流目前是**单进程内存桶**（60 秒窗口），多实例之间不共享；所有类别默认 0（机制已交付、默认不强制），开启后 GET/HEAD 仍不计数。`NEXT_PUBLIC_API_BASE_URL` 直连模式绕过 Next 代理，鉴权开启时不支持。401 响应不带 CORS 头（CORS 在鉴权内层），因此跨源直连应走同源代理或使用 CLI。
 - **每日成本上限的计数口径与限制（L14 已实现）**：`provider_usage` 每个 UTC 日期、每个 Provider 一行，只存请求数与 token 计数，不存 prompt/响应/图片/密钥。计数发生在出站策略与 DNS 解析成功之后、真实发送之前，所以被策略/DNS 拦截的调用不消耗额度；重试每次、重定向每跳各计 1。token 优先用响应 `usage`，缺失时用请求体+响应体字节数估算（`ceil(bytes/4)`），两者不重复计。限额默认 0（只记录不强制）；用量账本读写失败会 fail-closed（分析入队与 usage 端点 503 `provider_usage_unavailable`；设置页测试连接仍 200，以 `ProviderTestResult.code` 报告），而不是放行无界流量。队列内任务没有结构化 details 通道，只落 `provider_budget_exceeded` + 静态 message，由前端按 code 映射中文；同步 429 才带 `limit/used/remaining/resetAt`。Mock Provider 不计量。旧数据按日期保留，没有自动清理。
 
   | 平台 | 主密钥保护方式 | 支持状态 |
@@ -113,7 +114,7 @@
 
 ## 安全与部署
 
-- **API 无鉴权、无限流、无病毒扫描**；只应绑定 `127.0.0.1`（D-13），不得暴露公网或反向代理到公网。Host 白名单、Origin 与 `Sec-Fetch-Site` 检查只降低 DNS 重绑定和浏览器跨站写入风险，不是鉴权或完整 CSRF 防护。
+- **默认本地 token 鉴权 + 可选限流 + 无病毒扫描**：默认要求 `/api/v1` 携带本地 `X-FRAME-Token`（L7），限流可按类别配置（默认 0 不强制）；只应绑定 `127.0.0.1`，不得暴露公网或反向代理到公网。Host 白名单、Origin 与 `Sec-Fetch-Site` 检查先于鉴权，只降低 DNS 重绑定和浏览器跨站写入风险；同一 OS 用户仍可读取 token 文件，因此鉴权不是多用户隔离或完整 CSRF 防护。
 - 本机其他进程可以访问 API；这是当前接受的本机信任边界。
 - 日志不记录图片字节、原始文件名、配方内容或密钥；阶段 5 也不记录对话指令原文（只记录 `instruction_chars`）、点评正文或反馈评分明细。错误响应不返回绝对路径。新增日志点必须继续遵守。
 - 导出会剥离元数据，但原图下载不会；不要在分享场景使用原图下载。

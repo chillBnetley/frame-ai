@@ -39,20 +39,22 @@
 | 202 | 分析任务或导出作业已创建并进入后台队列 |
 | 204 | 删除分析任务、导出作业或图片/会话成功，无响应体 |
 | 400 | 请求体本身错误（空文件、多个 `file` 字段、缺少字段），或 Host 头不在允许列表 |
+| 401 | 缺少或错误的 `X-FRAME-Token`（仅 `/api/v1`；`OPTIONS` 与健康探针除外） |
 | 403 | 写入请求的来源不在允许列表，或浏览器标记为跨站写入 |
 | 404 | 图片、会话、revision、预览或导出作业不存在 |
 | 409 ⊕ | 状态冲突：父 revision 不是活动版本、无可撤销/重做步骤、渲染已被更新请求取代，或导出作业未就绪/已取消/已失败 |
 | 413 | 文件字节、像素数或导出预估内存超限 |
 | 415 | 无法解码、MIME 与内容不符、格式不支持、动画图 |
 | 422 | 字段校验失败（范围、两位小数、crop 越界等） |
+| 429 | 写请求触发本地限流；`Retry-After` 为等待秒数 |
 | 500 | 未预期错误或本地存储失败 |
 | 503 | 导出/渲染串行槽位被占用、导出队列已满，或服务未就绪 |
 
-任务书的状态码清单没有 403、409。并发/历史冲突使用 409、本机来源防护使用 403 是阶段 2 的契约扩展；具体 `code` 见 §4 与 §6。
+任务书的状态码清单没有 401、403、409、429。并发/历史冲突使用 409、本机来源防护使用 403、本地鉴权/限流使用 401/429 都是契约扩展；具体 `code` 见 §1.4、§4 与 §6。
 
 ### 1.2 本机边界
 
-API 只绑定 `127.0.0.1`，无鉴权、无限流（D-13）。启动命令必须显式使用 `--host 127.0.0.1`；不得把端口暴露到公网或反向代理到公网。任何部署加固都属于后续阶段。
+API 只绑定 `127.0.0.1`。D-13 的「无鉴权」已被 L7 取代：默认启用本地 token 鉴权与可选限流（见 §1.4），但仍不是多用户安全边界；不得把端口暴露到公网或反向代理到公网。任何部署加固都属于后续阶段。
 
 ### 1.3 Host 与来源防护（阶段 2.1）
 
@@ -67,6 +69,15 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 - **未知字段**：所有请求体模型都设 `extra="forbid"`（OpenAPI 中对应 `additionalProperties: false`）。拼错的字段（如把 `maxEdge` 写成 `maxEge`）返回 422 `validation_error`，`details.fields[].rule` 为 `extra_forbidden`，不会静默按默认值执行。
 
 默认允许来源为 `http://localhost:3000,http://127.0.0.1:3000`；通过 Next.js 同源代理访问时无需修改。若前端换端口、换主机名，或使用 `NEXT_PUBLIC_API_BASE_URL` 直连 API，必须同步更新 `FRAME_ALLOWED_ORIGINS`。这些检查不是鉴权，只降低浏览器与被诱导请求的风险。
+
+### 1.4 本地 API 鉴权与限流（L7 / B6d）
+
+- **Token**：API 启动时生成 64 位十六进制（32 随机字节），每次启动轮换，写入 `<FRAME_DATA_DIR>/api-token`（可用 `FRAME_API_TOKEN_FILE` 覆盖）。POSIX 强制 `0600`；Windows 上尽力用 `icacls` 收紧到当前用户。文件只包含 token；token 不进日志、OpenAPI 示例与前端 bundle。`FRAME_API_TOKEN_FILE` **必须为绝对路径**：API 侧会 resolve，Next 侧按原样读取且不展开 `~`；相对路径会导致两侧指向不同文件（表现为 401）。
+- **鉴权**：`FRAME_API_AUTH_ENABLED`（默认 `true`）开启后，所有 `/api/v1` 路径（含精确前缀）必须携带 `X-FRAME-Token`。缺失/错误统一 401 `unauthorized`，不区分原因，也不回显任何凭据。`OPTIONS` 与 `GET /api/v1/health` 不鉴权；根路径 `/`、`/docs` 等非 API 路径不受影响。无 `Origin` 的 CLI 请求允许，但仍必须带 token。
+- **顺序**：Host 400 `invalid_host` 与跨站写 403 `origin_not_allowed` 先于鉴权；鉴权先于读取请求体，因此 401/429 不会消耗上传体。CORS 预检在鉴权之后处理，故 401 响应不带 CORS 头。
+- **限流**：只对 `POST/PUT/PATCH/DELETE` 生效，类别为 upload/export/analysis/photographer/settings/render/default，使用内存 token bucket（60 秒窗口、线程安全）。阈值 `FRAME_RATE_LIMIT_*` 默认 0（机制已交付、默认不强制）。超限返回 429 `rate_limited`，`Retry-After` 与 `details.retryAfterSeconds` 为等待秒数，`details.category` 为类别。GET/HEAD 不计数。
+- **前端**：Next `proxy.ts` 每个请求读取上述文件并注入 `X-FRAME-Token`，API 重启轮换后无需重启 Next。`NEXT_PUBLIC_API_BASE_URL` 直连模式绕过该代理，鉴权开启时不支持；仅在 `FRAME_API_AUTH_ENABLED=false` 时可用。
+- **回滚**：`FRAME_API_AUTH_ENABLED=false` 同时关闭鉴权与限流，Host/Origin 校验保留；token 文件可保留。
 
 ## 2. 会话状态对象
 
@@ -685,6 +696,8 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | `origin_not_allowed` | 403 | 写入请求的 Origin 不在允许列表，或 `Sec-Fetch-Site` 为 `cross-site` |
 | `cors_origin_denied` | 403 | CORS 预检的 Origin 不在允许列表 |
 | `cors_method_denied` | 405 | CORS 预检请求的方法不在 `GET/POST/DELETE/OPTIONS` |
+| `unauthorized` | 401 | 缺少或错误的 `X-FRAME-Token`（`OPTIONS`/健康探针除外） |
+| `rate_limited` | 429 | 写请求超过本地限流；`details={category,retryAfterSeconds}` 并带 `Retry-After` |
 | `not_found` | 404 | 通用路由不存在 |
 | `image_not_found` | 404 | 图片 ID 不存在 |
 | `image_file_missing` | 404 | 登记存在但原图文件缺失 |

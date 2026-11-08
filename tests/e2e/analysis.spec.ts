@@ -7,7 +7,7 @@ import {
 } from "@playwright/test";
 import fs from "node:fs";
 
-import { analysisFixtureJson, uploadFixture } from "./support";
+import { analysisFixtureJson, apiHeaders, uploadFixture } from "./support";
 
 interface Fixture {
   path: string;
@@ -42,7 +42,9 @@ async function waitForTask(
   await expect
     .poll(
       async () => {
-        const response = await request.get(`${API_URL}/api/v1/analysis/${analysisId}`);
+        const response = await request.get(`${API_URL}/api/v1/analysis/${analysisId}`, {
+          headers: apiHeaders(),
+        });
         if (!response.ok()) {
           return `http_${response.status()}`;
         }
