@@ -78,6 +78,12 @@ class ProviderTestResponse(ProviderSettingsModel):
 
 
 class StoredProviderEntry(BaseModel):
+    """Legacy v1 entry. Also used as the in-memory domain shape.
+
+    The in-memory copy may hold a plaintext key while the process runs, but it
+    is only serialized to disk when encryption is explicitly turned off.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     provider: ProviderKind | None = None
@@ -87,12 +93,53 @@ class StoredProviderEntry(BaseModel):
 
 
 class StoredProviderSettings(BaseModel):
+    """Legacy v1 document, kept for reading and migrating older installs."""
+
     model_config = ConfigDict(extra="forbid")
 
     version: Literal[1] = 1
     vision: StoredProviderEntry | None = None
     decision: StoredProviderEntry | None = None
     planner: StoredProviderEntry | None = None
+
+
+SecretKind = Literal["vision", "decision", "planner"]
+
+
+class StoredProviderEntryV2(BaseModel):
+    """v2 entry: configuration only, never key material.
+
+    ``extra="forbid"`` rejects a smuggled ``api_key`` field so a v1-shaped entry
+    can never be written into an encrypted document.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: ProviderKind | None = None
+    model: str | None = Field(default=None, max_length=200)
+    base_url: str | None = Field(default=None, max_length=1000)
+
+
+class StoredSecret(BaseModel):
+    """Base64 AES-256-GCM record: 12-byte nonce, ciphertext with a 16-byte tag."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    alg: Literal["AES-256-GCM"] = "AES-256-GCM"
+    nonce: str = Field(min_length=1, max_length=64)
+    ciphertext: str = Field(min_length=1, max_length=65536)
+
+
+class StoredProviderSettingsV2(BaseModel):
+    """Encrypted document; ``secrets`` only covers providers with a saved key."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[2] = 2
+    vision: StoredProviderEntryV2 | None = None
+    decision: StoredProviderEntryV2 | None = None
+    planner: StoredProviderEntryV2 | None = None
+    secrets: dict[SecretKind, StoredSecret] = Field(default_factory=dict)
 
 
 __all__ = [
@@ -106,6 +153,10 @@ __all__ = [
     "ProviderSettingsView",
     "ProviderTestResponse",
     "ProviderTestResult",
+    "SecretKind",
     "StoredProviderEntry",
+    "StoredProviderEntryV2",
     "StoredProviderSettings",
+    "StoredProviderSettingsV2",
+    "StoredSecret",
 ]

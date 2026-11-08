@@ -559,7 +559,7 @@ B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD
 | 方法与路径 | 请求 | 响应 | 主要错误 |
 | --- | --- | --- | --- |
 | `GET /api/v1/settings/providers` | — | 脱敏配置视图（`vision`/`decision`/`planner` 三组），不含 API Key | 503 `provider_settings_unavailable` |
-| `POST /api/v1/settings/providers` | `{vision?, decision?, planner?}` | 保存并热替换后的脱敏配置视图 | 422 `invalid_provider_settings`；500 `provider_settings_write_failed`；503 |
+| `POST /api/v1/settings/providers` | `{vision?, decision?, planner?}` | 保存并热替换后的脱敏配置视图 | 422 `invalid_provider_settings`；500 `provider_settings_write_failed`；500 `secret_store_error`；503 |
 | `POST /api/v1/settings/providers/test` | `{vision?, decision?, planner?}`，用“当前配置 + 临时修改”测试 | `{vision, decision, planner}` 三项独立结果；不持久化 | 422；503 |
 | `POST /api/v1/settings/providers/reset` | — | 删除本机覆盖文件后按环境变量重建的视图（含 planner 回退） | 500；503 |
 
@@ -581,7 +581,10 @@ B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD
 - 请求期会重新解析并校验 DNS 的**每个**结果（任一被拒即失败），连接固定到已校验 IP，防止 DNS 重绑定；环境代理 `HTTP_PROXY`/`HTTPS_PROXY` 不生效。重定向最多 5 跳且只允许同源：跨源与 `https → http` 降级返回不可重试的 `provider_endpoint_error`，`Authorization` 不跨源；301/302/303 转 GET，307/308 保留 body。DNS 解析失败返回可重试的 `provider_unavailable`。
 - **`planner` 逐字段回退决策 Provider**：没有保存过 planner 字段时，`planner` 视图的 `provider`、`model`、`baseUrl`、`apiKey` 分别跟随**当前生效的 decision**（含已保存的 decision 覆盖），而不是只读环境变量；`planner.apiKeySource` 因此可能显示 `saved`/`environment`/`none`，与 decision 一致。只保存 `planner.model` 时其余字段仍逐项回退；清空 planner 字段（提交空字符串）恢复为跟随 decision；显式保存 `planner.provider="mock"` 不会被 decision 的 `openai` 覆盖，此时模型名为 `mock-planner`（除非显式保存了 planner 模型名）。planner 独立配置的数值项（超时、重试、修复次数）同理优先 `FRAME_PLANNER_*`，否则跟随 `FRAME_DECISION_*`。
 - 顶层 `isMock` 仍只由 vision/decision 的 Mock 状态决定；planner 是否 Mock 以 `planner.provider` 为准（planner 独立为 `mock` 不会把整个分析链标成 Mock）。
-- 保存成功后原子写入 `<FRAME_DATA_DIR>/provider-settings.json`（明文，尽力 `chmod 0600`），并热替换 Provider：新创建的分析任务使用新配置，已开始的任务继续使用旧 Provider。保存失败不会替换运行时配置。旧版覆盖文件没有 `planner` 分组时按“未配置”读取，行为与此前复用 decision 时一致。
+- 保存成功后原子写入 `<FRAME_DATA_DIR>/provider-settings.json`，并热替换 Provider：新创建的分析任务使用新配置，已开始的任务继续使用旧 Provider。保存失败不会替换运行时配置。旧版覆盖文件没有 `planner` 分组时按“未配置”读取，行为与此前复用 decision 时一致。
+- **磁盘格式 v2（L5/B6b）**：默认 `FRAME_PROVIDER_SETTINGS_ENCRYPTION=required`，文件形状为 `{"version":2,"vision":{"provider","model","base_url"},"decision":null,"planner":null,"secrets":{"vision":{"alg":"AES-256-GCM","nonce":"<base64 12B>","ciphertext":"<base64 ct+16B tag>"}}}`。API Key 只以 AES-256-GCM 密文出现在 `secrets`，v2 条目**没有也不接受 `api_key` 字段**（夹带明文会被拒绝）；`secrets` 只为显式保存了非空 key 的 provider 生成，每次保存使用新的随机 nonce。密文 AAD 绑定 provider 角色（`frame-ai/provider-settings/v2/<kind>`），改字节或跨 provider 挪动密文都会 fail-closed。32 字节主密钥单独存在 `<FRAME_DATA_DIR>/provider-master-key`（Windows DPAPI / macOS Keychain / POSIX `0600`）。**HTTP 契约不变**：请求/响应字段、脱敏视图与状态码集合除新增错误码外完全一致，OpenAPI 形状未变。
+- **迁移与失败语义**：首次以 v2 启动时读 v1 → 校验生效配置（含网络策略）→ 构建 Provider → 再原子写 v2，成功记 `provider_settings_migrated from=1 to=2`；迁移失败时 v1 字节完全不变、临时文件清理、启动 fail-closed，不以明文继续运行。密文被改动、主密钥丢失/损坏时启动失败并提示重新输入 API Key，不静默回退明文，**也不会自动生成替代主密钥**：只要文件里还有 `secrets` 密文，缺失的主密钥就只报错，磁盘/钥匙串里不会留下一把解不开旧数据的新密钥（首次使用、v2 尚无 `secrets`、v1 迁移仍正常创建第一把密钥）。备份须把 `provider-settings.json` 与 `provider-master-key` 成对保存。解密后的明文若不合法（如超长）同样只抛固定文案的 `ProviderConfigurationError`，消息、traceback 与日志都不含 key。`FRAME_PROVIDER_SETTINGS_ENCRYPTION=off` 仅用于回退/救援：写明文 v1 并在启动与每次保存打 WARNING，读 v2 仍需主密钥。
+- **新增错误码 `secret_store_error`（HTTP 500）**：保存期加密失败（主密钥不可用/损坏、密文校验不通过等）时返回，文案固定且不含密文或密钥，运行时配置与磁盘文件都不变；写盘失败仍是 500 `provider_settings_write_failed`。启动期同类失败表现为 API 启动失败（不是 HTTP 响应）。前端 `describeSettingsError` 对未知 code 回落到该安全 message，无需改动。
 - `test` 使用“当前生效配置 + 请求内临时修改”，不写入文件。真实 Provider 只发送一条纯文本 Chat Completions 提示，不发送用户图片；每项返回 `{ok, provider, model, latencyMs, code, message}`，失败码为安全的 `provider_*`/`provider_test_failed`，不返回上游响应正文。
 - `reset` 删除覆盖文件并恢复环境变量配置（planner 随之回到逐字段跟随 decision）；没有覆盖文件时同样返回 200。
 

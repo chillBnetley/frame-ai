@@ -496,7 +496,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             </div>
 
             <p className="mt-3 text-[10px] text-white/35">
-              API Key 只保存在本机数据目录的配置文件中，不会回显到页面或日志；本机其他进程仍可能读取该文件。
+              API Key 加密后保存在本机数据目录，不会回显到页面或日志；本机同一系统用户下的进程仍可能通过系统密钥库解密。
             </p>
 
             {testResults && (

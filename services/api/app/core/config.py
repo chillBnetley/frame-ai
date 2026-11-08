@@ -77,6 +77,7 @@ class Settings(BaseSettings):
 
     provider_url_policy: Literal["public-only", "allow-local"] = "public-only"
     provider_allow_insecure_http: bool = False
+    provider_settings_encryption: Literal["required", "off"] = "required"
 
     mock_scenario: str = "generic"
 

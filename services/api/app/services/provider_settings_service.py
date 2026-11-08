@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
-import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Literal, cast
 
 from pydantic import SecretStr, ValidationError
@@ -31,15 +30,31 @@ from app.models.provider_settings import (
     ProviderSettingsView,
     ProviderTestResponse,
     ProviderTestResult,
+    SecretKind,
     StoredProviderEntry,
+    StoredProviderEntryV2,
     StoredProviderSettings,
+    StoredProviderSettingsV2,
+    StoredSecret,
+)
+from app.services.secret_store import (
+    SecretBox,
+    SecretStoreError,
+    blob_from_record,
+    blob_to_record,
+    default_master_key_store,
+    provider_settings_aad,
+    write_private_document,
 )
 
 logger = logging.getLogger("frame_ai.settings")
 
 SETTINGS_FILENAME = "provider-settings.json"
 TEST_TIMEOUT_SECONDS = 20.0
-_KINDS = ("vision", "decision", "planner")
+_DECRYPTED_KEY_MESSAGE = (
+    "The saved provider API key could not be decrypted. Re-enter the API key in model settings."
+)
+_KINDS: tuple[SecretKind, ...] = ("vision", "decision", "planner")
 _FALLBACK_KINDS = {"planner": "decision"}
 _MOCK_MODELS: dict[str, str] = {
     "vision": "mock-vision",
@@ -68,6 +83,7 @@ class ProviderSettingsService:
         *,
         bundle_builder: BundleBuilder = build_provider_bundle,
         client_factory: ClientFactory | None = None,
+        secret_box: SecretBox | None = None,
     ) -> None:
         self._base = base_settings
         self._bundle_builder = bundle_builder
@@ -75,15 +91,62 @@ class ProviderSettingsService:
         self._path = base_settings.data_dir / SETTINGS_FILENAME
         self._lock = threading.RLock()
         self._on_change: Callable[[ProviderBundle], None] | None = None
-        self._stored = self._load()
+        self._encryption = base_settings.provider_settings_encryption
+        self._secret_box = secret_box
+        # A master key may only be minted when no saved ciphertext depends on one.
+        # Deciding this before _load() keeps a deleted key from being silently
+        # replaced during startup decryption.
+        self._allow_key_create = self._may_create_master_key()
+        self._stored, legacy_document = self._load()
         effective = self._effective_settings(self._stored)
         self._validate_effective(self._stored, raising=ProviderConfigurationError)
         self._bundle = self._build_bundle(effective)
+        if self._encryption == "off":
+            logger.warning("provider_settings_encryption_disabled mode=off")
+        elif legacy_document:
+            # Migration runs only after the v1 document passed validation and the
+            # bundle was built; a failure here leaves the v1 bytes untouched.
+            self._persist(self._stored, startup=True)
+            logger.info("provider_settings_migrated from=1 to=2")
 
     @property
     def bundle(self) -> ProviderBundle:
         with self._lock:
             return self._bundle
+
+    @property
+    def _secrets(self) -> SecretBox:
+        """Resolved lazily so the platform key store is only touched when needed."""
+
+        if self._secret_box is None:
+            self._secret_box = SecretBox(
+                default_master_key_store(
+                    self._base.data_dir,
+                    allow_create=self._allow_key_create,
+                )
+            )
+        return self._secret_box
+
+    def _may_create_master_key(self) -> bool:
+        """Forbid minting a key when the stored document already holds ciphertext.
+
+        A missing master key must mean "re-enter the API keys", never "generate a
+        replacement". A v2 document without any ``secrets`` (or a legacy v1 file,
+        or no file at all) has nothing to decrypt, so the first key may still be
+        created normally.
+        """
+
+        if not self._path.exists():
+            return True
+        try:
+            document = json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            # Unreadable documents fail closed in _load() before any crypto runs.
+            return False
+        if not isinstance(document, dict) or document.get("version") != 2:
+            return True
+        secrets = document.get("secrets")
+        return not isinstance(secrets, dict) or not secrets
 
     def set_on_change(self, callback: Callable[[ProviderBundle], None]) -> None:
         self._on_change = callback
@@ -202,46 +265,149 @@ class ProviderSettingsService:
             planner=results["planner"],
         )
 
-    def _load(self) -> StoredProviderSettings:
+    def _load(self) -> tuple[StoredProviderSettings, bool]:
+        """Return the in-memory domain plus whether a legacy v1 file needs migration."""
+
         if not self._path.exists():
-            return StoredProviderSettings()
+            return StoredProviderSettings(), False
         try:
-            raw = self._path.read_text(encoding="utf-8")
-            return StoredProviderSettings.model_validate_json(raw)
-        except (OSError, ValueError, ValidationError) as exc:
+            document = json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
             logger.error(
                 "provider_settings_load_failed error_type=%s",
                 type(exc).__name__,
             )
             raise ProviderConfigurationError(
                 "The saved provider settings could not be loaded."
-            ) from exc
-
-    def _persist(self, stored: StoredProviderSettings) -> None:
-        temporary = self._path.with_name(self._path.name + ".tmp")
-        try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            temporary.write_text(
-                stored.model_dump_json(exclude_none=True, indent=2),
-                encoding="utf-8",
+            ) from None
+        if not isinstance(document, dict):
+            raise ProviderConfigurationError("The saved provider settings could not be loaded.")
+        version = document.get("version", 1)
+        if version == 2:
+            return self._load_v2(document), False
+        if version != 1 or isinstance(version, bool):
+            logger.error("provider_settings_load_failed error_type=UnsupportedVersion")
+            raise ProviderConfigurationError(
+                "The saved provider settings use an unsupported format version."
             )
-            _restrict_permissions(temporary)
-            os.replace(temporary, self._path)
-            _restrict_permissions(self._path)
+        try:
+            return StoredProviderSettings.model_validate(document), True
+        except ValidationError as exc:
+            logger.error(
+                "provider_settings_load_failed error_type=%s",
+                type(exc).__name__,
+            )
+            raise ProviderConfigurationError(
+                "The saved provider settings could not be loaded."
+            ) from None
+
+    def _load_v2(self, document: dict[str, Any]) -> StoredProviderSettings:
+        try:
+            parsed = StoredProviderSettingsV2.model_validate(document)
+        except ValidationError as exc:
+            logger.error(
+                "provider_settings_load_failed error_type=%s",
+                type(exc).__name__,
+            )
+            raise ProviderConfigurationError(
+                "The saved provider settings could not be loaded."
+            ) from None
+        entries: dict[str, StoredProviderEntry | None] = {}
+        for kind in _KINDS:
+            entry = getattr(parsed, kind)
+            record = parsed.secrets.get(kind)
+            # Rebuilding the domain entry validates the decrypted plaintext, so it
+            # belongs inside the same boundary: a pydantic ValidationError would
+            # otherwise echo the key prefix through ``input_value``.
+            try:
+                api_key: str | None = None
+                if record is not None:
+                    blob = blob_from_record(record.alg, record.nonce, record.ciphertext)
+                    api_key = self._secrets.decrypt(blob, provider_settings_aad(kind))
+                if entry is None and api_key is None:
+                    entries[kind] = None
+                    continue
+                entries[kind] = StoredProviderEntry(
+                    provider=entry.provider if entry is not None else None,
+                    model=entry.model if entry is not None else None,
+                    base_url=entry.base_url if entry is not None else None,
+                    api_key=api_key,
+                )
+            except SecretStoreError as exc:
+                logger.error(
+                    "provider_settings_decrypt_failed kind=%s error_type=%s",
+                    kind,
+                    type(exc).__name__,
+                )
+                raise ProviderConfigurationError(str(exc)) from None
+            except ValidationError as exc:
+                logger.error(
+                    "provider_settings_decrypt_failed kind=%s error_type=%s",
+                    kind,
+                    type(exc).__name__,
+                )
+                raise ProviderConfigurationError(_DECRYPTED_KEY_MESSAGE) from None
+        try:
+            return StoredProviderSettings.model_validate(entries)
+        except ValidationError as exc:
+            logger.error(
+                "provider_settings_load_failed error_type=%s",
+                type(exc).__name__,
+            )
+            raise ProviderConfigurationError(
+                "The saved provider settings could not be loaded."
+            ) from None
+
+    def _persist(self, stored: StoredProviderSettings, *, startup: bool = False) -> None:
+        try:
+            payload = self._serialize(stored)
+        except SecretStoreError as exc:
+            logger.error(
+                "provider_settings_encrypt_failed error_type=%s",
+                type(exc).__name__,
+            )
+            raise _persist_error(startup, "secret_store_error", str(exc)) from None
+        try:
+            write_private_document(self._path, payload)
         except OSError as exc:
             logger.error(
                 "provider_settings_persist_failed error_type=%s",
                 type(exc).__name__,
             )
-            try:
-                temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
-            raise AppError(
-                500,
+            raise _persist_error(
+                startup,
                 "provider_settings_write_failed",
                 "The provider settings could not be saved.",
-            ) from exc
+            ) from None
+
+    def _serialize(self, stored: StoredProviderSettings) -> bytes:
+        """Build the whole document in memory; no file is touched on failure."""
+
+        if self._encryption == "off":
+            logger.warning("provider_settings_plaintext_write mode=off")
+            return stored.model_dump_json(exclude_none=True, indent=2).encode("utf-8")
+        entries: dict[str, StoredProviderEntryV2 | None] = {}
+        secrets: dict[SecretKind, StoredSecret] = {}
+        for kind in _KINDS:
+            entry = getattr(stored, kind)
+            if entry is None:
+                entries[kind] = None
+                continue
+            entries[kind] = StoredProviderEntryV2(
+                provider=entry.provider,
+                model=entry.model,
+                base_url=entry.base_url,
+            )
+            if entry.api_key:
+                blob = self._secrets.encrypt(entry.api_key, provider_settings_aad(kind))
+                secrets[kind] = StoredSecret.model_validate(blob_to_record(blob))
+        document = StoredProviderSettingsV2(
+            vision=entries["vision"],
+            decision=entries["decision"],
+            planner=entries["planner"],
+            secrets=secrets,
+        )
+        return document.model_dump_json(exclude_none=True, indent=2).encode("utf-8")
 
     def _merge(
         self,
@@ -527,11 +693,12 @@ def _secret_value(secret: SecretStr | None) -> str:
     return secret.get_secret_value() if secret is not None else ""
 
 
-def _restrict_permissions(path: Path) -> None:
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+def _persist_error(startup: bool, code: str, message: str) -> Exception:
+    """Startup failures must abort the process; request failures stay HTTP 500."""
+
+    if startup:
+        return ProviderConfigurationError(message)
+    return AppError(500, code, message)
 
 
 __all__ = [

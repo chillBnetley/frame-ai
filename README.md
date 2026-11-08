@@ -48,7 +48,7 @@
 - AI 分析任务：`POST /analysis` 异步创建，`pending/processing/completed/failed` 状态与真实阶段（预处理/视觉/特征/诊断）；失败任务保留供重试，`force=true` 重新分析，按图片内容与配置去重。
 - 预处理与 CV 测量：从只读原图生成内存 JPEG 副本（最长边 `FRAME_ANALYSIS_MAX_EDGE`，默认 1024），透明通道按白底合成并记录限制；亮度分位、直方图、截断、色偏、饱和度分布、RGB/HSV 直方图、主色集中度、清晰度、噪声、梯度各向异性、地平线倾斜与主色。
 - 可替换 Provider：视觉、决策与规划三个独立接口（规划未单独配置时逐字段跟随决策）；`mock`（默认，离线）与 OpenAI 兼容实现；API Key 只保存在服务端，可来自环境变量或页面内“模型设置”写入的本机覆盖文件，GET 只返回是否已配置；决策模型只接收结构化测量与语义，不接收图片；模型调用日志记录 provider/model/阶段/重试/token/延迟，不记录图片或 Base64。
-- 应用内模型设置：顶栏入口可分别配置视觉/决策/规划（可选）Provider、模型名、Base URL 与 API Key；规划留空的字段逐项跟随决策；保存后原子写入 `<FRAME_DATA_DIR>/provider-settings.json` 并热替换 Provider，新任务立即生效；“测试连接”只发送文本提示，不发送用户图片。
+- 应用内模型设置：顶栏入口可分别配置视觉/决策/规划（可选）Provider、模型名、Base URL 与 API Key；规划留空的字段逐项跟随决策；保存后原子写入 `<FRAME_DATA_DIR>/provider-settings.json` 并热替换 Provider，新任务立即生效；API Key 以 AES-256-GCM 加密（v2 格式，主密钥交给 Windows DPAPI / macOS Keychain / POSIX `0600`），旧明文文件首次启动自动迁移；“测试连接”只发送文本提示，不发送用户图片。
 - 主体与区域：视觉输出主体类型、归一化边界框、置信度与区域 ID；只提供边界框与区域引用，**没有像素级蒙版**；为后续局部调色预留统一区域接口。
 - 摄影诊断：曝光、色彩、构图、清晰度（含动态模糊/细节不足）、光线候选问题均带测量证据、严重度、置信度、关联区域与逐条建议；色彩协调/构图遮挡/主体占比进入结果；决策结果经后端校验，`unknown` 不会被包装成事实；场景/主体/光线/色彩/构图/质量诊断可按 `AnalysisOptions` 关闭并在局限中说明。
 - 前端分析界面：工具栏入口、五区结果、Mock 徽标、局限说明、真实阶段状态、主体框叠加、构图与遮挡摘要、可展开证据、逐条建议、重新分析、失败重试、切换图片清空状态。
@@ -282,7 +282,7 @@ npm run dev                  # Turbopack
 6. 打开“AI 摄影师”面板：选择风格与强度或直接生成方案，查看参数改动、理由与证据；可在预览中确认，接受后写入普通历史，也可拒绝、重置或提交评分。对话输入用于自然语言修改，点评区显示确定性优点/问题/建议。
 7. 导出 JPEG/PNG/TIFF：从原图全分辨率重渲染，自动剥离元数据并嵌入 sRGB；PNG/TIFF 可选 8/16-bit 并保留透明通道，JPEG 在白底合成且固定 8-bit。
 
-使用真实 OpenAI 兼容视觉/决策/规划服务时，可直接在页面顶栏打开“模型设置”，填写 Provider、模型名、Base URL 与 API Key 后“保存并应用”；规划模型留空的字段逐项跟随决策模型。也可以继续用 `.env` 设置 `FRAME_VISION_PROVIDER=openai`、`FRAME_DECISION_PROVIDER=openai`（可选 `FRAME_PLANNER_PROVIDER=openai`）及对应 `*_API_KEY`、`*_MODEL`、`*_API_BASE_URL`。本地保存的字段优先于环境变量，点击“恢复环境变量配置”会删除覆盖文件（包括规划覆盖）。缺少必需配置时启动或保存失败，不会静默回退到 Mock。密钥只留在服务端的本机覆盖文件或环境变量中，不会回显到页面、日志或前端构建产物，禁止提交到版本库。
+使用真实 OpenAI 兼容视觉/决策/规划服务时，可直接在页面顶栏打开“模型设置”，填写 Provider、模型名、Base URL 与 API Key 后“保存并应用”；规划模型留空的字段逐项跟随决策模型。也可以继续用 `.env` 设置 `FRAME_VISION_PROVIDER=openai`、`FRAME_DECISION_PROVIDER=openai`（可选 `FRAME_PLANNER_PROVIDER=openai`）及对应 `*_API_KEY`、`*_MODEL`、`*_API_BASE_URL`。本地保存的字段优先于环境变量，点击“恢复环境变量配置”会删除覆盖文件（包括规划覆盖）。缺少必需配置时启动或保存失败，不会静默回退到 Mock。密钥只留在服务端的本机覆盖文件（默认 AES-256-GCM 加密）或环境变量中，不会回显到页面、日志或前端构建产物，禁止提交到版本库。
 
 Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例如 Base URL `http://127.0.0.1:11434/v1`）时，默认保存会返回 422 `invalid_url`，已保存的本地地址会导致启动失败。迁移步骤：
 
@@ -342,6 +342,7 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 | `FRAME_PLANNER_REPAIR_ATTEMPTS` | 空 | 规划 JSON 校验失败后的修复尝试次数；空 = 跟随 `FRAME_DECISION_REPAIR_ATTEMPTS` |
 | `FRAME_PROVIDER_URL_POLICY` | `public-only` | Provider 出站地址策略：`public-only` 仅公网；`allow-local` 额外放行私网/回环（链路本地/元数据/组播/保留地址始终拒绝） |
 | `FRAME_PROVIDER_ALLOW_INSECURE_HTTP` | `false` | 是否允许 Provider 使用明文 `http://`；默认只允许 HTTPS |
+| `FRAME_PROVIDER_SETTINGS_ENCRYPTION` | `required` | 覆盖文件加密开关：`required` 写 v2 加密格式（AES-256-GCM + 系统主密钥）；`off` 仅用于回退/救援，写明文 v1 并在启动与每次保存打 WARNING。`off` 读取已存在的 v2 文件仍需主密钥 |
 | `FRAME_MOCK_SCENARIO` | `generic` | Mock 场景：`generic/portrait/landscape/low_light/backlit` |
 | `FRAME_ANALYSIS_MAX_EDGE` | `1024` | 发送给视觉 Provider 的内存副本最长边；范围 512–2048 |
 | `FRAME_ANALYSIS_MAX_CONCURRENCY` | `2` | 后台分析线程池大小 |
@@ -351,7 +352,30 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 | `FRAME_ANALYSIS_QUEUE_MAX` | `16` | `pending` 任务数上限；超限的新分析请求返回 503 `server_busy` + `Retry-After`，而不是无界排队 |
 | `FRAME_PHOTOGRAPHER_MAX_CONCURRENCY` | `2` | 同时执行的 Planner 调用（方案与对话）上限（1…8）；满时立即 503 `photographer_busy`，不排队 |
 
-页面内“模型设置”保存的字段写入 `<FRAME_DATA_DIR>/provider-settings.json`（已被 `.gitignore`），优先级高于上表中的同名字段；未保存的字段继续使用环境变量。规划分组中未保存的字段逐项跟随当前生效的决策配置（含已保存的 decision 覆盖），而不是先回退到默认值；旧版覆盖文件没有规划分组时按“未配置”读取。该文件以明文保存 API Key（Unix 上尽力 `chmod 0600`），不是密钥保险箱，本机其他进程/用户仍可能读取。文件损坏或选择了 `openai` 但缺少必需字段时，API 启动失败而不是静默回退。
+页面内“模型设置”保存的字段写入 `<FRAME_DATA_DIR>/provider-settings.json`（已被 `.gitignore`），优先级高于上表中的同名字段；未保存的字段继续使用环境变量。规划分组中未保存的字段逐项跟随当前生效的决策配置（含已保存的 decision 覆盖），而不是先回退到默认值；旧版覆盖文件没有规划分组时按“未配置”读取。文件损坏或选择了 `openai` 但缺少必需字段时，API 启动失败而不是静默回退。
+
+### API Key 加密存储（v2）
+
+默认（`FRAME_PROVIDER_SETTINGS_ENCRYPTION=required`）覆盖文件是 **v2 加密格式**：非密钥字段（provider/model/base_url）保持可读，API Key 以 AES-256-GCM 密文存放在 `secrets` 分组，文件里没有任何 `api_key` 明文字段。32 字节主密钥单独保存在 `<FRAME_DATA_DIR>/provider-master-key`：
+
+| 平台 | 主密钥保护方式 | 支持状态 |
+| --- | --- | --- |
+| Windows x64（amd64） | DPAPI `CryptProtectData`（当前用户，禁 UI，固定 entropy）；文件内只有 DPAPI blob | 支持，已在 Windows 实机验证 |
+| Linux x86_64 / aarch64 | 主密钥文件强制 `0600`，读取时校验权限，不符则尝试修复后复检，仍不符即失败 | 支持（依赖 `cryptography` 官方 wheel；本次未实机验证） |
+| macOS Apple Silicon（arm64） | 登录 Keychain 通用密码项（Security.framework，密钥不进 argv） | 支持（**未实机验证**，仅 mock 测试） |
+| Intel Mac（x86_64 macOS） | — | **不支持**：`cryptography==50.0.2` 无该 wheel |
+| 32-bit Windows / Windows on ARM | — | **不支持**：`cryptography==50.0.2` 无这些 wheel |
+
+要点与运维须知：
+
+- **旧文件自动迁移**：首次以 v2 启动时读 v1 → 校验生效配置（含 Provider 网络策略）→ 构建 Provider → 再原子写 v2，成功记录 `provider_settings_migrated from=1 to=2`。迁移失败时 v1 字节完全不变、临时文件清理、启动明确失败，不会以明文继续运行。
+- **篡改与换机**：密文绑定 `provider` 角色（AAD），把 vision 密文挪到 decision 或改动任一字节都会 fail-closed。主密钥丢失/损坏时启动失败并提示重新输入 API Key，**不会静默回退明文，也不会自动生成替代主密钥**：只要文件里还有已保存的密文，缺失的主密钥就只会报错，不会在磁盘/钥匙串里留下一把新的、解不开旧数据的密钥。
+- **备份必须成对**：`provider-settings.json` 与 `provider-master-key` 要一起备份。DPAPI/Keychain 保护的主密钥通常**无法在另一台机器或另一个用户下解开**；换机后请直接重新输入 API Key。
+- **恢复路径**：① 删除 `provider-settings.json`（必要时连 `provider-master-key` 一起删除）后重新在“模型设置”里输入密钥——这是丢失主密钥后唯一的正常恢复方式；② 需要回退到不支持 v2 的旧代码时，先用 `FRAME_PROVIDER_SETTINGS_ENCRYPTION=off` 保存一次，把文件写成明文 v1 再回退。
+- 首次使用（没有覆盖文件、或 v2 文件里还没有任何 `secrets`）仍会正常创建第一把主密钥；迁移 v1 明文文件时同样需要创建主密钥。只有“已有密文却缺主密钥”这一种情况禁止创建。
+- 支持矩阵之外的平台（如 BSD）沿用 POSIX 文件后端：仍强制 `0600` 并在读取时复检权限，无法建立私有权限即失败，不存在明文回落；这是有意的回落决策，不是平台白名单。
+- `off` 只是回退/救援开关：写明文 v1 并在启动与每次保存打 WARNING，读取 v2 仍需要主密钥。它不是长期运行模式。
+- Windows 上 `chmod` 不改变 DACL，因此安全性来自 DPAPI + 用户目录 ACL，而不是文件模式位。
 
 前端读取（放在 `apps/web/.env.local` 或 shell 环境）：
 
@@ -492,7 +516,7 @@ data/
 - **对话指令不落库**：`POST /chat` 的指令原文只在请求内使用，日志只记录 `instruction_chars` 长度；方案表保存方案/配方 JSON 与元数据，不保存指令、提示词或模型原始响应。
 - **反馈不含自由文本或图片**：反馈表只有动作、来源、参数差异、可选 1–5 评分与时间；不保存原图、指令或点评正文。单条可删除，图片/会话删除时级联清除。
 - **第三方数据留存**：发送到外部 Provider 的图片副本与结构化数据受该 Provider 自身的留存、日志与训练政策约束，本项目无法控制；接入前应确认服务条款与所在地区的合规要求。本项目不替用户开启训练授权，也不会把 Provider 返回的原始响应持久化。
-- 密钥只存在于服务器进程内存、`.env` 或本机覆盖文件 `<FRAME_DATA_DIR>/provider-settings.json` 中，不会出现在 API 响应、日志或前端构建产物中；`.env`、`data/` 与测试产物已被忽略。覆盖文件以明文保存密钥并尽力限制权限，能读取数据目录的本机进程仍可读取它。
+- 密钥只存在于服务器进程内存、`.env` 或本机数据目录中，不会出现在 API 响应、日志或前端构建产物中；`.env`、`data/` 与测试产物已被忽略。覆盖文件 `<FRAME_DATA_DIR>/provider-settings.json` 默认是 v2 加密格式（AES-256-GCM），API Key 密文与 32 字节主密钥分开存放，主密钥由 Windows DPAPI / macOS Keychain / POSIX `0600` 保护；磁盘上没有明文密钥。以同一用户身份运行的本机进程仍可能调用 DPAPI/Keychain 解密，因此这不是多用户隔离的密钥保险箱。详见上文「API Key 加密存储（v2）」。
 - 日志包含请求 ID、方法、路径、状态码、耗时、分析任务 ID 与阶段；不记录图片字节、Base64、原始文件名、配方内容、分析报告正文或密钥。
 - 导出与预览剥离全部 EXIF/XMP/IPTC/GPS 并嵌入 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。输出目标色彩空间恒为 sRGB，位深为 8 或 16（JPEG 固定 8）；PNG/TIFF 可带一条同深度的 alpha（RGBA），其余输出为 RGB 三通道。
 - 原图下载仍返回上传时的原始字节，包含可能存在的 EXIF/GPS 与原嵌入 ICC 配置；界面会提示这一点。契约是"原图不动、输出重编码"。

@@ -278,10 +278,37 @@ POST /api/v1/settings/providers/reset → 删除覆盖文件 → 按环境变量
 - `ProviderSettingsService` 在启动时读取 `<FRAME_DATA_DIR>/provider-settings.json`，按“本地保存字段 > 环境变量”解析生效配置并构建 `ProviderBundle`；文件损坏或 `openai` 配置缺字段时启动失败，不回退 Mock。
 - 保存流程先校验并构建候选 Bundle，再以临时文件 + `os.replace` 原子写入；写入失败时内存与运行时 Provider 都不变。交换操作由 `RLock` 保护。
 - `AnalysisTaskService.update_providers` 在同一把锁内替换 Provider 与 Orchestrator；已提交的任务持有旧 Orchestrator 并继续执行，新任务读取新快照。去重键仍由生效 Provider 类型、模型与提示词版本生成。
-- 覆盖文件包含明文 API Key，Unix 上尽力 `chmod 0600`；GET、错误、日志与测试结果均不含密钥或上游响应正文。测试连接只发送文本提示，不发送图片。
+- 覆盖文件默认是 v2 加密格式（详见下节「密钥加密层」）；GET、错误、日志与测试结果均不含密钥或上游响应正文。测试连接只发送文本提示，不发送图片。
 - 本机覆盖文件与 `.env` 都是服务端配置，前端只持有脱敏视图；修改后无需重启 API。
 - Provider 出站边界由 `ai/net_policy.py` 与 `ai/transport.py::PinnedHttpTransport` 执行：保存/启动只做 URL 语法与字面 IP 分类（不联网），请求前解析 DNS 并校验**每个**结果，任一地址被拒即 fail-closed；连接固定到已校验 IP，HTTPS 仍以原始主机名做 SNI/证书校验，Host 头保留原始主机（非默认端口带端口、IPv6 加方括号）。默认 `public-only` + 禁明文 `http`，本机 Provider 需 `FRAME_PROVIDER_URL_POLICY=allow-local`（明文再加 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`）；元数据/链路本地/组播/保留/未指定地址始终拒绝。传输不经 urllib opener，因此环境代理不能改变请求路径。重定向手写循环最多 5 跳、每跳重新校验，只允许同源；301/302/303 转 GET，307/308 保留 body，`Authorization` 不跨源。
 - 策略拒绝映射为不可重试的 `provider_endpoint_error`，DNS 失败映射为可重试的 `provider_unavailable`；错误文案为固定文本，不含 URL/host/IP/key。`UrllibJsonTransport` 仅为旧测试/显式注入保留，默认工厂不再使用。
+
+### 密钥加密层（L5 / B6b）
+
+`services/secret_store.py` 是唯一接触主密钥与密文的模块，`ProviderSettingsService` 只调用它的窄接口：
+
+```
+MasterKeyStore(Protocol).load_or_create() -> bytearray   # 32 字节
+SecretBox.encrypt(plaintext, aad) -> SecretBlob(nonce, ciphertext, alg)
+SecretBox.decrypt(blob, aad) -> str
+default_master_key_store(data_dir, *, allow_create=True) -> Dpapi / Keychain / File 之一
+write_private_document(path, payload)                    # 原子 + 私有权限
+```
+
+「是否允许创建主密钥」是后端构造参数（`create_if_missing` / `allow_create`），不进入
+`load_or_create()` 的 Protocol 签名，调用方语义保持窄接口。
+
+- **算法与封装**：`cryptography==50.0.2` 的 `AESGCM`（AES-256-GCM）。`AESGCM` 本身接受 16/24/32B key 与 8–128B nonce，所以封装层显式校验 `len(key)==32`、`len(nonce)==12`、tag 16B、`alg=="AES-256-GCM"`，不符即 `SecretStoreError`。主密钥用 `AESGCM.generate_key(bit_length=256)`，每次保存取新的 `os.urandom(12)`。
+- **AAD 绑定**：`b"frame-ai/provider-settings/v2/<kind>"`，同时绑定格式版本与 provider 角色，跨 provider 挪动密文解密失败。
+- **v2 文件形状**：`{"version":2,"vision":{"provider","model","base_url"},"decision":null,"planner":null,"secrets":{"vision":{"alg","nonce","ciphertext"}}}`。v2 存储模型 `extra="forbid"` 且**没有 `api_key` 字段**，夹带明文会被拒绝；`secrets` 只为显式保存了非空 key 的 provider 生成。v1 模型保留，只用于读旧文件与迁移，同时继续充当内存域模型；`required` 模式下内存域模型**绝不直接序列化到磁盘**。
+- **主密钥后端**：Windows 走 ctypes DPAPI（`CRYPTPROTECT_UI_FORBIDDEN` + 固定 entropy，`LocalFree` 显式声明 `argtypes` 防 64 位指针截断），`provider-master-key` 里只有 blob，安全性不依赖 `chmod`（Windows 上无效）；macOS 走 Security.framework 的 Keychain 通用密码项，密钥不进 argv；其余 POSIX 用 `os.open(O_CREAT|O_EXCL|O_WRONLY, 0o600)` 创建，读取时校验 `stat.S_IMODE==0o600`，不符则 chmod 后复检，仍不符 fail-closed。所有后端失败统一 `SecretStoreError`，文案固定、不含密文/密钥。
+- **平台回落决策**：支持矩阵是 Windows / Linux / macOS（P13）。`default_master_key_store` 对矩阵之外的平台（如 BSD）有意沿用 POSIX `FileMasterKeyStore`：它仍强制 `0600` 并在读取时复检权限，建立不了私有权限就 fail-closed，不存在明文回落。**不加平台白名单**，这是显式记录的回落决策而不是缺陷。
+- **主密钥创建许可（不静默替换）**：`ProviderSettingsService` 在 `_load()` 之前用 `_may_create_master_key()` 判定——只有「没有覆盖文件」「v1 明文文件」「v2 但 `secrets` 为空」这三种没有密文可解的情况才允许创建第一把主密钥；只要 v2 里还有 `secrets`，就以 `allow_create=False` 构造后端，缺失/删掉的主密钥只会抛静态 `SecretStoreError`，**绝不铸造一把解不开旧数据的新密钥**（DPAPI / Keychain / POSIX 三个后端一致）。`SecretBox` 经惰性属性解析，未用到加密的启动路径不会触碰系统密钥库。
+- **写入路径**：先在内存里完成全部加密与序列化（不产生半成品）→ `os.open(..., 0o600)` 建临时文件 → 写入 → `fsync` → `os.replace`；任一步失败删除临时文件并抛错。
+- **v1→v2 迁移顺序**：读 v1 → 校验生效配置（含 B6a 网络策略）→ 构建 Bundle → **再**写 v2。非法 v1 不迁移、原文件保留；失败时 v1 字节完全不变、临时文件清理、启动抛 `ProviderConfigurationError`（fail-closed，不以明文继续运行）；成功记 `provider_settings_migrated from=1 to=2`，不带字段值。
+- **读取分支**：先读 JSON `version`：2 → 校验 v2 并逐 provider 解密；1/缺失 → 按 v1 读并标记待迁移；其他 → `ProviderConfigurationError`。解密的 `InvalidTag`/base64/长度错误统一转 `SecretStoreError`，只记录 kind 与异常类型名。**解密后的明文重建 `StoredProviderEntry` 也放在同一 try 边界内**并额外捕获 `ValidationError`：超长/非法明文只抛固定文案的 `ProviderConfigurationError`，日志只有 `error_type`，不会让 pydantic 通过 `input_value` 回显 key 前缀。所有解析异常用 `raise ... from None`，避免 pydantic 异常链回显输入里的明文 key。
+- **开关与错误**：`FRAME_PROVIDER_SETTINGS_ENCRYPTION=required|off`，默认 `required`；`off` 写明文 v1 并在启动与每次保存打 WARNING（仅回退/救援），读 v2 仍需主密钥。启动/迁移/解密失败 → `ProviderConfigurationError`；保存期加密失败 → HTTP 500 `secret_store_error`，写盘失败 → 500 `provider_settings_write_failed`，运行时配置与磁盘文件都不变。API 视图仍只有 `hasApiKey`/`apiKeySource`，前端无需改动（`describeSettingsError` 对未知 code 回落到安全 message）。
+- **测试分层**：单元层用 `InMemoryMasterKeyStore` 与 fake DPAPI 函数 / fake Keychain bridge，不触碰真实系统密钥库；API 集成层用平台默认后端（Windows 上是真实 DPAPI）。POSIX 权限断言在 Windows 上 skip，Windows DPAPI blob 断言在其他平台 skip，不互相伪通过。「v2 有密文 + 主密钥缺失 → 拒绝创建」与「无密文 → 正常创建首把密钥」两条回归覆盖三后端：Windows 上真实 DPAPI 分支实跑，POSIX / Keychain 用 fake 后端加参数化平台断言。macOS Keychain **未实机验证**。
 
 ### AI 摄影师（阶段 5）
 
