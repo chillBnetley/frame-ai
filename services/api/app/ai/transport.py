@@ -273,7 +273,7 @@ class PinnedHttpTransport:
         try:
             connection.request(
                 method,
-                endpoint.path,
+                _request_target(endpoint),
                 body=body,
                 headers=_request_headers(headers),
             )
@@ -384,7 +384,7 @@ def _redirect_endpoint(current: ParsedEndpoint, location: str) -> ParsedEndpoint
         joined = urllib.parse.urljoin(_endpoint_url(current), location)
     except ValueError:
         raise EndpointPolicyError(_ENDPOINT_MESSAGE) from None
-    target = parse_endpoint(joined)
+    target = parse_endpoint(joined, allow_query=True)
     current_origin = (current.scheme, current.host.lower(), current.port)
     target_origin = (target.scheme, target.host.lower(), target.port)
     if target_origin != current_origin:
@@ -392,8 +392,14 @@ def _redirect_endpoint(current: ParsedEndpoint, location: str) -> ParsedEndpoint
     return target
 
 
+def _request_target(endpoint: ParsedEndpoint) -> str:
+    if endpoint.query:
+        return f"{endpoint.path}?{endpoint.query}"
+    return endpoint.path
+
+
 def _endpoint_url(endpoint: ParsedEndpoint) -> str:
-    return f"{endpoint.scheme}://{endpoint.host_header}{endpoint.path}"
+    return f"{endpoint.scheme}://{endpoint.host_header}{_request_target(endpoint)}"
 
 
 def _header_value(headers: Mapping[str, str], name: str) -> str | None:

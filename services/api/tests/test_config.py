@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -119,3 +120,36 @@ def test_uploaded_limit_matches_runtime_config(client: TestClient, settings):
     assert config["maxUploadBytes"] == settings.max_upload_bytes
     assert config["maxJsonBodyBytes"] == settings.max_json_body_bytes
     assert upload(client, payload).status_code == 201
+
+
+B6_ENV_VARIABLES = (
+    "FRAME_PROVIDER_URL_POLICY",
+    "FRAME_PROVIDER_ALLOW_INSECURE_HTTP",
+    "FRAME_PROVIDER_SETTINGS_ENCRYPTION",
+    "FRAME_PROVIDER_DAILY_REQUEST_LIMIT",
+    "FRAME_PROVIDER_DAILY_TOKEN_LIMIT",
+    "FRAME_API_AUTH_ENABLED",
+    "FRAME_API_TOKEN_FILE",
+    "FRAME_RATE_LIMIT_UPLOAD",
+    "FRAME_RATE_LIMIT_EXPORT",
+    "FRAME_RATE_LIMIT_ANALYSIS",
+    "FRAME_RATE_LIMIT_PHOTOGRAPHER",
+    "FRAME_RATE_LIMIT_SETTINGS",
+    "FRAME_RATE_LIMIT_RENDER",
+    "FRAME_RATE_LIMIT_DEFAULT",
+)
+
+
+def test_env_example_documents_every_b6_setting():
+    text = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
+    documented: set[str] = set()
+    for line in text.splitlines():
+        candidate = line.lstrip("# ").strip()
+        if "=" in candidate:
+            documented.add(candidate.split("=", 1)[0].strip())
+
+    assert set(B6_ENV_VARIABLES) <= documented
+    for name in B6_ENV_VARIABLES:
+        assert name.removeprefix("FRAME_").lower() in Settings.model_fields
+    assert "ABSOLUTE" in text
+    assert not re.search(r"\b[0-9a-f]{64}\b", text)

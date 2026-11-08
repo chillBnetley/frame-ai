@@ -334,7 +334,7 @@ def pinned_server(
                     "body": body,
                 }
             )
-            if location is not None and self.path != "/final":
+            if location is not None and self.path.split("?", 1)[0] != "/final":
                 status = redirect_status
             else:
                 status = 200
@@ -474,6 +474,23 @@ def test_pinned_transport_ignores_environment_proxies(monkeypatch: pytest.Monkey
 
     assert result == {"ok": True}
     assert len(requests) == 1
+
+
+def test_pinned_transport_preserves_query_on_same_origin_redirect():
+    with pinned_server(location="/final?probe=1&x=2", redirect_status=307) as (url, requests):
+        result = JsonHttpClient(PinnedHttpTransport(LOCAL_POLICY)).post_json(
+            url,
+            {"ping": True},
+            HEADERS,
+            timeout=5,
+            max_retries=0,
+        )
+
+    assert result == {"ok": True}
+    assert [request["path"] for request in requests] == [
+        "/chat/completions",
+        "/final?probe=1&x=2",
+    ]
 
 
 def test_pinned_transport_preserves_body_on_307_redirect():

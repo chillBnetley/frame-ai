@@ -23,7 +23,7 @@
 - 回退而不是报错是有意为之：配置损坏的图片仍要能出图，代价是颜色按 sRGB 解释。
 - 不透明 `RGBA` 与同像素 `RGB` 的结果一致（`test_opaque_rgba_matches_the_same_pixels_as_rgb`）：转换发生在 alpha 拆分/白底合成之前，两条路径不会分叉。
 - `preserve_alpha=True`（loader 默认）时 `RGBA`/`LA`/带 `transparency` 的 `P` 走 `_to_float_rgba`：`convert("RGBA")` → `_apply_embedded_profile` → 拆成 float32 RGB 与 `/255` 的 alpha，**不再先合成白底**。预览、代理与 AI 分析显式传 `preserve_alpha=False`，保持原有白底合成结果与缓存字节不变。
-- **16-bit RGB 输入不走 lcms**：Pillow 没有 16-bit RGB 模式（会把像素截断到 8-bit），因此 16-bit PNG 用 OpenCV `IMREAD_UNCHANGED`、16-bit TIFF 用 `tifffile` 解码，Pillow 只负责读取 ICC/EXIF 与方向标签。ICC 转换由 `app/imaging/icc.py` 的纯 NumPy 矩阵/TRC 实现：支持 `rXYZ/gXYZ/bXYZ` + `rTRC/gTRC/bTRC`（`curv` 或 `para` 类型 0–4），经 D50 PCS 转到 sRGB；`lut8/lut16/mAB/mBA/mft` 等 LUT 类配置、非 RGB/XYZ 设备空间、损坏或越界配置一律返回 422 `unsupported_icc_profile`，**不静默降级**。已是 sRGB 的快速路径也先走同一套结构解析：只有 header/tag 边界有效、没有任何 LUT 签名、矩阵与标准 sRGB D50 矩阵在量化容差内一致、三条 TRC 与 sRGB 传输函数等价时才恒等返回；**profile description 不参与判断**，因此写着 "sRGB" 的 LUT 或非 sRGB 矩阵配置仍会进入转换并按需 422。无配置的 16-bit 输入走快速路径，不做数值转换。8-bit 路径的 lcms 行为完全不变。上传入口不校验 ICC；上述 422 发生在首次 preview/render/export 解码时。
+- **16-bit RGB 输入不走 lcms**：Pillow 没有 16-bit RGB 模式（会把像素截断到 8-bit），因此 16-bit PNG 用 OpenCV `IMREAD_UNCHANGED`、16-bit TIFF 用 `tifffile` 解码，Pillow 只负责读取 ICC/EXIF 与方向标签。ICC 转换由 `app/imaging/icc.py` 的纯 NumPy 矩阵/TRC 实现：支持 `rXYZ/gXYZ/bXYZ` + `rTRC/gTRC/bTRC`（`curv` 或 `para` 类型 0–4），经 D50 PCS 转到 sRGB；`lut8/lut16/mAB/mBA/mft` 以及 ICC v4 的 `D2B*`/`B2D*` 结构化 LUT 标签、非 RGB/XYZ 设备空间、损坏或越界配置一律返回 422 `unsupported_icc_profile`，**不静默降级**。已是 sRGB 的快速路径也先走同一套结构解析：只有 header/tag 边界有效、没有任何 LUT/结构化签名、矩阵与三条 TRC 在原子容差内接近标准 sRGB，且合成变换在 17³ RGB 采样上与恒等输出相差 ≤1 个 8-bit 级时才恒等返回（lcms sRGB 实测 0.64 级；旧容差下最坏对抗矩阵可达约 16 级，现在会被拒绝并走真实转换）；**profile description 不参与判断**，因此写着 "sRGB" 的 LUT 或非 sRGB 矩阵配置仍会进入转换并按需 422。无配置的 16-bit 输入走快速路径，不做数值转换。8-bit 路径的 lcms 行为完全不变。上传入口不校验 ICC；上述 422 发生在首次 preview/render/export 解码时。
 
 ## 2. 输入格式与入口闸门
 
@@ -119,7 +119,7 @@
 - **16-bit JPEG**：JPEG 固定 8-bit；`bitDepth=16` + `format="jpeg"` 在请求模型校验阶段返回 422 `validation_error`，异步作业不会创建。
 - **16-bit + 降噪**：16-bit 导出跳过降噪（该实现强制 uint8），返回 warning `denoise_skipped_for_16bit`，不生成 8-bit 中间结果；其余调整保持 float32。
 - **预览/代理 16-bit**：预览 JPEG 与代理 PNG 恒为 8-bit；16-bit 源使用独立代理缓存键（追加 `|b16`），避免复用旧截断代理，8-bit 源的缓存键与像素不变。
-- **LUT 类或非 RGB/XYZ ICC 配置（16-bit）**：`lut8/lut16/mAB/mBA/mft`、灰度/Lab 等配置返回 422 `unsupported_icc_profile`，不静默按 sRGB 处理；即使 profile description 含 "sRGB" 也不会绕过结构校验。8-bit 路径仍保持既有的"回退按 sRGB 解释"策略。
+- **LUT 类或非 RGB/XYZ ICC 配置（16-bit）**：`lut8/lut16/mAB/mBA/mft`、ICC v4 `D2B*`/`B2D*`、灰度/Lab 等配置返回 422 `unsupported_icc_profile`，不静默按 sRGB 处理；即使 profile description 含 "sRGB" 也不会绕过结构校验。8-bit 路径仍保持既有的"回退按 sRGB 解释"策略。16-bit CMYK TIFF 不满足 16-bit RGB 解码条件（`mode` 仍是 CMYK），因此回退到 Pillow 8-bit + lcms 组合路径，沿用 8-bit CMYK 的已知限制（不保留 16-bit 精度）。
 - **TIFF associated alpha**：tag 338 含 1（预乘 alpha）的 8-bit/16-bit TIFF 返回 415 `associated_alpha_not_supported`；请先转换为 unassociated alpha。输出端写 `unassalpha`，不会产生该限制。
 - **CMYK 正确显影**：带 RGB 设备空间配置的 CMYK 输入，lcms 组合不合法 → 回退按 Pillow 的 CMYK→RGB 近似转换，实测与参考转换差 **19–23 级**。这是错误输入的兜底，不是 CMYK 支持。
 - **非 RGB 设备空间配置的转换（8-bit）**：灰度 / Lab 配置被显式跳过（`xcolor_space != "RGB"`），按 sRGB 解释。

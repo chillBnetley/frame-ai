@@ -280,7 +280,7 @@ POST /api/v1/settings/providers/reset → 删除覆盖文件 → 按环境变量
 - `AnalysisTaskService.update_providers` 在同一把锁内替换 Provider 与 Orchestrator；已提交的任务持有旧 Orchestrator 并继续执行，新任务读取新快照。去重键仍由生效 Provider 类型、模型与提示词版本生成。
 - 覆盖文件默认是 v2 加密格式（详见下节「密钥加密层」）；GET、错误、日志与测试结果均不含密钥或上游响应正文。测试连接只发送文本提示，不发送图片。
 - 本机覆盖文件与 `.env` 都是服务端配置，前端只持有脱敏视图；修改后无需重启 API。
-- Provider 出站边界由 `ai/net_policy.py` 与 `ai/transport.py::PinnedHttpTransport` 执行：保存/启动只做 URL 语法与字面 IP 分类（不联网），请求前解析 DNS 并校验**每个**结果，任一地址被拒即 fail-closed；连接固定到已校验 IP，HTTPS 仍以原始主机名做 SNI/证书校验，Host 头保留原始主机（非默认端口带端口、IPv6 加方括号）。默认 `public-only` + 禁明文 `http`，本机 Provider 需 `FRAME_PROVIDER_URL_POLICY=allow-local`（明文再加 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`）；元数据/链路本地/组播/保留/未指定地址始终拒绝。传输不经 urllib opener，因此环境代理不能改变请求路径。重定向手写循环最多 5 跳、每跳重新校验，只允许同源；301/302/303 转 GET，307/308 保留 body，`Authorization` 不跨源。
+- Provider 出站边界由 `ai/net_policy.py` 与 `ai/transport.py::PinnedHttpTransport` 执行：保存/启动只做 URL 语法与字面 IP 分类（不联网），保存期额外拒绝 `127.1`/`2130706433`/`0x7f000001`/前导零等 1–4 段全数字主机（不探测 DNS）；请求前解析 DNS 并校验**每个**结果，任一地址被拒即 fail-closed；连接固定到已校验 IP，HTTPS 仍以原始主机名做 SNI/证书校验，Host 头保留原始主机（非默认端口带端口、IPv6 加方括号）。默认 `public-only` + 禁明文 `http`，本机 Provider 需 `FRAME_PROVIDER_URL_POLICY=allow-local`（明文再加 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`）；元数据/链路本地/组播/保留/未指定地址始终拒绝。传输不经 urllib opener，因此环境代理不能改变请求路径。重定向手写循环最多 5 跳、每跳重新校验，只允许同源并保留 path+query；301/302/303 转 GET，307/308 保留 body，`Authorization` 不跨源。
 - 策略拒绝映射为不可重试的 `provider_endpoint_error`，DNS 失败映射为可重试的 `provider_unavailable`；错误文案为固定文本，不含 URL/host/IP/key。`UrllibJsonTransport` 仅为旧测试/显式注入保留，默认工厂不再使用。
 
 ### 密钥加密层（L5 / B6b）

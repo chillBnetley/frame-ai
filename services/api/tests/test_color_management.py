@@ -21,7 +21,7 @@ from PIL import Image, ImageCms, ImageOps
 
 from app.core.errors import AppError
 from app.imaging.curves import apply_curves
-from app.imaging.icc import is_srgb_matrix_trc
+from app.imaging.icc import UnsupportedProfileError, is_srgb_matrix_trc, transform_to_srgb
 from app.imaging.loader import LoadedImage, load_image, load_proxy
 from app.imaging.output import encode_image, to_uint16
 from app.imaging.pipeline import render
@@ -33,6 +33,8 @@ from tests.icc_support import (
     build_display_p3_like_profile,
     build_lut_only_profile,
     build_srgb_matrix_profile,
+    build_srgb_matrix_profile_with_delta,
+    build_structured_lut_profile,
 )
 
 P3_BYTES = build_display_p3_like_profile()
@@ -458,6 +460,84 @@ def test_lcms_srgb_profile_passes_the_structural_check() -> None:
     profile = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
     assert is_srgb_matrix_trc(profile)
     assert not is_srgb_matrix_trc(build_lut_only_profile(description="sRGB compatible"))
+
+
+def _identity_grid() -> NDArray[np.float32]:
+    axis = np.linspace(0.0, 1.0, 17, dtype=np.float32)
+    return np.stack(np.meshgrid(axis, axis, axis, indexing="ij"), axis=-1).reshape(1, -1, 3)
+
+
+def test_identity_shortcut_stays_within_one_eight_bit_level() -> None:
+    grid = _identity_grid()
+    lcms = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+
+    assert is_srgb_matrix_trc(lcms)
+    lcms_error = np.abs(transform_to_srgb(grid, lcms).astype(np.float64) - grid.astype(np.float64))
+    assert float(lcms_error.max() * 255.0) <= 1.0
+
+    exact = build_srgb_matrix_profile()
+    assert is_srgb_matrix_trc(exact)
+    exact_error = np.abs(
+        transform_to_srgb(grid, exact).astype(np.float64) - grid.astype(np.float64)
+    )
+    assert float(exact_error.max() * 255.0) <= 0.1
+
+    # This matrix sits inside the old element-wise tolerance but drifts about
+    # 16 8-bit levels at the dark end, so the composed-sample gate must reject it.
+    drifted = build_srgb_matrix_profile_with_delta((-1, 1, 1, -1, -1, -1, -1, -1, -1))
+    drift_error = np.abs(
+        transform_to_srgb(grid, drifted).astype(np.float64) - grid.astype(np.float64)
+    )
+    assert float(drift_error.max() * 255.0) > 1.0
+    assert not is_srgb_matrix_trc(drifted)
+
+
+@pytest.mark.parametrize("tag", ["D2B0", "D2B3", "B2D0", "B2D3"])
+def test_v4_structured_lut_tags_fail_closed(tag: str) -> None:
+    profile = build_structured_lut_profile(tag)
+    rgb = np.zeros((1, 1, 3), dtype=np.float32)
+
+    assert not is_srgb_matrix_trc(profile)
+    with pytest.raises(UnsupportedProfileError):
+        transform_to_srgb(rgb, profile)
+    with pytest.raises(AppError) as error:
+        load_image(_png16(np.zeros((1, 1, 3), dtype=np.uint16), profile))
+
+    assert error.value.status_code == 422
+    assert error.value.code == "unsupported_icc_profile"
+
+
+@pytest.mark.parametrize(
+    ("function_type", "params"),
+    [
+        (1, (2.2, 1.0, 0.0)),
+        (2, (2.2, 1.0, 0.0, 0.0)),
+    ],
+    ids=["para-1", "para-2"],
+)
+def test_para_1_and_2_match_the_lcms_eight_bit_reference(
+    function_type: int,
+    params: tuple[float, ...],
+) -> None:
+    profile = build_srgb_matrix_profile(trc=_para_tag(function_type, *params))
+    colors = np.array(
+        [(200, 60, 60), (60, 200, 60), (230, 160, 120), (20, 20, 20)],
+        dtype=np.uint16,
+    )
+    loaded = load_image(_png16((colors * 257)[None], profile))
+    reference = np.asarray(
+        ImageCms.profileToProfile(
+            Image.fromarray(colors.astype(np.uint8)[None], "RGB"),
+            ImageCms.ImageCmsProfile(io.BytesIO(profile)),
+            SRGB,
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode="RGB",
+            flags=ImageCms.Flags.BLACKPOINTCOMPENSATION,
+        ),
+        dtype=np.float32,
+    )
+
+    assert float(np.abs(loaded.rgb * 255.0 - reference).max()) <= 1.0
 
 
 @pytest.mark.parametrize(

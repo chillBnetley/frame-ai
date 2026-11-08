@@ -19,7 +19,7 @@ from app.ai.providers.openai_compatible import OpenAICompatiblePlannerProvider
 from app.ai.transport import HttpResponse
 from app.core.config import Settings
 from app.main import create_app
-from app.services.provider_settings_service import SETTINGS_FILENAME
+from app.services.provider_settings_service import SETTINGS_FILENAME, ProviderSettingsService
 from app.services.secret_store import (
     MASTER_KEY_FILENAME,
     InMemoryMasterKeyStore,
@@ -93,6 +93,27 @@ def _write_saved(settings: Settings, payload: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def test_settings_document_is_parsed_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    settings = _settings(tmp_path)
+    path = _write_saved(settings, {"version": 2, "planner": {"model": "planner-model"}})
+    real_read_text = Path.read_text
+    reads: list[Path] = []
+
+    def counting(self: Path, *args: Any, **kwargs: Any) -> str:
+        if self == path:
+            reads.append(self)
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", counting)
+
+    ProviderSettingsService(settings)
+
+    assert len(reads) == 1
 
 
 def test_get_reports_mock_defaults_without_exposing_keys(client: TestClient):
@@ -737,6 +758,36 @@ def test_disallowed_provider_urls_are_rejected_without_saving(
     assert fields[0]["rule"] == "invalid_url"
     assert base_url not in response.text
     assert not _saved_path(settings).exists()
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["127.1", "2130706433", "0x7f000001", "0177.0.0.1"],
+)
+def test_legacy_numeric_provider_hosts_are_rejected_without_saving(
+    client: TestClient,
+    settings: Settings,
+    host: str,
+):
+    response = client.post(
+        PREFIX,
+        json={"vision": _local_openai(f"https://{host}/v1")},
+    )
+
+    assert response.status_code == 422, response.text
+    fields = response.json()["error"]["details"]["fields"]
+    assert [entry["field"] for entry in fields] == ["vision.baseUrl"]
+    assert fields[0]["rule"] == "invalid_url"
+    assert not _saved_path(settings).exists()
+
+
+def test_numeric_looking_domains_still_save(client: TestClient):
+    for host in ("1.2.3.4.example.com", "123.com"):
+        response = client.post(
+            PREFIX,
+            json={"vision": _local_openai(f"https://{host}/v1")},
+        )
+        assert response.status_code == 200, response.text
 
 
 def test_rejected_provider_url_is_not_logged(

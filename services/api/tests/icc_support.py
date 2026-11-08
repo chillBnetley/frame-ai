@@ -170,6 +170,69 @@ def build_srgb_matrix_profile(
     return _icc_profile(tags)
 
 
+def build_srgb_matrix_profile_with_delta(
+    signs: tuple[int, ...],
+    *,
+    step: float = 32.0 / 65536.0,
+) -> bytes:
+    """An sRGB matrix/TRC profile whose matrix entries are displaced by ``signs``.
+
+    Each of the nine matrix entries is ``sRGB + sign * step``; the tolerance
+    tests use this to construct a profile that is still structurally accepted
+    but whose composed transform drifts from identity.
+    """
+    matrix = (
+        np.array(
+            [
+                [0.4360747, 0.3850649, 0.1430804],
+                [0.2225045, 0.7168786, 0.0606169],
+                [0.0139322, 0.0971045, 0.7141733],
+            ],
+            dtype=np.float64,
+        )
+        + np.array(signs, dtype=np.float64).reshape(3, 3) * step
+    )
+    curve = _srgb_para_tag()
+    tags = {
+        b"desc": _desc_tag("Perturbed sRGB matrix"),
+        b"rXYZ": _xyz_tag(*matrix[:, 0].tolist()),
+        b"gXYZ": _xyz_tag(*matrix[:, 1].tolist()),
+        b"bXYZ": _xyz_tag(*matrix[:, 2].tolist()),
+        b"rTRC": curve,
+        b"gTRC": curve,
+        b"bTRC": curve,
+    }
+    return _icc_profile(tags)
+
+
+def build_structured_lut_profile(tag: str = "D2B0") -> bytes:
+    """An exact sRGB matrix/TRC profile plus one v4 ``D2B*``/``B2D*`` tag.
+
+    The tag payload is never parsed: the structured tag signature alone must
+    make the profile fail closed instead of falling into the matrix/TRC path.
+    """
+    matrix = np.array(
+        [
+            [0.4360747, 0.3850649, 0.1430804],
+            [0.2225045, 0.7168786, 0.0606169],
+            [0.0139322, 0.0971045, 0.7141733],
+        ],
+        dtype=np.float64,
+    )
+    curve = _srgb_para_tag()
+    tags = {
+        b"desc": _desc_tag("Structured LUT profile"),
+        b"rXYZ": _xyz_tag(*matrix[:, 0].tolist()),
+        b"gXYZ": _xyz_tag(*matrix[:, 1].tolist()),
+        b"bXYZ": _xyz_tag(*matrix[:, 2].tolist()),
+        b"rTRC": curve,
+        b"gTRC": curve,
+        b"bTRC": curve,
+        tag.encode("latin-1"): b"mAB " + b"\0" * 12,
+    }
+    return _icc_profile(tags)
+
+
 def build_adobe_rgb_like_profile(*, parametric: bool = False) -> bytes:
     """An Adobe RGB (1998)-like matrix/TRC profile with gamma 2.2.
 

@@ -3,8 +3,8 @@
 Pillow's ``ImageCms`` cannot transform 16-bit RGB samples without going through
 an 8-bit image, so the 16-bit decoder applies the profile here instead.  Only
 the ICC v2/v4 matrix/TRC model is supported: ``rXYZ``/``gXYZ``/``bXYZ`` plus
-``rTRC``/``gTRC``/``bTRC``.  LUT-based profiles (``A2B*``/``B2A*``/``mAB``/
-``mBA``/``mft*``) and non-RGB or non-XYZ profiles raise
+``rTRC``/``gTRC``/``bTRC``.  LUT-based profiles (``A2B*``/``B2A*``/``D2B*``/
+``B2D*``/``mAB``/``mBA``/``mft*``) and non-RGB or non-XYZ profiles raise
 ``UnsupportedProfileError`` instead of being silently treated as sRGB.
 """
 
@@ -41,6 +41,14 @@ _LUT_SIGNATURES = {
     "B2A0",
     "B2A1",
     "B2A2",
+    "D2B0",
+    "D2B1",
+    "D2B2",
+    "D2B3",
+    "B2D0",
+    "B2D1",
+    "B2D2",
+    "B2D3",
     "mAB ",
     "mBA ",
     "mft1",
@@ -53,6 +61,11 @@ _REQUIRED_SIGNATURES = ("rXYZ", "gXYZ", "bXYZ", "rTRC", "gTRC", "bTRC")
 # largest component differs from the standard values below by about 2.6e-4.
 _SRGB_MATRIX_TOLERANCE = 5e-4
 _SRGB_TRC_TOLERANCE = 2e-4
+# The identity shortcut must not shift a sample by more than one 8-bit level.
+# The element-wise tolerances above are only a cheap pre-filter; the final gate
+# samples the composed transform on a 17^3 RGB grid.
+_IDENTITY_MAX_ERROR = np.float32(1.0 / 255.0)
+_IDENTITY_SAMPLE_STEPS = 17
 
 
 class UnsupportedProfileError(ValueError):
@@ -120,7 +133,8 @@ def _tag_bytes(profile: bytes, tags: dict[str, tuple[int, int]], signature: str)
 
 def _has_lut_tag(tags: dict[str, tuple[int, int]]) -> bool:
     return any(
-        signature in _LUT_SIGNATURES or signature.startswith(("A2B", "B2A", "mft", "mAB", "mBA"))
+        signature in _LUT_SIGNATURES
+        or signature.startswith(("A2B", "B2A", "D2B", "B2D", "mft", "mAB", "mBA"))
         for signature in tags
     )
 
@@ -237,13 +251,15 @@ def _srgb_decode(encoded: NDArray[np.float32]) -> NDArray[np.float32]:
 
 
 def is_srgb_matrix_trc(raw: bytes) -> bool:
-    """Return True only for a structurally valid sRGB matrix/TRC profile.
+    """Return True only when treating the profile as sRGB is visually exact.
 
     This is the safe identity shortcut for 16-bit input.  It deliberately does
     not trust the profile description: the header, tag table, LUT signatures,
     matrices and TRC tables must all pass the same bounded parser used by
-    ``transform_to_srgb``.  Any parse failure or unexpected colour-space tag
-    means the profile is not eligible for the shortcut.
+    ``transform_to_srgb``, and the composed transform must stay within one
+    8-bit level of identity on a 17^3 RGB sample.  Any parse failure, LUT
+    signature, or unexpected colour-space tag means the profile is not eligible
+    for the shortcut (it is then converted instead of rejected).
     """
     try:
         tags = _read_tag_table(raw)
@@ -273,6 +289,7 @@ def is_srgb_matrix_trc(raw: bytes) -> bool:
             return False
 
         reference = _srgb_decode(np.linspace(0.0, 1.0, 65536, dtype=np.float32))
+        curves: list[_Curve] = []
         for signature in ("rTRC", "gTRC", "bTRC"):
             curve = _parse_curve(_tag_bytes(raw, tags, signature), signature)
             if curve.table.shape != reference.shape:
@@ -284,8 +301,21 @@ def is_srgb_matrix_trc(raw: bytes) -> bool:
                 atol=_SRGB_TRC_TOLERANCE,
             ):
                 return False
-        return True
-    except Exception:
+            curves.append(curve)
+
+        sample = np.linspace(0.0, 1.0, _IDENTITY_SAMPLE_STEPS, dtype=np.float32)
+        grid = np.stack(np.meshgrid(sample, sample, sample, indexing="ij"), axis=-1).reshape(
+            1, -1, 3
+        )
+        linear = np.stack(
+            [curve.apply(grid[..., index]) for index, curve in enumerate(curves)],
+            axis=-1,
+        )
+        converted = _srgb_encode(
+            np.asarray(linear @ matrix.T @ _XYZ_TO_SRGB_D50.T, dtype=np.float32)
+        )
+        return bool(np.all(np.abs(converted - grid) <= _IDENTITY_MAX_ERROR))
+    except (ValueError, TypeError, struct.error):
         # A predicate must never turn malformed metadata into an identity
         # shortcut; the caller then falls back to transform_to_srgb, whose
         # detailed error is reported as 422 unsupported_icc_profile.

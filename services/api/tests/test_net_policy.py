@@ -8,9 +8,11 @@ from app.ai.net_policy import (
     EndpointPolicyError,
     EndpointResolutionError,
     ProviderEndpointPolicy,
+    is_legacy_numeric_ipv4,
     parse_endpoint,
     resolve_and_validate,
     validate_for_save,
+    validate_host_for_save,
 )
 
 PUBLIC_ONLY = ProviderEndpointPolicy()
@@ -139,6 +141,59 @@ def test_saving_a_dns_name_never_resolves(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(socket, "getaddrinfo", fail)
 
     validate_for_save(parse_endpoint("https://api.example.com/v1"), PUBLIC_ONLY)
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "127.1",
+        "2130706433",
+        "0x7f000001",
+        "0X7F000001",
+        "0177.0.0.1",
+        "1.2.3.04",
+        "0",
+        "1.2.3.256",
+        "0x7f.0.0.1",
+    ],
+)
+def test_legacy_numeric_ipv4_spellings_are_rejected_at_save(host: str):
+    endpoint = parse_endpoint(f"https://{host}/v1")
+
+    assert is_legacy_numeric_ipv4(host)
+    with pytest.raises(EndpointPolicyError):
+        validate_host_for_save(endpoint.host)
+    # Request-time validation is unchanged; it still only classifies literals.
+    validate_for_save(endpoint, PUBLIC_ONLY)
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["1.2.3.4.example.com", "123.com", "example.123", "1e2.com", "a.1"],
+)
+def test_numeric_looking_domains_are_not_flagged(host: str):
+    assert not is_legacy_numeric_ipv4(host)
+    validate_host_for_save(host)
+
+
+def test_canonical_dotted_quad_is_left_to_the_policy():
+    assert not is_legacy_numeric_ipv4("127.0.0.1")
+    validate_host_for_save("127.0.0.1")
+    validate_for_save(parse_endpoint("https://127.0.0.1/v1"), ALLOW_LOCAL)
+
+    with pytest.raises(EndpointPolicyError):
+        validate_for_save(parse_endpoint("https://127.0.0.1/v1"), PUBLIC_ONLY)
+
+
+def test_only_redirecting_urls_may_carry_a_query():
+    with pytest.raises(EndpointPolicyError):
+        parse_endpoint("https://api.example.com/v1?key=value")
+
+    parsed = parse_endpoint("https://api.example.com/v1?key=value", allow_query=True)
+    assert parsed.query == "key=value"
+    assert parsed.path == "/v1"
+    with pytest.raises(EndpointPolicyError):
+        parse_endpoint("https://api.example.com/v1?bad=\x01", allow_query=True)
 
 
 @pytest.mark.parametrize(

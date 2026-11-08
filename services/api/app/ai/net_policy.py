@@ -11,6 +11,7 @@ from typing import Any
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 _MAX_HOST_LENGTH = 253
 _HOST_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+_LEGACY_V4_PART = re.compile(r"^(?:0[xX][0-9A-Fa-f]+|[0-9]+)$")
 
 _V4_LOCAL_NETWORKS = (
     ipaddress.ip_network("10.0.0.0/8"),
@@ -46,6 +47,7 @@ class ParsedEndpoint:
     port: int
     path: str
     host_header: str
+    query: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,8 +71,12 @@ class EndpointResolutionError(RuntimeError):
     """The host could not be resolved to usable addresses."""
 
 
-def parse_endpoint(url: str) -> ParsedEndpoint:
-    """Parse and normalise an absolute provider URL without any network access."""
+def parse_endpoint(url: str, *, allow_query: bool = False) -> ParsedEndpoint:
+    """Parse and normalise an absolute provider URL without any network access.
+
+    ``allow_query`` is only used when following same-origin redirects; saved
+    provider base URLs must not carry a query string.
+    """
 
     if not isinstance(url, str) or not url:
         raise EndpointPolicyError(_INVALID_URL)
@@ -91,7 +97,9 @@ def parse_endpoint(url: str) -> ParsedEndpoint:
 
     if scheme not in _DEFAULT_PORTS:
         raise EndpointPolicyError(_INVALID_URL)
-    if parts.fragment or parts.query:
+    if parts.fragment or (parts.query and not allow_query):
+        raise EndpointPolicyError(_INVALID_URL)
+    if any(ord(character) < 0x21 or ord(character) > 0x7E for character in parts.query):
         raise EndpointPolicyError(_INVALID_URL)
     if "@" in parts.netloc or parts.username is not None or parts.password is not None:
         raise EndpointPolicyError(_INVALID_URL)
@@ -119,6 +127,7 @@ def parse_endpoint(url: str) -> ParsedEndpoint:
         port=port,
         path=path,
         host_header=_host_header(host, port, scheme),
+        query=parts.query,
     )
 
 
@@ -131,6 +140,40 @@ def validate_for_save(endpoint: ParsedEndpoint, policy: ProviderEndpointPolicy) 
     literal = _literal_address(endpoint.host)
     if literal is not None and not _is_allowed(literal, policy):
         raise EndpointPolicyError(_NOT_ALLOWED)
+
+
+def validate_host_for_save(host: str) -> None:
+    """Reject legacy numeric IPv4 spellings when saving settings.
+
+    Browsers and some resolvers accept ``127.1``, ``2130706433``,
+    ``0x7f000001`` and octal/leading-zero forms as IPv4 addresses, while the
+    runtime policy only classifies canonical literals. Refusing them at save
+    time keeps the persisted configuration unambiguous without probing DNS.
+    Request-time validation is deliberately unchanged.
+    """
+
+    if is_legacy_numeric_ipv4(host):
+        raise EndpointPolicyError(_NOT_ALLOWED)
+
+
+def is_legacy_numeric_ipv4(host: str) -> bool:
+    """True for 1-4 all-numeric labels that are not a canonical IPv4 literal.
+
+    Domains that contain a non-numeric label (``123.com``,
+    ``1.2.3.4.example.com``) are not affected, and a canonical dotted quad is
+    left to the policy check so ``allow-local`` can still accept it.
+    """
+
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        return False
+    parts = host.split(".")
+    if not 1 <= len(parts) <= 4:
+        return False
+    return all(_LEGACY_V4_PART.match(part) for part in parts)
 
 
 def resolve_and_validate(
@@ -261,7 +304,9 @@ __all__ = [
     "ParsedEndpoint",
     "PinnedEndpoint",
     "ProviderEndpointPolicy",
+    "is_legacy_numeric_ipv4",
     "parse_endpoint",
     "resolve_and_validate",
     "validate_for_save",
+    "validate_host_for_save",
 ]

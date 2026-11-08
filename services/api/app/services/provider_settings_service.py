@@ -16,6 +16,7 @@ from app.ai.net_policy import (
     ProviderEndpointPolicy,
     parse_endpoint,
     validate_for_save,
+    validate_host_for_save,
 )
 from app.ai.transport import JsonHttpClient
 from app.core.config import Settings
@@ -93,11 +94,12 @@ class ProviderSettingsService:
         self._on_change: Callable[[ProviderBundle], None] | None = None
         self._encryption = base_settings.provider_settings_encryption
         self._secret_box = secret_box
-        # A master key may only be minted when no saved ciphertext depends on one.
-        # Deciding this before _load() keeps a deleted key from being silently
-        # replaced during startup decryption.
-        self._allow_key_create = self._may_create_master_key()
-        self._stored, legacy_document = self._load()
+        # Read and parse once: deciding whether a key may be created and loading
+        # the settings must observe the same document, even if the file changes
+        # concurrently after startup begins.
+        exists, document, document_error = self._read_document()
+        self._allow_key_create = self._may_create_master_key(exists, document, document_error)
+        self._stored, legacy_document = self._load(exists, document, document_error)
         effective = self._effective_settings(self._stored)
         self._validate_effective(self._stored, raising=ProviderConfigurationError)
         self._bundle = self._build_bundle(effective)
@@ -127,7 +129,22 @@ class ProviderSettingsService:
             )
         return self._secret_box
 
-    def _may_create_master_key(self) -> bool:
+    def _read_document(self) -> tuple[bool, Any, Exception | None]:
+        """Return ``(exists, document, error)`` with a single file read."""
+
+        if not self._path.exists():
+            return False, None, None
+        try:
+            return True, json.loads(self._path.read_text(encoding="utf-8")), None
+        except (OSError, ValueError) as exc:
+            return True, None, exc
+
+    def _may_create_master_key(
+        self,
+        exists: bool,
+        document: Any,
+        error: Exception | None,
+    ) -> bool:
         """Forbid minting a key when the stored document already holds ciphertext.
 
         A missing master key must mean "re-enter the API keys", never "generate a
@@ -136,11 +153,9 @@ class ProviderSettingsService:
         created normally.
         """
 
-        if not self._path.exists():
+        if not exists:
             return True
-        try:
-            document = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        if error is not None:
             # Unreadable documents fail closed in _load() before any crypto runs.
             return False
         if not isinstance(document, dict) or document.get("version") != 2:
@@ -265,17 +280,20 @@ class ProviderSettingsService:
             planner=results["planner"],
         )
 
-    def _load(self) -> tuple[StoredProviderSettings, bool]:
+    def _load(
+        self,
+        exists: bool,
+        document: Any,
+        error: Exception | None,
+    ) -> tuple[StoredProviderSettings, bool]:
         """Return the in-memory domain plus whether a legacy v1 file needs migration."""
 
-        if not self._path.exists():
+        if not exists:
             return StoredProviderSettings(), False
-        try:
-            document = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
+        if error is not None:
             logger.error(
                 "provider_settings_load_failed error_type=%s",
-                type(exc).__name__,
+                type(error).__name__,
             )
             raise ProviderConfigurationError(
                 "The saved provider settings could not be loaded."
@@ -648,7 +666,9 @@ def _apply_entry_patch(
         issues.append((f"{kind}.model", "invalid_characters", "Must not contain newlines."))
     if entry.base_url:
         try:
-            validate_for_save(parse_endpoint(entry.base_url), policy)
+            endpoint = parse_endpoint(entry.base_url)
+            validate_for_save(endpoint, policy)
+            validate_host_for_save(endpoint.host)
         except EndpointPolicyError:
             issues.append(
                 (

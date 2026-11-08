@@ -588,8 +588,8 @@ B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD
 
 - `apiKeySource ∈ {saved, environment, none}`；任何响应都不会包含 API Key 本身。
 - 保存请求可只带一个 Provider。字段缺省或 `null` 表示保持当前值；`apiKey` 为空字符串表示保持已保存密钥；`clearApiKey=true` 删除本地保存的密钥。`apiKey` 非空与 `clearApiKey=true` 同时出现返回 422 `validation_error`。
-- 选择 `openai` 时，模型名、Base URL 与 API Key 必须有值（本地保存或环境变量）；Base URL 必须是 `http(s)` 绝对地址，且通过 Provider 网络策略：默认只允许公网 HTTPS，拒绝私网/回环/链路本地/云元数据/`0.0.0.0/8`/组播/保留/未指定地址、userinfo、query/fragment、非法端口与 CR/LF/空白。字面 IP 在保存时分类；DNS 名保存时只做语法校验，不触发网络。本机 Provider 需在服务端设置 `FRAME_PROVIDER_URL_POLICY=allow-local`，明文 `http://127.0.0.1:...` 还需 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`；放行本机后元数据/链路本地/组播/保留地址仍被拒绝。缺失/非法字段返回 422 `invalid_provider_settings`，`details.fields` 与请求体校验同构（对象数组 `{field, rule, limit, message}`，`rule ∈ {missing, invalid_url, invalid_characters}`），响应不回显 Base URL 或 IP，不改变已生效配置。
-- 请求期会重新解析并校验 DNS 的**每个**结果（任一被拒即失败），连接固定到已校验 IP，防止 DNS 重绑定；环境代理 `HTTP_PROXY`/`HTTPS_PROXY` 不生效。重定向最多 5 跳且只允许同源：跨源与 `https → http` 降级返回不可重试的 `provider_endpoint_error`，`Authorization` 不跨源；301/302/303 转 GET，307/308 保留 body。DNS 解析失败返回可重试的 `provider_unavailable`。
+- 选择 `openai` 时，模型名、Base URL 与 API Key 必须有值（本地保存或环境变量）；Base URL 必须是 `http(s)` 绝对地址，且通过 Provider 网络策略：默认只允许公网 HTTPS，拒绝私网/回环/链路本地/云元数据/`0.0.0.0/8`/组播/保留/未指定地址、userinfo、query/fragment、非法端口与 CR/LF/空白。字面 IP 在保存时分类；DNS 名保存时只做语法校验、不触发网络。保存期还拒绝遗留数字 IPv4 写法（`127.1`、`2130706433`、`0x7f000001`、八进制/前导零等 1–4 段全数字主机），不探测 DNS；含字母标签的真实域名与 ≤255 的正经 dotted-quad 不受影响（后者仍按 `allow-local` 策略）。本机 Provider 需在服务端设置 `FRAME_PROVIDER_URL_POLICY=allow-local`，明文 `http://127.0.0.1:...` 还需 `FRAME_PROVIDER_ALLOW_INSECURE_HTTP=true`；放行本机后元数据/链路本地/组播/保留地址仍被拒绝。缺失/非法字段返回 422 `invalid_provider_settings`，`details.fields` 与请求体校验同构（对象数组 `{field, rule, limit, message}`，`rule ∈ {missing, invalid_url, invalid_characters}`），响应不回显 Base URL 或 IP，不改变已生效配置。
+- 请求期会重新解析并校验 DNS 的**每个**结果（任一被拒即失败），连接固定到已校验 IP，防止 DNS 重绑定；环境代理 `HTTP_PROXY`/`HTTPS_PROXY` 不生效。重定向最多 5 跳且只允许同源：同源跳转保留 path+query，跨源与 `https → http` 降级返回不可重试的 `provider_endpoint_error`，`Authorization` 不跨源；301/302/303 转 GET，307/308 保留 body。DNS 解析失败返回可重试的 `provider_unavailable`。
 - **`planner` 逐字段回退决策 Provider**：没有保存过 planner 字段时，`planner` 视图的 `provider`、`model`、`baseUrl`、`apiKey` 分别跟随**当前生效的 decision**（含已保存的 decision 覆盖），而不是只读环境变量；`planner.apiKeySource` 因此可能显示 `saved`/`environment`/`none`，与 decision 一致。只保存 `planner.model` 时其余字段仍逐项回退；清空 planner 字段（提交空字符串）恢复为跟随 decision；显式保存 `planner.provider="mock"` 不会被 decision 的 `openai` 覆盖，此时模型名为 `mock-planner`（除非显式保存了 planner 模型名）。planner 独立配置的数值项（超时、重试、修复次数）同理优先 `FRAME_PLANNER_*`，否则跟随 `FRAME_DECISION_*`。
 - 顶层 `isMock` 仍只由 vision/decision 的 Mock 状态决定；planner 是否 Mock 以 `planner.provider` 为准（planner 独立为 `mock` 不会把整个分析链标成 Mock）。
 - 保存成功后原子写入 `<FRAME_DATA_DIR>/provider-settings.json`，并热替换 Provider：新创建的分析任务使用新配置，已开始的任务继续使用旧 Provider。保存失败不会替换运行时配置。旧版覆盖文件没有 `planner` 分组时按“未配置”读取，行为与此前复用 decision 时一致。
@@ -749,8 +749,9 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | `mime_mismatch` | 415 | 声明 MIME 与真实格式不符 |
 | `animated_not_supported` | 415 | 多帧图片 |
 | `unsupported_tiff_compression` | 415 | TIFF 使用 LZW/JPEG 等未支持压缩（仅接受未压缩与 Deflate） |
+| `associated_alpha_not_supported` | 415 | TIFF 使用 associated（预乘）alpha；只接受 unassociated alpha |
 | `tiff_multipage_not_supported` | 415 | TIFF 含多页/多帧 |
-| `unsupported_icc_profile` | 422 | 16-bit 输入的 ICC 为 LUT/non-RGB/XYZ 或超出解析边界，不做静默降级 |
+| `unsupported_icc_profile` | 422 | 16-bit 输入的 ICC 为 LUT/结构化（`A2B*`/`B2A*`/`D2B*`/`B2D*`/`mAB`/`mBA`/`mft*`）/non-RGB/XYZ 或超出解析边界，不做静默降级 |
 | `unsupported_bit_depth` | 422 | 导出服务的保护性错误（绕过 HTTP 模型直接调用）；HTTP 入口的 JPEG+16 组合统一返回 `validation_error` |
 | `validation_error` | 422 | 字段校验失败（含未知字段 `extra_forbidden`），`details.fields` 给出字段、规则与限制 |
 | `storage_error` | 500 | 原图或登记写入失败 |
