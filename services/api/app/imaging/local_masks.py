@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import cv2
@@ -14,6 +15,7 @@ from app.imaging.color_ops import apply_color
 from app.imaging.geometry import crop_bounds, rotation_matrix, rotation_target_size
 from app.imaging.local import apply_clarity
 from app.imaging.params_map import ENGINE_VERSION, LOCAL_MASK_CHUNK_PIXELS
+from app.imaging.semantic_mattes import read_matte
 from app.imaging.tone import (
     apply_contrast,
     apply_tone_linear,
@@ -170,6 +172,11 @@ def _cache_key(
     return (
         ENGINE_VERSION,
         str(mask.shape),
+        str(mask.source),
+        str(mask.semantic_class),
+        str(mask.matte_id),
+        str(mask.matte_sha256),
+        str(mask.model_version),
         float(mask.x),
         float(mask.y),
         float(mask.width),
@@ -187,6 +194,14 @@ def _cache_key(
 
 
 _mask_cache: MaskWeightCache | None = None
+_semantic_mattes_dir: Path | None = None
+
+
+def configure_semantic_mattes(directory: Path | None) -> None:
+    """Set the process-wide matte store used by semantic mask weights."""
+
+    global _semantic_mattes_dir
+    _semantic_mattes_dir = directory
 
 
 def mask_weights(
@@ -225,6 +240,103 @@ def mask_weights(
     weights.setflags(write=False)
     if cache is not None:
         cache.put(key, weights)
+    return weights
+
+
+def semantic_mask_weights(
+    mask: UserMask,
+    *,
+    output_width: int,
+    output_height: int,
+    source_width: int,
+    source_height: int,
+    rotation_deg: float,
+    crop: Crop | None,
+) -> NDArray[np.float32] | None:
+    """Sample a stored semantic matte in source-normalized coordinates."""
+
+    root = _semantic_mattes_dir
+    if root is None or mask.matte_id is None or mask.matte_sha256 is None:
+        return None
+    key = _cache_key(
+        mask,
+        output_width=output_width,
+        output_height=output_height,
+        source_width=source_width,
+        source_height=source_height,
+        rotation_deg=rotation_deg,
+        crop=crop,
+    )
+    cache = _mask_cache
+    if cache is not None:
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+    matte = read_matte(root, mask.matte_id, mask.matte_sha256)
+    if matte is None:
+        return None
+    weights = _sample_semantic_weights(
+        mask,
+        matte,
+        output_width=output_width,
+        output_height=output_height,
+        source_width=source_width,
+        source_height=source_height,
+        rotation_deg=rotation_deg,
+        crop=crop,
+    )
+    weights.setflags(write=False)
+    if cache is not None:
+        cache.put(key, weights)
+    return weights
+
+
+def _sample_semantic_weights(
+    mask: UserMask,
+    matte: NDArray[np.uint8],
+    *,
+    output_width: int,
+    output_height: int,
+    source_width: int,
+    source_height: int,
+    rotation_deg: float,
+    crop: Crop | None,
+) -> NDArray[np.float32]:
+    target_width, target_height = rotation_target_size(source_width, source_height, rotation_deg)
+    x0, y0, x1, y1 = crop_bounds(crop, target_width, target_height)
+    if x1 - x0 != output_width or y1 - y0 != output_height:
+        raise ValueError("mask geometry does not match the output dimensions")
+
+    matrix = rotation_matrix(source_width, source_height, rotation_deg, target_width, target_height)
+    inverse = np.asarray(cv2.invertAffineTransform(matrix), dtype=np.float64)
+    matte_height, matte_width = matte.shape
+    matte_scale_x = np.float32(max(matte_width - 1, 0))
+    matte_scale_y = np.float32(max(matte_height - 1, 0))
+
+    weights = np.zeros((output_height, output_width), dtype=np.float32)
+    chunk_rows = max(1, LOCAL_MASK_CHUNK_PIXELS // max(output_width, 1))
+    xs = np.arange(x0, x0 + output_width, dtype=np.float64)
+    for start in range(0, output_height, chunk_rows):
+        end = min(start + chunk_rows, output_height)
+        ys = np.arange(y0 + start, y0 + end, dtype=np.float64)
+        source_x = inverse[0, 0] * xs[None, :] + inverse[0, 1] * ys[:, None] + inverse[0, 2]
+        source_y = inverse[1, 0] * xs[None, :] + inverse[1, 1] * ys[:, None] + inverse[1, 2]
+        px = ((source_x + 0.5) / source_width).astype(np.float32)
+        py = ((source_y + 0.5) / source_height).astype(np.float32)
+        sampled = cv2.remap(
+            matte,
+            px * matte_scale_x,
+            py * matte_scale_y,
+            interpolation=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
+        )
+        weights[start:end] = sampled.astype(np.float32) / np.float32(255.0)
+
+    if mask.inverted:
+        np.subtract(np.float32(1.0), weights, out=weights)
+    if mask.opacity != 100:
+        weights *= np.float32(mask.opacity / 100.0)
     return weights
 
 
@@ -329,7 +441,7 @@ def apply_local_adjustments(
 ) -> tuple[RgbArray, tuple[str, ...]]:
     masks_by_id = {mask.id: mask for mask in masks}
     result = rgb
-    warnings = local_adjustment_warnings(local_adjustments, masks)
+    warnings = list(local_adjustment_warnings(local_adjustments, masks))
 
     for item in sorted(local_adjustments, key=lambda entry: (entry.order, entry.id)):
         if not item.enabled or item.opacity == 0 or not _has_adjustments(item):
@@ -353,15 +465,31 @@ def apply_local_adjustments(
         if mask is None:
             continue
 
-        weights = mask_weights(
-            mask,
-            output_width=result.shape[1],
-            output_height=result.shape[0],
-            source_width=source_width,
-            source_height=source_height,
-            rotation_deg=rotation_deg,
-            crop=crop,
-        )
+        if mask.source == "semantic":
+            weights = semantic_mask_weights(
+                mask,
+                output_width=result.shape[1],
+                output_height=result.shape[0],
+                source_width=source_width,
+                source_height=source_height,
+                rotation_deg=rotation_deg,
+                crop=crop,
+            )
+            if weights is None:
+                warning = f"local_matte_missing:{mask.matte_id}"
+                if warning not in warnings:
+                    warnings.append(warning)
+                continue
+        else:
+            weights = mask_weights(
+                mask,
+                output_width=result.shape[1],
+                output_height=result.shape[0],
+                source_width=source_width,
+                source_height=source_height,
+                rotation_deg=rotation_deg,
+                crop=crop,
+            )
         if not bool(weights.any()):
             continue
 

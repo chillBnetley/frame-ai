@@ -214,6 +214,7 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `masks` | 最多 20 项；`id` 匹配 `^mask_[A-Za-z0-9_-]{1,58}$` 且唯一；`shape` 为 `rectangle` 或 `ellipse`；`source` 固定 `user`；`coordinateSpace` 固定 `source-normalized`；最多 4 位小数 |
 | `masks[].x/y` | 0…1；`masks[].width/height` 为 (0,1]；`x+width≤1`、`y+height≤1` |
 | `masks[].feather/opacity` | 0…100，默认分别为 15 / 100；`inverted` 必须是布尔值 |
+| `masks[].source` | `user`（默认）或 `semantic`；语义蒙版必须 `shape:"semantic"`、几何全图 `x=y=0,w=h=1`，并提供 `semanticClass`（person/sky）、`matteId`/`matteSha256`（64 位小写 hex）与 `modelVersion`；`feather` 对语义蒙版忽略，`opacity/inverted` 生效 |
 | `localAdjustments` | 最多 20 项；`id` 匹配 `^local_[A-Za-z0-9_-]{1,58}$` 且唯一；`maskId` 为 `full` 或 `mask_*`；`enabled` 必须是布尔值 |
 | `localAdjustments[].name` | 可选字符串，≤200；只读展示，**不参与像素身份/哈希** |
 | `localAdjustments[].blendMode` | `normal`（默认）/`multiply`/`screen`/`overlay` |
@@ -237,11 +238,11 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 - 曲线语义：空数组表示恒等；单点被拒绝；通道按 Master → Red → Green → Blue 依次应用；使用 Fritsch–Carlson 单调三次 Hermite 预计算 8192 格点 LUT 并在格点间线性插值（与逐点 Hermite 最大偏差实测 0.000918，低于半个 8-bit 级），首末节点之外按**端点斜率线性外推**后截断到 `[0,1]`（不再保持端点值），因此悬空曲线不会把暗部/高光压平。曲线在对比度之后、饱和度/自然饱和度之前执行，作用在 sRGB 编码值上。
 - HSL 语义：八个色带中心为 0°/30°/60°/120°/180°/240°/285°/330°（红/橙/黄/绿/青/蓝/紫/洋红），相邻中心之间用 smoothstep 权重平滑过渡并在 0°/360° 首尾相接。由于中心不等距，每条带的有效范围（到相邻中心为止）不同：红 330°–30°（60°）、橙 0°–60°（60°）、黄 30°–120°（90°）、绿 60°–180°（120°）、青 120°–240°（120°）、蓝 180°–285°（105°）、紫 240°–330°（90°）、洋红 285°–30°（105°）；同值滑块在窄带上的覆盖范围小、在宽带上的覆盖范围大，这是保持既有配方观感的代价。`hue` 为相对色相偏移，`saturation` 为色度缩放（−100 变为灰色、+100 最多加倍），`luminance` 为明度增益（±100 对应 ±1 EV），结果截断到合法范围。色相偏移受**单调性上限**约束：相邻带心间距越小，允许的两带偏移差越小（约束为 `|ΔH_i − ΔH_j| ≤ gap·0.95/1.5`，超出的部分对半分给这一对），因此 30° 间距上的单个色带 `hue` 约在 ±20° 后不再增加，60° 间距约 ±40°；这保证了输出不会出现局部色相反序或等色轮廓带。低色度门控分两档：`hue` 在 `max−min` 0.02→0.10 上渐入（色相在色度趋零时无定义），`saturation/luminance` 在 0.005→0.03 上渐入，因此皮肤、天空与浅色背景上的明度/饱和度滑块仍然有效；完全无彩色像素不受影响，全部为 0 时恒等。HSL 在曲线之后、饱和度/自然饱和度之前执行。
 - 颜色分级语义：按 Rec.709 亮度把像素平滑分配到阴影 / 中间调 / 高光，三个权重恒和为 1；`hue` 为色偏方向，`saturation` 为该区域强度（0…100），`balance` 平移亮度锚点（±100 对应 ±0.25），`blending` 控制区域过渡宽度（0…100 映射到 0.08–0.60）。色偏使用零亮度方向向量，并把向量**等比缩放到刚好不越出 `[0,1]`**（不再逐通道裁剪），因此输出亮度严格等于输入亮度，越界像素只是分级力度减弱；三个区域强度均为 0 时恒等。颜色分级在饱和度/自然饱和度之后、清晰度/暗角之前执行。
-- 蒙版语义：`x/y/width/height` 锚定 EXIF 方向归一化后的原图坐标，不随预览/导出尺寸变化；矩形按轴对齐、椭圆为内接椭圆，羽化带完全位于形状内部，形状外权重严格为 0；`inverted` 在形状权重之后取反，`opacity` 最后缩放。`maskId:"full"` 使用内置全图蒙版，不需要对应的 `masks` 项。前端人物/天空按钮仅为禁用占位，后端没有 `person`/`sky` 类型，也不把阶段三 bbox 当作蒙版。
+- 蒙版语义：`x/y/width/height` 锚定 EXIF 方向归一化后的原图坐标，不随预览/导出尺寸变化；矩形按轴对齐、椭圆为内接椭圆，羽化带完全位于形状内部，形状外权重严格为 0；`inverted` 在形状权重之后取反，`opacity` 最后缩放。`maskId:"full"` 使用内置全图蒙版，不需要对应的 `masks` 项。语义蒙版（`source:"semantic"`、`shape:"semantic"`）以 `matteId` 引用 `<FRAME_DATA_DIR>/mattes/` 中的 8-bit 灰度 matte，几何固定全图，`feather` 忽略；matte 缺失时渲染跳过并返回 `local_matte_missing:<matteId>` warning。人物/天空按钮由 `FRAME_FEATURE_SEMANTIC_MASKS` 与模型可用性控制；AI 不会自动创建语义蒙版，也不把阶段三 bbox 当作蒙版。
 - 局部调整语义：v1 只实现 11 个字段，顺序为线性光曝光/白平衡/高光/阴影/白场/黑场 → sRGB 对比度 → 饱和度/自然饱和度 → 清晰度；局部调整按 `(order, id)` 依次混合，后一项看到前一项的结果（旧配方全部 `order=0`，因此仍按 `id` 字典序，像素不变）。`sharpen/denoise/vignette/grain` 非零返回 422（避免静默忽略）。混合公式：`f` = normal 时为本层调整结果，multiply/screen/overlay 时先把本层 clip 到 [0,1] 再逐通道混合；`a = mask_weight × opacity/100`；`out = clip(B + (f−B)·a)`。normal+opacity100 的全图分支仍直接返回本层结果且不 clip；normal+opacity100 的蒙版分支保留旧的 `B+(A−B)·w` 运算顺序。局部阶段在颜色分级之后、全局清晰度/暗角之前执行；`enabled=false`、全零参数、`opacity=0` 或蒙版完全在裁切外时等价于恒等。alpha 不参与局部合成。
 - 蒙版引用：`maskId` 不在 `masks` 中时，旧配方（无任何非默认图层字段）服务端跳过该局部调整并在渲染/导出 warnings 中返回 `local_mask_missing:<maskId>`；使用新图层字段写入的配方因缺少 mask 直接 422。不回退到全图或错误区域，也不返回 5xx。前端恢复会话时若发现悬空引用，显示“蒙版缺失，已停用此局部调整”并提供删除入口。
 - 引擎版本 `frame-engine/10` 改变五处像素/契约语义：Blacks 正向改为一律压暗（Lightroom 约定，掩膜端点 0.30→0.20）、HSL 低色度门控按参数分档（色相 0.02→0.10，饱和度/明度 0.005→0.03）、曲线首末节点外改为端点斜率线性外推、对比度后把色度回收至原值 ±5% 容差内，并删除遗留 `POST /images/{id}/analyze`；`frame-engine/9` 改变三处像素语义：白平衡的亮度守恒从逐像素改为全图均值标量、HSL 色相改为受单调上限约束的查表映射、颜色分级越界由逐通道裁剪改为等比缩放到边界；`frame-engine/8` 把嵌入 ICC 管理的范围从 `RGB`/`RGBA` 扩展到全部可归一为 RGB 的模式（`P`/`PA`/`1`/`L`/`LA`）；`frame-engine/7` 起局部调整参与渲染；`frame-engine/6` 引入颜色分级，`frame-engine/5` 引入 HSL，`frame-engine/4` 引入曲线。预览缓存键包含 `curve`、`hsl`、`colorGrading`、`masks` 与 `localAdjustments`，任一变化都会产生新的 `previewId`。
-- 规范化会把局部调整按 `(order, id)` 排序，保证相同语义的配方得到相同哈希。`pixel_recipe_json` 只序列化非默认的图层字段（`blendMode≠normal`、`opacity≠100`、`order≠0`），并始终排除 `name`；因此旧配方哈希与 `render_key` 不变，改 `name` 不改变 `recipe_hash`/`render_key`（仍会随提交新增一条 revision 用于保存 name），调序/改 blend/opacity 会改变它们。
+- 规范化会把局部调整按 `(order, id)` 排序，保证相同语义的配方得到相同哈希。`pixel_recipe_json` 只序列化非默认的图层字段（`blendMode≠normal`、`opacity≠100`、`order≠0`），并始终排除 `name`；因此旧配方哈希与 `render_key` 不变，改 `name` 不改变 `recipe_hash`/`render_key`（仍会随提交新增一条 revision 用于保存 name），调序/改 blend/opacity 会改变它们。蒙版身份只额外序列化非默认语义字段（`source`、`semanticClass`、`matteId`、`matteSha256`、`modelVersion`）；手动蒙版的 `recipe_hash`/`render_key` 逐字节不变。
 
 ## 4. 端点
 
@@ -253,11 +254,12 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `GET /api/v1/config` | — | `{maxUploadBytes, maxJsonBodyBytes, maxImagePixels, allowedMimeTypes, features:{layers}}` | — |
 | `POST /api/v1/images` | multipart，唯一 `file` 字段 | 201 `{imageId, originalName, width, height, exifOrientation, mimeType, bytes}` | 400 `invalid_upload`/`empty_file`；413 `payload_too_large`/`file_too_large`；415 `invalid_image`/`mime_mismatch`/`unsupported_media_type`/`animated_not_supported`/`unsupported_tiff_compression`/`tiff_multipage_not_supported`/`associated_alpha_not_supported`；500 `storage_error` |
 | `GET /api/v1/images/{imageId}/original` | 可选 `?download=true` | 原始字节；`inline` 或 `attachment` | 404 `image_not_found`/`image_file_missing` |
+| `POST /api/v1/images/{imageId}/semantic-masks` | `{semanticClass:"person"\|"sky"}` | 201 `{matteId, sha256, modelVersion, semanticClass, width, height}`；同 matte 重复调用复用同一结果 | 404 `image_not_found`；422 `validation_error`；503 `semantic_mask_unavailable`（flag/模型不可用）；504 `semantic_mask_timeout` |
 | `DELETE /api/v1/images/{imageId}` | — | 204，无响应体；重复删除同样 204 | 404 `image_not_found`；409 `resource_busy`（分析 pending/processing） |
 
 `DELETE /images/{imageId}` 硬删除图片及其会话、revision、分析任务/结果、方案与反馈，并在提交后删除原图、无共享引用的代理与预览缓存。删除不可恢复；编辑器在删除前要求二次确认，并在成功后回到上传态。文件删除失败不回滚 204，由 `scripts/purge_orphans.py` 重试。
 
-`features.layers` 来自 `FRAME_FEATURE_LAYERS`（默认 `false`），只用于前端能力曝光与 UI 显隐；后端始终接受、校验并渲染图层字段，关闭开关不会拒绝写入或改变像素。
+`features.layers` 来自 `FRAME_FEATURE_LAYERS`（默认 `false`），只用于前端能力曝光与 UI 显隐；后端始终接受、校验并渲染图层字段，关闭开关不会拒绝写入或改变像素。`features.semanticMasks.enabled` 是 `FRAME_FEATURE_SEMANTIC_MASKS` 本身；`person/sky` 在 flag 开启且对应模型校验通过、缓存可写时才为 true，`features.semanticMaskModels` 给出模型版本（不可用为 null）。flag 开启但模型都不可用时前端仍显示两个禁用按钮与原因；flag 关闭/模型缺失只影响 UI 与推理端点，已保存的语义蒙版仍会渲染。
 
 `width/height` 是 EXIF 方向归一后的显示尺寸；`exifOrientation` 保留原始 1–8（D-07）。原图字节从上传到导出全程不变。阶段三遗留的 `POST /api/v1/images/{imageId}/analyze` 已在阶段四复审中删除（前端无引用，且与任务化 `POST /api/v1/analysis` 重复）；图像分析统一走 `/analysis` 任务接口。
 
@@ -343,7 +345,7 @@ Content-Type: application/json
 - 响应中的 `width/height` 是**旋转内接并裁切后的画布尺寸**，前端据此绘制裁切框与对比容器（D-04）。引擎版本 `frame-engine/2` 起，旋转只缩小画布，内容不再二次缩放，画布不包含源图之外的像素。
 - render 无状态：不改会话、不新增 revision，只可能写入预览缓存文件。
 - `cacheHit=true` 表示命中内容寻址缓存，未重新渲染。
-- `warnings` 是本次渲染中**被跳过或简化**的非致命步骤，可能含 `local_mask_missing:<maskId>`（局部调整引用的蒙版不存在，已跳过）。预览档的 warnings 只由配方决定，因此缓存命中时按同一规则重算，不会丢失；前端把该值存进 `preview.warnings` 并在局部调整面板标注被跳过的条目。
+- `warnings` 是本次渲染中**被跳过或简化**的非致命步骤，可能含 `local_mask_missing:<maskId>`（局部调整引用的蒙版不存在，已跳过）或 `local_matte_missing:<matteId>`（语义蒙版的 matte 缺失/校验失败，已跳过）。`local_matte_missing` 依赖 matte 文件是否实际存在且 raw SHA/尺寸校验通过；预览缓存键包含 matte id/sha，但**不包含文件存在性**，因此 matte 被外部删除后旧缓存仍可能命中。预览档的 warnings 只由配方决定，因此缓存命中时按同一规则重算，不会丢失；前端把该值存进 `preview.warnings` 并在局部调整面板标注被跳过的条目。
 - `X-Render-Seq` 是可选的非负整数，客户端在同一会话内单调递增。服务端按会话记录最大序号；等待渲染槽位期间若出现更新的序号，当前请求返回 409 `render_superseded`，不写入预览。前端静默忽略该错误，因为更新请求会提供结果。命中缓存时直接返回，不做 superseded 检查。
 - ⊕ 阶段四：前端用 `nextRenderSeq()`（`apps/web/lib/render-seq.ts`）统一发号，取 `max(Date.now(), 上一次 + 1)`，滑杆预览与裁切底图共用同一个计数器。用时钟是为了让同一会话在页面重挂载、多标签页之间仍然可比，`+1` 下限保证同一毫秒内的两次请求也严格递增；共用计数器避免裁切底图被滑杆请求判定为过期。`renderPreview` 的序号参数默认值仍是 `Date.now()`；完全不带该头时服务端不记录序号、也不做 superseded 判断。
 - 同进程最多并发执行 2 次渲染；等待槽位超过 10 秒返回 503 `server_busy`，带 `Retry-After: 1`。
@@ -381,7 +383,7 @@ GET /api/v1/sessions/{sessionId}/compare?revisionId=<uuid>&maxEdge=1600
 }
 ```
 
-- `warnings` 汇总两侧渲染的非致命告警（目前为 `local_mask_missing:<maskId>`，去重后保留顺序）；原图侧只应用几何，通常为空。
+- `warnings` 汇总两侧渲染的非致命告警（目前为 `local_mask_missing:<maskId>` / `local_matte_missing:<matteId>`，去重后保留顺序）；原图侧只应用几何，通常为空。
 
 - `revisionId` 省略时使用当前活动 revision；必须属于该会话。
 - `maxEdge` 默认 1600，范围 1…2560。
@@ -769,6 +771,8 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | `internal_error` | 500 | 未预期错误 |
 | `server_busy` | 503 | 导出并发数或内存预算已满，渲染槽位等待超过 10 秒，或分析待处理队列达到 `FRAME_ANALYSIS_QUEUE_MAX` |
 | `service_unavailable` | 503 | 服务未就绪 |
+| `semantic_mask_unavailable` | 503 | 语义蒙版能力关闭或对应模型不可用/损坏 |
+| `semantic_mask_timeout` | 504 | 语义分割推理等待超时 |
 | `provider_rate_limited` / `provider_unavailable` | 任务错误码 | 阶段 3 的 Provider 限流/不可用，记录在分析任务的 `status.error.code` |
 
 阶段 1 已约定的错误码与文案映射（前端 `apps/web/lib/error-messages.ts`）保持不变；`revision_conflict` 映射为“编辑状态已更新，已为你刷新”，`idempotency_key_reuse` 提示保存请求与已有版本冲突；`render_superseded` 与 `preview_expired` 静默处理。`export_too_large` 会展示预估内存与上限。

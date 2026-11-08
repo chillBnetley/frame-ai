@@ -7,13 +7,24 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
-from app.api.deps import get_deletion_service, get_image_service
+from app.api.deps import (
+    get_deletion_service,
+    get_image_service,
+    get_semantic_mask_service,
+)
 from app.core.errors import AppError
-from app.models.schemas import ErrorResponse, UploadImageResponse
+from app.models.schemas import (
+    ErrorResponse,
+    SemanticMaskRequest,
+    SemanticMaskResponse,
+    UploadImageResponse,
+)
 from app.repositories.image_registry import ImageAssetRecord
 from app.services.deletion_service import DeletionService
 from app.services.image_service import ImageService
+from app.services.semantic_mask_service import SemanticMaskService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     code: {"model": ErrorResponse, "description": description}
@@ -24,6 +35,8 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
         413: "Upload or pixel limit exceeded",
         415: "Unsupported or invalid image",
         500: "Storage failure",
+        503: "Semantic mask model is unavailable",
+        504: "Semantic mask inference timed out",
     }.items()
 }
 
@@ -60,6 +73,31 @@ async def upload_image(
         exif_orientation=record.exif_orientation,
         mime_type=record.mime_type,
         bytes=record.bytes,
+    )
+
+
+@router.post(
+    "/{image_id}/semantic-masks",
+    response_model=SemanticMaskResponse,
+    status_code=201,
+)
+async def create_semantic_mask(
+    image_id: UUID,
+    request: SemanticMaskRequest,
+    service: Annotated[SemanticMaskService, Depends(get_semantic_mask_service)],
+) -> SemanticMaskResponse:
+    result = await run_in_threadpool(
+        service.create,
+        str(image_id),
+        request.semantic_class,
+    )
+    return SemanticMaskResponse(
+        matte_id=result.matte_id,
+        sha256=result.sha256,
+        model_version=result.model_version,
+        semantic_class=result.semantic_class,
+        width=result.width,
+        height=result.height,
     )
 
 

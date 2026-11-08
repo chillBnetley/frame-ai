@@ -1,0 +1,8 @@
+FRAME AI bundles MediaPipe Selfie Segmentation.
+
+Source: https://storage.googleapis.com/mediapipe-assets/selfie_segmentation.tflite
+Copyright: Google LLC
+License: Apache License 2.0 (see LICENSE in this directory)
+
+The model file is unmodified. FRAME AI loads it with OpenCV DNN (readNetFromTFLite)
+after copying it to an ASCII path and verifying its SHA-256.

@@ -61,8 +61,8 @@
 
 ## 局部调整与蒙版
 
-- **没有人物 / 天空自动蒙版**：局部调整只支持全图、用户矩形和用户椭圆。阶段三视觉结果只有归一化 bbox，`regions[].mask` 仍为 `null`；bbox 不是像素蒙版，把它当蒙版会污染框内背景，因此界面中的“人物蒙版”“天空蒙版”按钮是禁用占位，后端也没有对应类型。接入真实分割模型前不会提供该能力。
-- **蒙版是参数化几何，不是栅格蒙版**：矩形/椭圆、羽化、反选、不透明度随 recipe 以 JSON 保存，没有 `storageRef` 或蒙版图片；因此不支持画笔、渐变、多蒙版布尔运算或语义蒙版。最多 20 个蒙版 / 20 个局部调整。
+- **语义蒙版有模型与样本限制（L8 已实现）**：人物使用随仓库打包的 MediaPipe Selfie（Apache-2.0，249 KB），在 3 张 P3M 人工 alpha GT 上 IoU 0.9476–0.9693（均值 0.9557、1280 代理端到端约 5.6 ms）；样本仅 3 张且以单人/全身为主，多人、遮挡、发丝与视频帧未覆盖。天空使用 skyseg（MIT，168 MB，**不随仓库分发**，需预置到 `<FRAME_DATA_DIR>/models/semantic/skyseg.onnx` 或显式运行 `scripts/fetch_semantic_models.py --class sky`），与上游参考蒙版的 parity 仅 1/4 ≥0.85，且参考蒙版很可能是作者模型输出而非独立 GT，因此天空只作为**实验性**能力，**不宣称 IoU 达标**。模型必须先复制到 ASCII 缓存（Windows `%PUBLIC%\FRAME-AI\models\<sha256>\`；POSIX 优先 `<FRAME_DATA_DIR>/models/semantic/<sha256>/`，非 ASCII 的 data_dir 回退到 `$XDG_CACHE_HOME/frame-ai/models`、`~/.cache/frame-ai/models`，仍非 ASCII 用 `/tmp/frame-ai-models`）并校验 SHA-256；含中文的路径无法被 OpenCV DNN 加载，缓存不可写或复制失败时该类能力关闭。推理全本地、图片与 matte 不上传；日志只记 id/class/latency/outcome。matte 删除失败时保留 sidecar 供重试，但没有自动孤儿 sweep，需要再次触发该图片删除或手工 purge。`FRAME_FEATURE_SEMANTIC_MASKS=false` 只隐藏 UI 和关闭推理端点，已保存的语义蒙版仍会渲染；B8 之前的代码无法读取含语义字段的配方（`extra="forbid"`）。
+- **蒙版是参数化几何或本机 matte，不是栅格蒙版**：手动蒙版（矩形/椭圆、羽化、反选、不透明度）随 recipe 以 JSON 保存；语义蒙版通过 `matteId` 引用本机 `<FRAME_DATA_DIR>/mattes/` 中的 8-bit PNG matte，几何固定全图。两者都没有画笔、渐变、蒙版布尔运算或独立图层树；最多 20 个蒙版 / 20 个局部调整。
 - **局部 v1 只支持 11 个字段**：曝光、对比、高光、阴影、白场、黑场、色温、色调、饱和度、自然饱和度、清晰度。`sharpen/denoise/vignette/grain` 的字段仍保留在 schema 中，但非零值保存返回 422；前端不提供这些控件。局部降噪/锐化在代理与导出分辨率之间的语义未验证，局部暗角本质是全局径向效果。
 - **局部图层有合成语义，但仍是内联参数不是独立图层树**：`localAdjustments[]` 新增可选 `name/blendMode/opacity/order`（B7）。默认 `normal/100/0` 的旧配方走原渲染分支，像素逐字节不变；显式 `order` 后按 `(order,id)` 叠加，支持 normal/multiply/screen/overlay 与逐层不透明度，alpha 不参与合成。模型上限保持 20（旧配方 17–20 层合法），UI 软上限 16（`FRAME_FEATURE_LAYERS=true` 时显示）；没有拖拽库、图层组、蒙版相减或独立图层树。
 - **图层能力默认隐藏（B7）**：`FRAME_FEATURE_LAYERS` 默认 `false`，`GET /api/v1/config` 的 `features.layers` 为 false 时前端不显示排序/混合/不透明度控件；后端**始终接受、校验和渲染**这些字段，关闭开关不会丢数据或改变像素。真正回退到 B7 之前的代码无法读取含新字段的配方（`extra="forbid"`），需要保留本代码并用开关隐藏 UI。
@@ -76,7 +76,7 @@
 
 - **默认是 Mock Provider**：Mock 场景固定、置信度是演示值，界面明确显示“模拟分析（未调用真实视觉模型）”。Mock 结果只用于开发与流程验证，不代表真实模型能力，不得用于准确率宣传。
 - **没有真实 Provider 的准确率/成本评估**：本机没有用户授权的标注图片集，也没有配置真实 API Key；真实模型调用的耗时、token 与费用均**未测量**。`scripts/bench_analysis.py` 只测量预处理、CV 特征与 Mock 任务。`scripts/eval_analysis.py` 已提供标注集评估框架（缺 manifest/图片时非零退出且不输出指标），`scripts/smoke_live_provider.py` 用于真实 Provider 连通性检查，未配置时安全跳过；两者都不能替代正式质量数据。规范见 [evaluation.md](evaluation.md)。
-- **分析结果没有像素级蒙版**：主体与区域只提供归一化边界框与 `regionId`，`regions[].mask` 恒为 `null`；不生成 RLE 或伪造分割。编辑器的局部调整另使用用户手动画的矩形/椭圆参数蒙版，但它不是语义分割，不能自动选中人物或天空。
+- **分析结果没有像素级蒙版**：主体与区域只提供归一化边界框与 `regionId`，`regions[].mask` 恒为 `null`；不生成 RLE 或伪造分割。编辑器另有用户手动画的矩形/椭圆蒙版与用户手动生成的人物/实验性天空语义蒙版；AI 不会自动创建语义蒙版，也不能引用不存在的蒙版。
 - **检测器选型结论**：第一版使用视觉 Provider 返回的 bbox，未引入 YOLO/ONNX/分割大模型；原因是依赖体积、模型下载、部署复杂度与当前环境不匹配，且阶段三只要求基础区域识别。`RegionInfo.source` 已预留 `detector`，后续可在 `VisionProvider` 内部替换而不影响业务层。
 - **AI 只提案，不自动应用**：阶段 3 只输出诊断与建议；阶段 5 会基于诊断生成配方提案并在前端预览，但不会自动写 revision 或修改原图。只有用户点击“应用”后才以 `source:"ai"` 提交普通 revision，历史中可撤销/重做；没有后台自动调色、批处理或跳过确认的路径。
 - **去重按图片资产与内容**：`dedupe_key` 使用 `sha256(image.id + image.sha256 + config_key)`。同一资产、同一配置仍会去重；重新上传同一内容会得到新的 `image.id`，因此会创建新任务，报告内的 `image.id` 始终与当前图片一致。`force=true` 仍可强制重新分析。
@@ -105,7 +105,7 @@
 
 - **默认是 Mock Planner**：`mock-planner` 固定输出、置信度是演示值，界面显示 Mock 徽标。自动化回归只证明流程、结构、范围与边界，**不代表真实模型的摄影判断质量**，不得用于准确率或“更专业”的宣传。
 - **真实 Provider 与真实照片均未评估**：[stage-5-evaluation.md](evaluation/stage-5-evaluation.md) §4–§7 的 14 类真实照片评分、A/B/C/D 对照、真实 Provider 三次重复稳定性与失败案例计数全部为“未评估（待补）”。仓库不附带授权照片集，不得填写推断分数。
-- **没有像素级语义蒙版**：方案只能引用用户已创建的矩形/椭圆蒙版；AI 编造 `maskId` 会被校验拒绝。逆光人像等需要局部提亮但无蒙版时，降级为全局调整并在 `limitations` 中说明，不伪造分割。
+- **AI 不会自动创建语义蒙版**：方案可引用用户已创建的矩形/椭圆或用户手动生成的语义蒙版；AI 编造 `maskId` 会被校验拒绝。逆光人像等需要局部提亮但无蒙版时，降级为全局调整并在 `limitations` 中说明，不伪造分割。
 - **`styleId/styleStrength` 是惰性元数据**：12 个风格的效果全部落实为配方参数（包络 + 约束），渲染引擎不读取风格字段。风格跨版本时 `styleVersion` 只用于追溯；不要指望只改 `styleId` 就会改变画面。
 - **对话只能改白名单路径**：全局 `adjustments.*` 与已存在的 `localAdjustments.<maskId>.*`；不修改曲线、HSL、颜色分级、裁切、旋转、输出设置或蒙版集合。未提及参数保持不变，越界值被裁剪而非落库，无法解析为参数时返回 `supported:false` 而不猜测。
 - **点评是确定性证据驱动**：`build_critique` 不调用自由文本模型，优点是稳定、可复现、不编造；局限是表达模板化，只覆盖分析报告中有证据的项。`critique/apply` 只生成全局参数补丁，不改曲线/HSL/分级/蒙版/几何。

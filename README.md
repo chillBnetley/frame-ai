@@ -2,7 +2,7 @@
 
 响应式、非破坏性照片后期工具。本仓库已完成 **开发阶段 5：AI 摄影师与智能后期决策**（Task 0–9），在阶段 3 的视觉理解之上增加了可解释的调色方案、参数化风格、对话修改、摄影点评与反馈闭环；执行层沿用阶段 4 的专业调色引擎（配方 v2、全局调色、RGB 曲线、八色带 HSL、三区域颜色分级、全图/矩形/椭圆蒙版局部调整，以及导出尺寸、两层进程内缓存、导出并发准入与渲染序号统一）。阶段 2 的完整编辑闭环继续保留：上传、自动建会话、手动参数调整、前后对比、撤销/重做/重置，到从原图全分辨率导出 JPEG/PNG/TIFF（PNG/TIFF 可选 8/16-bit，带 alpha 时保留透明度）。
 
-原图字节从上传到导出全程不变；编辑只记录配方（recipe）与 revision，渲染始终从原图重算。阶段 3 的异步分析任务（预处理与 OpenCV 测量、可替换的视觉/决策 Provider、主体与区域引用、摄影问题诊断、五区界面）继续作为阶段 5 的输入。阶段 5 的 AI 摄影师把“照片是什么样”转换为“建议调什么、调多少、为什么”，但**只生成提案并在预览中展示，不自动写入配方或修改原图**；只有用户显式接受后才生成普通 revision。默认使用离线 Mock Provider，风格由参数实现，**不伪造人物/天空语义分割**。
+原图字节从上传到导出全程不变；编辑只记录配方（recipe）与 revision，渲染始终从原图重算。阶段 3 的异步分析任务（预处理与 OpenCV 测量、可替换的视觉/决策 Provider、主体与区域引用、摄影问题诊断、五区界面）继续作为阶段 5 的输入。阶段 5 的 AI 摄影师把“照片是什么样”转换为“建议调什么、调多少、为什么”，但**只生成提案并在预览中展示，不自动写入配方或修改原图**；只有用户显式接受后才生成普通 revision。默认使用离线 Mock Provider，风格由参数实现；人物/实验性天空语义蒙版只由用户在本机点击生成，AI 不会自动伪造分割结果。
 
 ## 开发状态
 
@@ -77,7 +77,7 @@
 明确未实现（后续阶段）：
 
 - 自动应用配方：阶段 5 会生成方案并在预览中展示，但只有用户点击“应用”才写入普通 revision；没有后台自动调色、批处理或跳过确认的路径。
-- 人物/天空语义分割与自动蒙版；局部调整只支持全图与用户手动画的矩形/椭圆，阶段三 bbox 不会被当作蒙版，AI 也不能引用不存在的蒙版。
+- 人物/天空语义蒙版的自动选择、多人/遮挡/发丝质量保证，以及天空模型的质量结论；L8 已提供由用户手动触发的人物（MediaPipe，本地）与实验性天空（skyseg，需另行安装）语义蒙版，AI 仍不会自动创建语义蒙版，阶段三 bbox 不会被当作蒙版。
 - 栅格蒙版、画笔/渐变蒙版、蒙版布尔运算与图层混合；当前蒙版是随 recipe 保存的参数化几何。
 - 几何编辑（裁剪/旋转/扩图/删除物体/换背景）不由 AI 发起；方案不生成裁切或旋转。
 - 真实视觉/规划模型的准确率、成本与稳定性评估；本机没有授权标注集与真实密钥，默认 Mock Provider 未调用第三方。评估框架与冒烟脚本已提供，但正式指标仍为未测量。
@@ -329,6 +329,9 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 | `FRAME_RATE_LIMIT_RENDER` | `0` | 渲染/预览写请求每分钟上限 |
 | `FRAME_RATE_LIMIT_DEFAULT` | `0` | 其他写请求每分钟上限 |
 | `FRAME_FEATURE_LAYERS` | `false` | 局部调整图层能力曝光：`true` 时前端显示排序/混合/不透明度控件；后端始终接受与渲染图层字段 |
+| `FRAME_FEATURE_SEMANTIC_MASKS` | `false` | 语义蒙版能力曝光：`true` 时前端显示人物/天空按钮；还需对应模型可用 |
+| `FRAME_SEMANTIC_MASK_CONCURRENCY` | `1` | 同时运行的语义分割推理上限（1…4）；推理串行执行 |
+| `FRAME_SEMANTIC_MASK_TIMEOUT_SECONDS` | `10` | 单次语义分割的等待上限；超时返回 504 |
 | `FRAME_VISION_PROVIDER` | `mock` | 视觉 Provider：`mock` 或 `openai` |
 | `FRAME_VISION_API_KEY` | 空 | 视觉 Provider 密钥；仅服务端读取，禁止提交 |
 | `FRAME_VISION_MODEL` | 空 | 视觉模型名 |
@@ -411,6 +414,15 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 - **兼容与身份**：模型上限仍为 20（旧配方 17–20 层合法）。`pixel_recipe_json` 只序列化非默认图层字段并排除 `name`，因此旧配方的 `recipe_hash`/`render_key` 不变；改 `name` 不改变 `recipe_hash`/`render_key`（仍会随提交新增一条 revision 用于保存 name），调序/改混合/改不透明度会改变它们。
 - **开关**：`FRAME_FEATURE_LAYERS` 默认 `false`，`GET /api/v1/config` 返回 `features.layers`；关闭时前端隐藏图层控件，但后端始终接受、校验和渲染，不会丢数据。UI 软上限 16，模型硬上限 20。
 - **容量（D3）**：默认 `FRAME_EXPORT_MAX_RSS_MB=3072` 下，24 MP × 16 层全配方估算 **6741.8 MB**，导出会如实返回 413；需要时可自行提高预算并承担 OOM 风险。真实 RSS/耗时只作为 opt-in bench 记录。
+
+### 语义蒙版（L8 / B8）
+
+- **能力**：在“局部调整”面板点击“人物蒙版”或“天空蒙版（实验性）”会在本机生成 8-bit 灰度 matte，并创建引用该 matte 的语义蒙版与局部调整。图片与 matte 都不上传；推理失败/模型缺失时对应按钮禁用，手动矩形/椭圆蒙版不受影响。
+- **模型与许可**：人物使用 MediaPipe Selfie Segmentation（TFLite，249,505 B，Apache-2.0，随仓库打包，附 LICENSE/NOTICE）；天空使用 skyseg（ONNX，175,997,079 B，MIT，**不随仓库分发**）。天空模型放在 `<FRAME_DATA_DIR>/models/semantic/skyseg.onnx`，可用 `scripts/fetch_semantic_models.py --class sky --data-dir <FRAME_DATA_DIR>` 显式下载；未安装时天空按钮禁用。天空为**实验性**：预检与上游参考蒙版的 parity 仅 1/4 ≥0.85，且参考蒙版不是独立 GT，**不宣称 IoU 达标**。
+- **质量样本**：人物仅 3 张 P3M 人工 alpha GT，IoU 0.9476–0.9693（均值 0.9557），单人/全身为主；多人、遮挡、发丝未覆盖。所有推理确定（同图同模型 raw matte 哈希一致），跨平台未验证。
+- **ASCII 路径**：OpenCV DNN 无法从含中文的路径加载模型、传 bytes 会崩溃。模型会先复制到 ASCII 缓存（Windows `%PUBLIC%\FRAME-AI\models\<sha256>\`；POSIX 优先 `<FRAME_DATA_DIR>/models/semantic/<sha256>/`，若 data_dir 非 ASCII 则回退 `$XDG_CACHE_HOME/frame-ai/models`、`~/.cache/frame-ai/models`，仍非 ASCII 用 `/tmp/frame-ai-models`）并校验字节数与 SHA-256；缓存目录不可写或复制/校验失败只关闭该类能力。
+- **身份与渲染**：语义蒙版写 `source:"semantic"`、`shape:"semantic"`、`semanticClass`、`matteId`、`matteSha256`、`modelVersion`，几何固定全图，`feather` 忽略，`opacity/inverted` 参与权重；`pixel_recipe_json` 只序列化非默认语义字段，旧手动蒙版哈希/`render_key` 逐字节不变。matte 缺失时 warning `local_matte_missing:<matteId>` 并跳过；alpha 不参与。
+- **开关与清理**：`FRAME_FEATURE_SEMANTIC_MASKS` 默认 false，只控制 UI 曝光与推理端点可用性；后端始终接受/渲染已保存的语义蒙版。matte 保存在 `<FRAME_DATA_DIR>/mattes/`，删除图片时按图片 SHA 清理，删除会话保留。真正回退到 B8 之前的代码无法读取含语义字段的配方（`extra="forbid"`）。
 
 前端读取（放在 `apps/web/.env.local` 或 shell 环境）：
 
@@ -799,7 +811,7 @@ SQLite 记录仍存在但文件被移动/删除时，预览接口返回 `404 ima
 7. **AI 默认是 Mock**：默认模型结果用于开发与流程验证，不代表真实模型能力；没有真实 Provider 的准确率/成本评估，也没有像素级主体蒙版。
 8. **分析任务按单进程设计**：线程池、启动恢复与任务状态都在进程内协调；多 uvicorn worker 不在当前范围。
 9. **AI 摄影师只提案，不自动应用**：方案在预览中展示，必须由用户接受才写入 revision；没有批处理、后台自动调色或跳过确认的路径。
-10. **没有像素级语义蒙版**：方案只能引用用户已创建的矩形/椭圆蒙版；无蒙版时局部提亮会降级为全局并给出提示，不会伪造人物/天空蒙版。
+10. **语义蒙版不是 AI 自动生成**：方案只能引用用户已创建的矩形/椭圆或用户手动生成的语义蒙版；无蒙版时局部提亮会降级为全局并给出提示，AI 不会伪造人物/天空分割。人物模型随仓库打包（MediaPipe，Apache-2.0，3 张 P3M 样本 IoU 0.9476–0.9693）；天空模型 168 MB 不随仓库分发，需用户显式获取，且标注为实验性。
 11. **风格是参数化配方，不是滤镜引擎**：12 个风格由参数包络与约束实现，`styleId/styleStrength` 只是元数据，渲染引擎不读取风格字段；风格跨版本时记录的 `styleVersion` 仅用于追溯。
 12. **点评是确定性证据驱动**：v1 不调用自由文本模型，避免编造；优点是稳定可复现，局限是表达模板化、无法评价证据之外的美学细节。
 13. **AI 不做几何编辑**：不支持裁剪、旋转、扩图、删除物体或换背景；构图问题只作为诊断与建议呈现。

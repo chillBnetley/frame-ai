@@ -103,6 +103,15 @@ export interface ApiRequestOptions {
   timeoutMs?: number;
 }
 
+export interface SemanticMaskInfo {
+  matteId: string;
+  sha256: string;
+  modelVersion: string;
+  semanticClass: "person" | "sky";
+  width: number;
+  height: number;
+}
+
 export async function apiRequest(
   path: string,
   init: RequestInit = {},
@@ -158,12 +167,27 @@ export async function uploadImage(
   }
 }
 
+export async function createSemanticMask(
+  imageId: string,
+  semanticClass: "person" | "sky",
+  signal?: AbortSignal,
+): Promise<SemanticMaskInfo> {
+  return apiJson<SemanticMaskInfo>(
+    `/api/v1/images/${encodeURIComponent(imageId)}/semantic-masks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ semanticClass }),
+    },
+    { signal, timeoutMs: 120_000 },
+  );
+}
+
 /**
  * Permanently removes an image, its sessions, revisions and analysis rows.
  * The API answers 204 both for a fresh delete and for an id it already removed.
  */
-export async function deleteImage(
-  imageId: string,
+export async function deleteImage(  imageId: string,
   signal?: AbortSignal,
 ): Promise<void> {
   await apiRequest(

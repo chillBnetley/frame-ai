@@ -35,8 +35,21 @@ class HealthResponse(CamelModel):
     storage: StorageHealth
 
 
+class SemanticMaskFeature(CamelModel):
+    enabled: bool
+    person: bool
+    sky: bool
+
+
+class SemanticMaskModels(CamelModel):
+    person: str | None
+    sky: str | None
+
+
 class RuntimeFeatures(CamelModel):
     layers: bool
+    semantic_masks: SemanticMaskFeature
+    semantic_mask_models: SemanticMaskModels
 
 
 class RuntimeConfigResponse(CamelModel):
@@ -55,6 +68,19 @@ class UploadImageResponse(CamelModel):
     exif_orientation: int
     mime_type: str
     bytes: int
+
+
+class SemanticMaskRequest(CamelModel):
+    semantic_class: Literal["person", "sky"]
+
+
+class SemanticMaskResponse(CamelModel):
+    matte_id: str
+    sha256: str
+    model_version: str
+    semantic_class: Literal["person", "sky"]
+    width: int
+    height: int
 
 
 class ErrorBody(BaseModel):

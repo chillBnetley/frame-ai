@@ -6,6 +6,7 @@ from uuid import UUID
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.imaging.loader import PROXY_EDGE_STEP, proxy_cache_directory, proxy_cache_path
+from app.imaging.semantic_mattes import purge_mattes_for_image
 from app.repositories.deletion_repo import ImageDeletionRecord, SqliteDeletionRepository
 from app.services.analysis_task_service import AnalysisTaskService
 from app.services.export_jobs import ExportJobManager
@@ -124,7 +125,9 @@ class DeletionService:
         proxies_removed = 0
         proxies_skipped = 0
         cache_dropped = 0
+        mattes_removed = 0
         if outcome.sha256 and not self.repository.sha_is_shared(outcome.sha256):
+            mattes_removed = purge_mattes_for_image(self.settings.mattes_dir, outcome.sha256)
             cache_dir = proxy_cache_directory(self.previews.directory)
             edge_limit = self.settings.render_max_edge_limit + PROXY_EDGE_STEP
             for edge in range(PROXY_EDGE_STEP, edge_limit, PROXY_EDGE_STEP):
@@ -147,7 +150,7 @@ class DeletionService:
         logger.info(
             "image_files_deleted image_id=%s original_removed=%s proxies_removed=%s "
             "proxies_skipped=%s previews_removed=%s previews_skipped=%s "
-            "proxy_cache_dropped=%s",
+            "proxy_cache_dropped=%s mattes_removed=%s",
             image_id,
             original_removed,
             proxies_removed,
@@ -155,6 +158,7 @@ class DeletionService:
             purged.deleted,
             purged.skipped,
             cache_dropped,
+            mattes_removed,
         )
 
 

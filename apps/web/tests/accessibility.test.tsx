@@ -16,7 +16,15 @@ const CONFIG = {
   maxUploadBytes: 20 * 1024 * 1024,
   maxImagePixels: 40_000_000,
   allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
-  features: { layers: false },
+  features: {
+    layers: false,
+    semanticMasks: {
+      enabled: false,
+      person: false,
+      sky: false,
+    },
+    semanticMaskModels: { person: null, sky: null },
+  },
 };
 
 const IMAGE_ID = "2b1d0f76-4a1e-4de0-8a7b-3c0f2f9c1a55";

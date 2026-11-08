@@ -91,7 +91,15 @@ function installFlowMock() {
           maxUploadBytes: 20 * 1024 * 1024,
           maxImagePixels: 40_000_000,
           allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
-          features: { layers: false },
+          features: {
+            layers: false,
+            semanticMasks: {
+              enabled: false,
+              person: false,
+              sky: false,
+            },
+            semanticMaskModels: { person: null, sky: null },
+          },
         });
       }
       if (url.endsWith(`/api/v1/sessions/${SESSION_ID}`)) {

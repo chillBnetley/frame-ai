@@ -109,6 +109,7 @@ export const MASK_ID_PATTERN = /^(full|mask_[A-Za-z0-9_-]{1,58})$/;
 export const MASK_LIMIT = 20;
 export const USER_MASK_ID_PATTERN = /^mask_[A-Za-z0-9_-]{1,58}$/;
 export const MASK_SHAPES = ["rectangle", "ellipse"] as const satisfies readonly MaskShape[];
+export const SEMANTIC_MASK_HASH = /^[0-9a-f]{64}$/;
 
 export interface AdjustmentRange {
   min: number;
@@ -331,6 +332,38 @@ export function normalizeMask(mask: Partial<UserMask> | null | undefined): UserM
   if (!USER_MASK_ID_PATTERN.test(id)) {
     return null;
   }
+  if (mask.source === "semantic") {
+    const semanticClass = mask.semanticClass;
+    if (
+      mask.shape !== "semantic" ||
+      (semanticClass !== "person" && semanticClass !== "sky") ||
+      typeof mask.matteId !== "string" ||
+      !SEMANTIC_MASK_HASH.test(mask.matteId) ||
+      typeof mask.matteSha256 !== "string" ||
+      !SEMANTIC_MASK_HASH.test(mask.matteSha256) ||
+      typeof mask.modelVersion !== "string" ||
+      mask.modelVersion.length === 0
+    ) {
+      return null;
+    }
+    return {
+      id,
+      shape: "semantic",
+      source: "semantic",
+      semanticClass,
+      matteId: mask.matteId,
+      matteSha256: mask.matteSha256,
+      modelVersion: mask.modelVersion,
+      coordinateSpace: "source-normalized",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      feather: bounded(mask.feather, MASK_RANGES.feather),
+      opacity: bounded(mask.opacity, MASK_RANGES.opacity),
+      inverted: mask.inverted === true,
+    };
+  }
   const x = roundTo4(clamp(finite(mask.x, 0), 0, 0.9999));
   const y = roundTo4(clamp(finite(mask.y, 0), 0, 0.9999));
   const width = roundTo4(clamp(finite(mask.width, 1), 0.0001, roundTo4(1 - x)));
@@ -380,6 +413,33 @@ export function createMask(id: string): UserMask {
     y: 0.25,
     width: 0.5,
     height: 0.5,
+    feather: MASK_RANGES.feather.defaultValue,
+    opacity: MASK_RANGES.opacity.defaultValue,
+    inverted: false,
+  };
+}
+
+export interface SemanticMaskInfo {
+  matteId: string;
+  sha256: string;
+  modelVersion: string;
+  semanticClass: "person" | "sky";
+}
+
+export function createSemanticMask(id: string, info: SemanticMaskInfo): UserMask {
+  return {
+    id,
+    shape: "semantic",
+    source: "semantic",
+    semanticClass: info.semanticClass,
+    matteId: info.matteId,
+    matteSha256: info.sha256,
+    modelVersion: info.modelVersion,
+    coordinateSpace: "source-normalized",
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
     feather: MASK_RANGES.feather.defaultValue,
     opacity: MASK_RANGES.opacity.defaultValue,
     inverted: false,

@@ -408,6 +408,159 @@
               }
             }
           },
+          "503": {
+            "description": "Semantic mask model is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Semantic mask inference timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}/semantic-masks": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Create Semantic Mask",
+        "operationId": "create_semantic_mask_api_v1_images__image_id__semantic_masks_post",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SemanticMaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SemanticMaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or empty upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Image is being analyzed or exported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Upload or pixel limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported or invalid image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Semantic mask model is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Semantic mask inference timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -518,6 +671,26 @@
               }
             }
           },
+          "503": {
+            "description": "Semantic mask model is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Semantic mask inference timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -605,6 +778,26 @@
           },
           "500": {
             "description": "Storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Semantic mask model is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Semantic mask inference timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -8015,12 +8208,20 @@
           "layers": {
             "type": "boolean",
             "title": "Layers"
+          },
+          "semanticMasks": {
+            "$ref": "#/components/schemas/SemanticMaskFeature"
+          },
+          "semanticMaskModels": {
+            "$ref": "#/components/schemas/SemanticMaskModels"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "layers"
+          "layers",
+          "semanticMasks",
+          "semanticMaskModels"
         ],
         "title": "RuntimeFeatures"
       },
@@ -8076,6 +8277,124 @@
           "confidence"
         ],
         "title": "SceneResult"
+      },
+      "SemanticMaskFeature": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "person": {
+            "type": "boolean",
+            "title": "Person"
+          },
+          "sky": {
+            "type": "boolean",
+            "title": "Sky"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled",
+          "person",
+          "sky"
+        ],
+        "title": "SemanticMaskFeature"
+      },
+      "SemanticMaskModels": {
+        "properties": {
+          "person": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person"
+          },
+          "sky": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sky"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "person",
+          "sky"
+        ],
+        "title": "SemanticMaskModels"
+      },
+      "SemanticMaskRequest": {
+        "properties": {
+          "semanticClass": {
+            "type": "string",
+            "enum": [
+              "person",
+              "sky"
+            ],
+            "title": "Semanticclass"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "semanticClass"
+        ],
+        "title": "SemanticMaskRequest"
+      },
+      "SemanticMaskResponse": {
+        "properties": {
+          "matteId": {
+            "type": "string",
+            "title": "Matteid"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "modelVersion": {
+            "type": "string",
+            "title": "Modelversion"
+          },
+          "semanticClass": {
+            "type": "string",
+            "enum": [
+              "person",
+              "sky"
+            ],
+            "title": "Semanticclass"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "matteId",
+          "sha256",
+          "modelVersion",
+          "semanticClass",
+          "width",
+          "height"
+        ],
+        "title": "SemanticMaskResponse"
       },
       "SessionState": {
         "properties": {
@@ -8583,16 +8902,71 @@
             "type": "string",
             "enum": [
               "rectangle",
-              "ellipse"
+              "ellipse",
+              "semantic"
             ],
             "title": "Shape",
             "default": "rectangle"
           },
           "source": {
             "type": "string",
-            "const": "user",
+            "enum": [
+              "user",
+              "semantic"
+            ],
             "title": "Source",
             "default": "user"
+          },
+          "semanticClass": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "person",
+                  "sky"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Semanticclass"
+          },
+          "matteId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matteid"
+          },
+          "matteSha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mattesha256"
+          },
+          "modelVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelversion"
           },
           "coordinateSpace": {
             "type": "string",

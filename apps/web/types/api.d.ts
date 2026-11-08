@@ -124,6 +124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/{image_id}/semantic-masks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Semantic Mask */
+        post: operations["create_semantic_mask_api_v1_images__image_id__semantic_masks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/{image_id}/original": {
         parameters: {
             query?: never;
@@ -2470,6 +2487,8 @@ export interface components {
         RuntimeFeatures: {
             /** Layers */
             layers: boolean;
+            semanticMasks: components["schemas"]["SemanticMaskFeature"];
+            semanticMaskModels: components["schemas"]["SemanticMaskModels"];
         };
         /**
          * SaturationLevel
@@ -2491,6 +2510,48 @@ export interface components {
             secondary: components["schemas"]["SceneLabel"][];
             /** Confidence */
             confidence: number;
+        };
+        /** SemanticMaskFeature */
+        SemanticMaskFeature: {
+            /** Enabled */
+            enabled: boolean;
+            /** Person */
+            person: boolean;
+            /** Sky */
+            sky: boolean;
+        };
+        /** SemanticMaskModels */
+        SemanticMaskModels: {
+            /** Person */
+            person: string | null;
+            /** Sky */
+            sky: string | null;
+        };
+        /** SemanticMaskRequest */
+        SemanticMaskRequest: {
+            /**
+             * Semanticclass
+             * @enum {string}
+             */
+            semanticClass: "person" | "sky";
+        };
+        /** SemanticMaskResponse */
+        SemanticMaskResponse: {
+            /** Matteid */
+            matteId: string;
+            /** Sha256 */
+            sha256: string;
+            /** Modelversion */
+            modelVersion: string;
+            /**
+             * Semanticclass
+             * @enum {string}
+             */
+            semanticClass: "person" | "sky";
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
         };
         /** SessionState */
         SessionState: {
@@ -2747,13 +2808,21 @@ export interface components {
              * @default rectangle
              * @enum {string}
              */
-            shape: "rectangle" | "ellipse";
+            shape: "rectangle" | "ellipse" | "semantic";
             /**
              * Source
              * @default user
-             * @constant
+             * @enum {string}
              */
-            source: "user";
+            source: "user" | "semantic";
+            /** Semanticclass */
+            semanticClass?: ("person" | "sky") | null;
+            /** Matteid */
+            matteId?: string | null;
+            /** Mattesha256 */
+            matteSha256?: string | null;
+            /** Modelversion */
+            modelVersion?: string | null;
             /**
              * Coordinatespace
              * @default source-normalized
@@ -3174,6 +3243,131 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Semantic mask model is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask inference timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_semantic_mask_api_v1_images__image_id__semantic_masks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticMaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMaskResponse"];
+                };
+            };
+            /** @description Invalid or empty upload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image is being analyzed or exported */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Upload or pixel limit exceeded */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unsupported or invalid image */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Storage failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask model is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask inference timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     get_original_image_api_v1_images__image_id__original_get: {
@@ -3261,6 +3455,24 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Semantic mask model is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask inference timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     delete_image_api_v1_images__image_id__delete: {
@@ -3337,6 +3549,24 @@ export interface operations {
             };
             /** @description Storage failure */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask model is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask inference timed out */
+            504: {
                 headers: {
                     [name: string]: unknown;
                 };

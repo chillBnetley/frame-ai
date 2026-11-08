@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     api_auth_enabled: bool = True
     api_token_file: Path | None = None
     feature_layers: bool = Field(default=False)
+    feature_semantic_masks: bool = Field(default=False)
+    semantic_mask_concurrency: int = Field(default=1, ge=1, le=4)
+    semantic_mask_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
     rate_limit_upload: int = Field(default=0, ge=0)
     rate_limit_export: int = Field(default=0, ge=0)
     rate_limit_analysis: int = Field(default=0, ge=0)
@@ -167,6 +170,14 @@ class Settings(BaseSettings):
         if self.api_token_file is not None:
             return self.api_token_file.expanduser().resolve()
         return self.data_dir / "api-token"
+
+    @property
+    def mattes_dir(self) -> Path:
+        return self.data_dir / "mattes"
+
+    @property
+    def semantic_models_dir(self) -> Path:
+        return self.data_dir / "models" / "semantic"
 
     @property
     def api_rate_limits(self) -> dict[str, int]:

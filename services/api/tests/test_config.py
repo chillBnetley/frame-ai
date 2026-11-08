@@ -92,7 +92,11 @@ def test_config_endpoint_exposes_runtime_limits(client: TestClient, settings: Se
         "maxJsonBodyBytes": settings.max_json_body_bytes,
         "maxImagePixels": settings.max_image_pixels,
         "allowedMimeTypes": ["image/jpeg", "image/png", "image/webp", "image/tiff"],
-        "features": {"layers": False},
+        "features": {
+            "layers": False,
+            "semanticMasks": {"enabled": False, "person": False, "sky": False},
+            "semanticMaskModels": {"person": None, "sky": None},
+        },
     }
 
 
@@ -121,7 +125,11 @@ def test_uploaded_limit_matches_runtime_config(client: TestClient, settings):
 
     assert config["maxUploadBytes"] == settings.max_upload_bytes
     assert config["maxJsonBodyBytes"] == settings.max_json_body_bytes
-    assert config["features"] == {"layers": False}
+    assert config["features"] == {
+        "layers": False,
+        "semanticMasks": {"enabled": False, "person": False, "sky": False},
+        "semanticMaskModels": {"person": None, "sky": None},
+    }
     assert upload(client, payload).status_code == 201
 
 
@@ -137,7 +145,31 @@ def test_layer_feature_flag_is_exposed_when_enabled(tmp_path):
     with TestClient(create_app(settings)) as client:
         config = client.get("/api/v1/config").json()
 
-    assert config["features"] == {"layers": True}
+    assert config["features"] == {
+        "layers": True,
+        "semanticMasks": {"enabled": False, "person": False, "sky": False},
+        "semanticMaskModels": {"person": None, "sky": None},
+    }
+
+
+def test_semantic_mask_capability_follows_flag_and_bundled_model(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        allowed_origins="http://testserver",
+        allowed_hosts="testserver",
+        feature_semantic_masks=True,
+    )
+
+    with TestClient(create_app(settings)) as client:
+        config = client.get("/api/v1/config").json()
+
+    assert config["features"]["semanticMasks"] == {
+        "enabled": True,
+        "person": True,
+        "sky": False,
+    }
+    assert config["features"]["semanticMaskModels"] == {"person": "1", "sky": None}
 
 
 B6_ENV_VARIABLES = (
@@ -156,6 +188,9 @@ B6_ENV_VARIABLES = (
     "FRAME_RATE_LIMIT_RENDER",
     "FRAME_RATE_LIMIT_DEFAULT",
     "FRAME_FEATURE_LAYERS",
+    "FRAME_FEATURE_SEMANTIC_MASKS",
+    "FRAME_SEMANTIC_MASK_CONCURRENCY",
+    "FRAME_SEMANTIC_MASK_TIMEOUT_SECONDS",
 )
 
 

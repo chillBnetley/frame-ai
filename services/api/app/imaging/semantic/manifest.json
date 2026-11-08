@@ -1,0 +1,30 @@
+{
+  "preprocessVersion": "semantic/1",
+  "models": {
+    "person": {
+      "modelId": "mediapipe-selfie-segmentation",
+      "version": "1",
+      "file": "models/mediapipe/selfie_segmentation.tflite",
+      "bytes": 249505,
+      "sha256": "9ee168ec7c8f2a16c56fe8e1cfbc514974cbbb7e434051b455635f1bd1462f5c",
+      "input": [256, 256],
+      "license": "Apache-2.0",
+      "sourceUrl": "https://storage.googleapis.com/mediapipe-assets/selfie_segmentation.tflite",
+      "notice": "models/mediapipe/NOTICE",
+      "bundled": true
+    },
+    "sky": {
+      "modelId": "skyseg-u2net",
+      "version": "1",
+      "file": "skyseg.onnx",
+      "bytes": 175997079,
+      "sha256": "ab9c34c64c3d821220a2886a4a06da4642ffa14d5b30e8d5339056a089aa1d39",
+      "input": [320, 320],
+      "license": "MIT",
+      "sourceUrl": "https://huggingface.co/JianyuanWang/skyseg/resolve/main/skyseg.onnx",
+      "licenseFile": "LICENSE.skyseg",
+      "bundled": false,
+      "experimental": true
+    }
+  }
+}

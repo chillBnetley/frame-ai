@@ -95,7 +95,15 @@ function mockApi(options: MockApiOptions = {}) {
         maxUploadBytes: 20 * 1024 * 1024,
         maxImagePixels: 40_000_000,
         allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
-        features: { layers: options.layers === true },
+        features: {
+          layers: options.layers === true,
+          semanticMasks: {
+            enabled: false,
+            person: false,
+            sky: false,
+          },
+          semanticMaskModels: { person: null, sky: null },
+        },
       });
     }
     if (url.endsWith("/api/v1/images") && init?.method === "POST") {
@@ -263,7 +271,15 @@ function mockSlowUpload() {
           maxUploadBytes: 20 * 1024 * 1024,
           maxImagePixels: 40_000_000,
           allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
-          features: { layers: false },
+          features: {
+            layers: false,
+            semanticMasks: {
+              enabled: false,
+              person: false,
+              sky: false,
+            },
+            semanticMaskModels: { person: null, sky: null },
+          },
         }),
       );
     }

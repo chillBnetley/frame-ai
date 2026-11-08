@@ -17,6 +17,7 @@ import {
   createLocalAdjustmentId,
   createMask,
   createMaskId,
+  createSemanticMask,
   moveLocalAdjustment,
   normalizeRecipe,
   removeLocalAdjustment,
@@ -39,6 +40,7 @@ import {
   type Size,
 } from "@/lib/mask-geometry";
 import type { EditorRecipe, MaskShape, UserMask } from "@/types/session";
+import type { SemanticMaskInfo } from "@/lib/api/client";
 
 interface LocalFieldDefinition {
   key: LocalV1AdjustmentKey;
@@ -157,6 +159,15 @@ export interface LocalAdjustmentsPanelProps {
   renderWarnings?: readonly string[];
   disabled?: boolean;
   layersEnabled?: boolean;
+  semanticMasks?: {
+    enabled: boolean;
+    person: boolean;
+    sky: boolean;
+    models: { person: string | null; sky: string | null };
+  };
+  onRequestSemanticMask?: (
+    kind: "person" | "sky",
+  ) => Promise<SemanticMaskInfo | null>;
   onChange: (recipe: EditorRecipe) => void;
   onCommit: () => void;
 }
@@ -170,6 +181,8 @@ export function LocalAdjustmentsPanel({
   renderWarnings = [],
   disabled = false,
   layersEnabled = false,
+  semanticMasks,
+  onRequestSemanticMask,
   onChange,
   onCommit,
 }: LocalAdjustmentsPanelProps) {
@@ -177,6 +190,8 @@ export function LocalAdjustmentsPanel({
   const hintId = useId();
   const splitHintId = useId();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [semanticBusy, setSemanticBusy] = useState<"person" | "sky" | null>(null);
+  const [semanticError, setSemanticError] = useState<string | null>(null);
 
   const items = recipe.localAdjustments;
   const masksById = new Map(recipe.masks.map((mask) => [mask.id, mask]));
@@ -219,6 +234,31 @@ export function LocalAdjustmentsPanel({
     const localId = createLocalAdjustmentId(items);
     setSelectedId(localId);
     apply(addLocalAdjustment(recipe, "full"));
+  };
+
+  const addSemantic = async (kind: "person" | "sky") => {
+    if (!onRequestSemanticMask || !canAdd || !canCreateMask || semanticBusy !== null) {
+      return;
+    }
+    setSemanticError(null);
+    setSemanticBusy(kind);
+    try {
+      const info = await onRequestSemanticMask(kind);
+      if (info === null) {
+        setSemanticError("语义蒙版生成失败，请确认模型可用后重试。");
+        return;
+      }
+      const maskId = createMaskId(recipe.masks);
+      const localId = createLocalAdjustmentId(items);
+      let next = addMask(recipe, createSemanticMask(maskId, info));
+      next = addLocalAdjustment(next, maskId);
+      setSelectedId(localId);
+      apply(next);
+    } catch {
+      setSemanticError("语义蒙版生成失败，请确认模型可用后重试。");
+    } finally {
+      setSemanticBusy(null);
+    }
   };
 
   const switchMaskMode = (itemId: string, mask: UserMask | null, mode: MaskMode) => {
@@ -292,27 +332,71 @@ export function LocalAdjustmentsPanel({
             添加全图局部调整
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-1">
-          <button
-            type="button"
-            disabled
-            aria-describedby={splitHintId}
-            className="min-h-9 cursor-not-allowed rounded-lg border border-white/8 px-2 text-[11px] text-white/25"
-          >
-            人物蒙版
-          </button>
-          <button
-            type="button"
-            disabled
-            aria-describedby={splitHintId}
-            className="min-h-9 cursor-not-allowed rounded-lg border border-white/8 px-2 text-[11px] text-white/25"
-          >
-            天空蒙版
-          </button>
-        </div>
-        <p id={splitHintId} className="text-[10px] leading-relaxed text-white/30">
-          未接入真实的人物/天空分割模型，这两个蒙版暂不可用；请使用矩形或椭圆手动框选。
-        </p>
+        {semanticMasks?.enabled ? (
+          <>
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                disabled={
+                  !canAdd ||
+                  !canCreateMask ||
+                  !semanticMasks.person ||
+                  semanticBusy !== null
+                }
+                title={
+                  semanticMasks.person
+                    ? `人物模型 v${semanticMasks.models.person ?? "?"}（本地）`
+                    : "人物模型不可用"
+                }
+                onClick={() => void addSemantic("person")}
+                className={addButtonClass(
+                  !canAdd ||
+                    !canCreateMask ||
+                    !semanticMasks.person ||
+                    semanticBusy !== null,
+                )}
+              >
+                {semanticBusy === "person" ? "生成中…" : "人物蒙版"}
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !canAdd ||
+                  !canCreateMask ||
+                  !semanticMasks.sky ||
+                  semanticBusy !== null
+                }
+                title={
+                  semanticMasks.sky
+                    ? `天空模型 v${semanticMasks.models.sky ?? "?"}（实验性，质量未验证）`
+                    : "天空模型未安装（实验性）"
+                }
+                onClick={() => void addSemantic("sky")}
+                className={addButtonClass(
+                  !canAdd ||
+                    !canCreateMask ||
+                    !semanticMasks.sky ||
+                    semanticBusy !== null,
+                )}
+              >
+                {semanticBusy === "sky" ? "生成中…" : "天空蒙版（实验性）"}
+              </button>
+            </div>
+            <p id={splitHintId} className="text-[10px] leading-relaxed text-white/30">
+              {semanticMasks.person
+                ? "人物蒙版在本地模型上运行，图片不会上传；"
+                : "人物模型不可用；"}
+              {semanticMasks.sky
+                ? "天空蒙版为实验性能力，质量尚未量化。"
+                : "天空模型未安装（实验性）。"}
+            </p>
+            {semanticError && (
+              <p role="alert" className="text-[10px] leading-relaxed text-amber-200/80">
+                {semanticError}
+              </p>
+            )}
+          </>
+        ) : null}
       </div>
 
       {items.length === 0 ? (
@@ -328,13 +412,18 @@ export function LocalAdjustmentsPanel({
               `local_mask_missing:${item.maskId}`,
             );
             const expanded = activeId === item.id;
-            const summary = missing
-              ? "蒙版缺失"
-              : mask
-                ? mask.shape === "ellipse"
-                  ? "椭圆"
-                  : "矩形"
-                : "全图";
+            const summary =
+              mask?.source === "semantic"
+                ? mask.semanticClass === "person"
+                  ? "人物（语义）"
+                  : "天空（语义，实验性）"
+                : missing
+                  ? "蒙版缺失"
+                  : mask
+                    ? mask.shape === "ellipse"
+                      ? "椭圆"
+                      : "矩形"
+                    : "全图";
             const localIsZero = LOCAL_V1_ADJUSTMENT_KEYS.every(
               (key) => (item.adjustments?.[key] ?? 0) === 0,
             );
@@ -448,119 +537,131 @@ export function LocalAdjustmentsPanel({
                               最近一次预览渲染已跳过此调整：请求时的选区引用已失效。
                             </p>
                           )}
-                          <div
-                            role="group"
-                            aria-label="蒙版模式"
-                            className="grid grid-cols-3 gap-1"
-                          >
-                            {MASK_MODES.map((mode) => {
-                              const pressed =
-                                mode.id === "full"
-                                  ? item.maskId === "full"
-                                  : mask?.shape === mode.id;
-                              const modeDisabled =
-                                disabled || (mode.id !== "full" && !mask && !canCreateMask);
-                              return (
-                                <button
-                                  key={mode.id}
-                                  type="button"
-                                  aria-pressed={pressed}
-                                  disabled={modeDisabled}
-                                  onClick={() => switchMaskMode(item.id, mask, mode.id)}
-                                  className={`min-h-9 rounded-md border px-1 text-[11px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-35 ${
-                                    pressed
-                                      ? "border-white/25 bg-white/10 text-white"
-                                      : "border-white/10 bg-black/20 text-white/55 hover:bg-white/[0.06] hover:text-white"
-                                  }`}
-                                >
-                                  {mode.label}
-                                </button>
-                              );
-                            })}
-                          </div>
+                          {mask?.source !== "semantic" && (
+                            <div
+                              role="group"
+                              aria-label="蒙版模式"
+                              className="grid grid-cols-3 gap-1"
+                            >
+                              {MASK_MODES.map((mode) => {
+                                const pressed =
+                                  mode.id === "full"
+                                    ? item.maskId === "full"
+                                    : mask?.shape === mode.id;
+                                const modeDisabled =
+                                  disabled || (mode.id !== "full" && !mask && !canCreateMask);
+                                return (
+                                  <button
+                                    key={mode.id}
+                                    type="button"
+                                    aria-pressed={pressed}
+                                    disabled={modeDisabled}
+                                    onClick={() => switchMaskMode(item.id, mask, mode.id)}
+                                    className={`min-h-9 rounded-md border px-1 text-[11px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-35 ${
+                                      pressed
+                                        ? "border-white/25 bg-white/10 text-white"
+                                        : "border-white/10 bg-black/20 text-white/55 hover:bg-white/[0.06] hover:text-white"
+                                    }`}
+                                  >
+                                    {mode.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
 
                           {mask ? (
                             <>
-                              <MaskCanvas
-                                imageUrl={previewUrl}
-                                previewWidth={previewWidth}
-                                previewHeight={previewHeight}
-                                rotationDeg={rotationDeg}
-                                crop={crop}
-                                sourceSize={sourceSize}
-                                mask={mask}
-                                disabled={disabled}
-                                onChangeRegion={(region) => updateRegion(mask, region)}
-                                onCommit={onCommit}
-                              />
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                <MaskPercentField
-                                  label="区域左侧 x（%）"
-                                  value={mask.x}
-                                  min={0}
-                                  max={100}
-                                  disabled={disabled}
-                                  onChange={(value) =>
-                                    onChange(updateMask(recipe, mask.id, { x: value }))
-                                  }
-                                  onCommit={onCommit}
-                                />
-                                <MaskPercentField
-                                  label="区域顶部 y（%）"
-                                  value={mask.y}
-                                  min={0}
-                                  max={100}
-                                  disabled={disabled}
-                                  onChange={(value) =>
-                                    onChange(updateMask(recipe, mask.id, { y: value }))
-                                  }
-                                  onCommit={onCommit}
-                                />
-                                <MaskPercentField
-                                  label="区域宽度（%）"
-                                  value={mask.width}
-                                  min={1}
-                                  max={100}
-                                  disabled={disabled}
-                                  onChange={(value) =>
-                                    onChange(
-                                      updateMask(recipe, mask.id, { width: value }),
-                                    )
-                                  }
-                                  onCommit={onCommit}
-                                />
-                                <MaskPercentField
-                                  label="区域高度（%）"
-                                  value={mask.height}
-                                  min={1}
-                                  max={100}
-                                  disabled={disabled}
-                                  onChange={(value) =>
-                                    onChange(
-                                      updateMask(recipe, mask.id, { height: value }),
-                                    )
-                                  }
-                                  onCommit={onCommit}
-                                />
-                              </div>
+                              {mask.source === "semantic" ? (
+                                <p className="text-[10px] leading-relaxed text-white/40">
+                                  语义蒙版由本地模型生成；几何与羽化不可编辑，蒙版不透明度与反选仍然生效。
+                                </p>
+                              ) : (
+                                <>
+                                  <MaskCanvas
+                                    imageUrl={previewUrl}
+                                    previewWidth={previewWidth}
+                                    previewHeight={previewHeight}
+                                    rotationDeg={rotationDeg}
+                                    crop={crop}
+                                    sourceSize={sourceSize}
+                                    mask={mask}
+                                    disabled={disabled}
+                                    onChangeRegion={(region) => updateRegion(mask, region)}
+                                    onCommit={onCommit}
+                                  />
+                                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                    <MaskPercentField
+                                      label="区域左侧 x（%）"
+                                      value={mask.x}
+                                      min={0}
+                                      max={100}
+                                      disabled={disabled}
+                                      onChange={(value) =>
+                                        onChange(updateMask(recipe, mask.id, { x: value }))
+                                      }
+                                      onCommit={onCommit}
+                                    />
+                                    <MaskPercentField
+                                      label="区域顶部 y（%）"
+                                      value={mask.y}
+                                      min={0}
+                                      max={100}
+                                      disabled={disabled}
+                                      onChange={(value) =>
+                                        onChange(updateMask(recipe, mask.id, { y: value }))
+                                      }
+                                      onCommit={onCommit}
+                                    />
+                                    <MaskPercentField
+                                      label="区域宽度（%）"
+                                      value={mask.width}
+                                      min={1}
+                                      max={100}
+                                      disabled={disabled}
+                                      onChange={(value) =>
+                                        onChange(
+                                          updateMask(recipe, mask.id, { width: value }),
+                                        )
+                                      }
+                                      onCommit={onCommit}
+                                    />
+                                    <MaskPercentField
+                                      label="区域高度（%）"
+                                      value={mask.height}
+                                      min={1}
+                                      max={100}
+                                      disabled={disabled}
+                                      onChange={(value) =>
+                                        onChange(
+                                          updateMask(recipe, mask.id, { height: value }),
+                                        )
+                                      }
+                                      onCommit={onCommit}
+                                    />
+                                  </div>
+                                </>
+                              )}
                               <div className="grid gap-4">
+                                {mask.source !== "semantic" && (
+                                  <SliderField
+                                    label="局部羽化"
+                                    value={mask.feather}
+                                    min={MASK_RANGES.feather.min}
+                                    max={MASK_RANGES.feather.max}
+                                    step={MASK_RANGES.feather.step}
+                                    defaultValue={MASK_RANGES.feather.defaultValue}
+                                    disabled={disabled}
+                                    onChange={(value) =>
+                                      onChange(
+                                        updateMask(recipe, mask.id, { feather: value }),
+                                      )
+                                    }
+                                    onCommit={onCommit}
+                                  />
+                                )}
                                 <SliderField
-                                  label="局部羽化"
-                                  value={mask.feather}
-                                  min={MASK_RANGES.feather.min}
-                                  max={MASK_RANGES.feather.max}
-                                  step={MASK_RANGES.feather.step}
-                                  defaultValue={MASK_RANGES.feather.defaultValue}
-                                  disabled={disabled}
-                                  onChange={(value) =>
-                                    onChange(
-                                      updateMask(recipe, mask.id, { feather: value }),
-                                    )
-                                  }
-                                  onCommit={onCommit}
-                                />
-                                <SliderField
-                                  label="局部不透明度"
+                                  label={mask.source === "semantic" ? "蒙版不透明度" : "局部不透明度"}
                                   value={mask.opacity}
                                   min={MASK_RANGES.opacity.min}
                                   max={MASK_RANGES.opacity.max}

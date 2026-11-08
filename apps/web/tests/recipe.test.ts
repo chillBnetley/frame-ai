@@ -331,6 +331,65 @@ describe("recipe schema 2.0 groups", () => {
     expect(added.localAdjustments.map((item) => item.order)).toEqual([0, 1, 2]);
   });
 
+  it("preserves semantic mask fields and forces full-frame geometry", () => {
+    const mask = normalizeMask({
+      id: "mask_sem",
+      shape: "semantic",
+      source: "semantic",
+      semanticClass: "person",
+      matteId: "a".repeat(64),
+      matteSha256: "b".repeat(64),
+      modelVersion: "1",
+      x: 0.2,
+      y: 0.2,
+      width: 0.3,
+      height: 0.3,
+    });
+
+    expect(mask).toMatchObject({
+      id: "mask_sem",
+      shape: "semantic",
+      source: "semantic",
+      semanticClass: "person",
+      matteId: "a".repeat(64),
+      matteSha256: "b".repeat(64),
+      modelVersion: "1",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+    });
+  });
+
+  it("drops malformed semantic masks", () => {
+    expect(
+      normalizeMask({
+        id: "mask_sem",
+        shape: "semantic",
+        source: "semantic",
+        semanticClass: "person",
+        matteId: "not-a-hash",
+        matteSha256: "b".repeat(64),
+        modelVersion: "1",
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps manual masks free of semantic fields", () => {
+    const mask = normalizeMask({
+      id: "mask_manual",
+      shape: "rectangle",
+      source: "user",
+      x: 0.1,
+      y: 0.1,
+      width: 0.2,
+      height: 0.2,
+    });
+
+    expect(mask).toMatchObject({ source: "user", shape: "rectangle" });
+    expect(mask).not.toHaveProperty("semanticClass");
+  });
+
   it("updates blend mode and opacity with clamping", () => {
     const recipe = addLocalAdjustment(DEFAULT_RECIPE);
     const id = recipe.localAdjustments[0]!.id;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +12,22 @@ interface HarnessProps {
   initial?: Partial<EditRecipe>;
   disabled?: boolean;
   layersEnabled?: boolean;
+  semanticMasks?: {
+    enabled: boolean;
+    person: boolean;
+    sky: boolean;
+    models: { person: string | null; sky: string | null };
+  };
+  onRequestSemanticMask?: (
+    kind: "person" | "sky",
+  ) => Promise<{
+    matteId: string;
+    sha256: string;
+    modelVersion: string;
+    semanticClass: "person" | "sky";
+    width: number;
+    height: number;
+  } | null>;
   previewUrl?: string | null;
   previewWidth?: number;
   previewHeight?: number;
@@ -25,6 +41,8 @@ function Harness({
   initial,
   disabled,
   layersEnabled = false,
+  semanticMasks,
+  onRequestSemanticMask,
   previewUrl = "/api/v1/previews/mock",
   previewWidth = 800,
   previewHeight = 600,
@@ -44,6 +62,8 @@ function Harness({
       renderWarnings={renderWarnings}
       disabled={disabled}
       layersEnabled={layersEnabled}
+      semanticMasks={semanticMasks}
+      onRequestSemanticMask={onRequestSemanticMask}
       onChange={(next) => {
         onChange?.(next);
         setRecipe(next);
@@ -102,15 +122,12 @@ function outlinePointCount(): number {
 }
 
 describe("LocalAdjustmentsPanel", () => {
-  it("starts empty and explains that person and sky masks are unavailable", () => {
+  it("hides the semantic mask buttons when the capability is off", () => {
     renderPanel();
 
     expect(screen.getByText(/尚未添加局部调整/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "人物蒙版" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "天空蒙版" })).toBeDisabled();
-    expect(
-      screen.getByText(/未接入真实的人物\/天空分割模型/),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "人物蒙版" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /天空蒙版/ })).toBeNull();
     expect(screen.getByText("0 / 20")).toBeInTheDocument();
   });
 
@@ -335,8 +352,6 @@ describe("LocalAdjustmentsPanel", () => {
       "添加矩形区域",
       "添加椭圆区域",
       "添加全图局部调整",
-      "人物蒙版",
-      "天空蒙版",
       "矩形",
       "椭圆",
       "删除局部 1",
@@ -437,5 +452,80 @@ describe("LocalAdjustmentsPanel layer capacity", () => {
     expect(
       screen.getByRole("button", { name: "添加全图局部调整" }),
     ).toBeDisabled();
+  });
+});
+
+describe("LocalAdjustmentsPanel semantic masks", () => {
+  it("enables person, disables sky when its model is missing, and marks sky experimental", () => {
+    renderPanel({
+      semanticMasks: {
+        enabled: true,
+        person: true,
+        sky: false,
+        models: { person: "1", sky: null },
+      },
+    });
+
+    expect(screen.getByRole("button", { name: "人物蒙版" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "人物蒙版" })).toHaveAttribute(
+      "title",
+      "人物模型 v1（本地）",
+    );
+    const sky = screen.getByRole("button", { name: "天空蒙版（实验性）" });
+    expect(sky).toBeDisabled();
+    expect(sky).toHaveAttribute("title", "天空模型未安装（实验性）");
+  });
+
+  it("keeps both buttons visible but disabled when every model is unavailable", () => {
+    renderPanel({
+      semanticMasks: {
+        enabled: true,
+        person: false,
+        sky: false,
+        models: { person: null, sky: null },
+      },
+    });
+
+    expect(screen.getByRole("button", { name: "人物蒙版" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "天空蒙版（实验性）" })).toBeDisabled();
+  });
+
+  it("adds a semantic mask and matching local adjustment", async () => {
+    const info = {
+      matteId: "a".repeat(64),
+      sha256: "b".repeat(64),
+      modelVersion: "1",
+      semanticClass: "person" as const,
+      width: 64,
+      height: 48,
+    };
+    const { onChange } = renderPanel({
+      semanticMasks: {
+        enabled: true,
+        person: true,
+        sky: false,
+        models: { person: "1", sky: null },
+      },
+      onRequestSemanticMask: async () => info,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "人物蒙版" }));
+
+    await waitFor(() => expect(lastRecipe(onChange).masks).toHaveLength(1));
+    const recipe = lastRecipe(onChange);
+    expect(recipe.masks[0]).toMatchObject({
+      source: "semantic",
+      shape: "semantic",
+      semanticClass: "person",
+      matteId: info.matteId,
+      matteSha256: info.sha256,
+      modelVersion: "1",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+    });
+    expect(recipe.localAdjustments[0]?.maskId).toBe(recipe.masks[0]?.id);
+    expect(screen.getByText(/人物（语义）/)).toBeInTheDocument();
   });
 });

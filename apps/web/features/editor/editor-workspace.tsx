@@ -54,6 +54,7 @@ import {
   useEditorState,
 } from "@/features/editor/state/editor-context";
 import {
+  createSemanticMask,
   deleteImage,
   fetchConfig,
   fetchHealth,
@@ -136,12 +137,24 @@ function useApiHealth(): ApiStatus {
 interface RuntimeConfigState {
   limits: UploadLimits | null;
   layersEnabled: boolean;
+  semanticMasks: {
+    enabled: boolean;
+    person: boolean;
+    sky: boolean;
+    models: { person: string | null; sky: string | null };
+  };
 }
 
 function useRuntimeLimits(): RuntimeConfigState {
   const [state, setState] = useState<RuntimeConfigState>({
     limits: null,
     layersEnabled: false,
+    semanticMasks: {
+      enabled: false,
+      person: false,
+      sky: false,
+      models: { person: null, sky: null },
+    },
   });
 
   useEffect(() => {
@@ -150,12 +163,23 @@ function useRuntimeLimits(): RuntimeConfigState {
     fetchConfig()
       .then((config) => {
         if (active) {
+          const semantic = config.features?.semanticMasks;
+          const models = config.features?.semanticMaskModels;
           setState({
             limits: {
               maxUploadBytes: config.maxUploadBytes,
               allowedMimeTypes: config.allowedMimeTypes,
             },
             layersEnabled: config.features?.layers === true,
+            semanticMasks: {
+              enabled: semantic?.enabled === true,
+              person: semantic?.person === true,
+              sky: semantic?.sky === true,
+              models: {
+                person: models?.person ?? null,
+                sky: models?.sky ?? null,
+              },
+            },
           });
         }
       })
@@ -196,6 +220,7 @@ interface EditorStageProps {
   image: UploadedImage | null;
   uploading: boolean;
   layersEnabled: boolean;
+  semanticMasks: RuntimeConfigState["semanticMasks"];
   onFileSelected: (file: File) => void;
   onStartOver: () => void;
   onPhotoDeleted: () => void;
@@ -205,6 +230,7 @@ function EditorStage({
   image,
   uploading,
   layersEnabled,
+  semanticMasks,
   onFileSelected,
   onStartOver,
   onPhotoDeleted,
@@ -1004,6 +1030,12 @@ function EditorStage({
               renderWarnings={preview.warnings}
               disabled={cropMode || compareOpen}
               layersEnabled={layersEnabled}
+              semanticMasks={semanticMasks}
+              onRequestSemanticMask={
+                state.imageId
+                  ? (kind) => createSemanticMask(state.imageId!, kind)
+                  : undefined
+              }
               onChange={(recipe) => dispatch({ type: "draft-recipe", recipe })}
               onCommit={requestCommit}
             />
@@ -1197,6 +1229,7 @@ function EditorWorkspaceInner() {
               image={image}
               uploading={uploading}
               layersEnabled={runtime.layersEnabled}
+              semanticMasks={runtime.semanticMasks}
               onFileSelected={handleFileSelected}
               onStartOver={handleStartOver}
               onPhotoDeleted={handlePhotoDeleted}

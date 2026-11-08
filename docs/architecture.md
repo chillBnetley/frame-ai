@@ -180,7 +180,7 @@ HSL 阶段在曲线之后、全局饱和度/自然饱和度之前执行，输入
 | 矩形 | `shape: "rectangle"` | 原图坐标轴对齐；旋转后随内容旋转 |
 | 椭圆 | `shape: "ellipse"` | 外接矩形内切椭圆 |
 
-**不提供人物 / 天空蒙版。** 阶段三的视觉结果只有边界框，没有像素级分割；把 bbox 当蒙版会污染框内背景，因此后端没有 `person`/`sky` 类型，界面上对应按钮禁用并说明需要真实分割模型。未来接入真实分割后再新增类型，不在本版伪造。
+**语义蒙版（L8）**：人物使用随仓库打包的 MediaPipe Selfie TFLite（256 输入，Apache-2.0），天空使用可选的 skyseg ONNX（320 输入，MIT，168 MB 不入库）。`SemanticModelRegistry` 在启动时校验模型字节数/SHA-256 并探测缓存目录可写；推理前把模型复制到 ASCII 缓存（Windows `%PUBLIC%\FRAME-AI\models\<sha256>\`；POSIX 优先 `<data_dir>/models/semantic/<sha256>/`，非 ASCII 时回退 `$XDG_CACHE_HOME/frame-ai/models` → `~/.cache/frame-ai/models` → `/tmp/frame-ai-models`），因为 OpenCV DNN 无法从含中文的路径加载且不接受 bytes。`POST /images/{id}/semantic-masks` 在 1280 长边代理上推理，matte 以 8-bit PNG 存 `<data_dir>/mattes/`（raw 像素 SHA-256 写入配方），单飞 + semaphore + 超时；模型缺失/flag 关闭返回 503。渲染时 `local_masks` 在源归一化坐标系采样 matte 作为权重，再与 `opacity`/`inverted`/B7 图层混合组合；matte 缺失只 warning + 跳过。阶段三 bbox 仍不会被当作蒙版，AI 也不会自动创建语义蒙版。
 
 #### 权重计算
 

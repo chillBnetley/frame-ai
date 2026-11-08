@@ -37,7 +37,9 @@ STYLE_IDS: tuple[StyleId, ...] = (
     "cinematic",
 )
 RenderQuality = Literal["draft", "final", "export"]
-MaskShape = Literal["rectangle", "ellipse"]
+MaskShape = Literal["rectangle", "ellipse", "semantic"]
+MaskSource = Literal["user", "semantic"]
+SemanticClass = Literal["person", "sky"]
 OutputFormat = Literal["jpeg", "png"]
 ColorSpace = Literal["sRGB"]
 CurveChannel = Literal["master", "red", "green", "blue"]
@@ -286,7 +288,11 @@ class LocalAdjustment(_Strict):
 class UserMask(_Strict):
     id: UserMaskIdentifier
     shape: MaskShape = "rectangle"
-    source: Literal["user"] = "user"
+    source: MaskSource = "user"
+    semantic_class: SemanticClass | None = None
+    matte_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    matte_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    model_version: str | None = Field(default=None, max_length=64)
     coordinate_space: Literal["source-normalized"] = "source-normalized"
     x: UNIT4
     y: UNIT4
@@ -295,6 +301,25 @@ class UserMask(_Strict):
     feather: U100 = 15.0
     opacity: U100 = 100.0
     inverted: StrictBool = False
+
+    @model_validator(mode="after")
+    def _semantic_fields(self) -> Self:
+        semantic_fields = (
+            self.semantic_class,
+            self.matte_id,
+            self.matte_sha256,
+            self.model_version,
+        )
+        if self.source == "semantic":
+            if self.shape != "semantic":
+                raise ValueError("semantic masks must use shape='semantic'")
+            if any(value is None for value in semantic_fields):
+                raise ValueError("semantic masks require class, matte id/hash and model version")
+            if (self.x, self.y, self.width, self.height) != (0.0, 0.0, 1.0, 1.0):
+                raise ValueError("semantic masks must use the full-frame geometry")
+        elif self.shape == "semantic" or any(value is not None for value in semantic_fields):
+            raise ValueError("manual masks must not carry semantic fields")
+        return self
 
     @model_validator(mode="after")
     def _inside_frame(self) -> Self:
@@ -427,8 +452,16 @@ def _canonical_local_adjustments(local_adjustments: tuple[LocalAdjustment, ...])
     return sorted(payload, key=lambda item: (int(item.get("order", 0)), str(item["id"])))
 
 
+def _mask_identity_payload(mask: UserMask) -> dict[str, Any]:
+    payload = mask.model_dump(mode="json")
+    for key in ("semantic_class", "matte_id", "matte_sha256", "model_version"):
+        if payload.get(key) is None:
+            payload.pop(key, None)
+    return payload
+
+
 def _canonical_masks(masks: tuple[UserMask, ...]) -> list[Any]:
-    payload = _canonicalize([mask.model_dump(mode="json") for mask in masks])
+    payload = _canonicalize([_mask_identity_payload(mask) for mask in masks])
     return sorted(payload, key=lambda item: str(item["id"]))
 
 

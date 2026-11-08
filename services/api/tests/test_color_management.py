@@ -632,7 +632,7 @@ def test_render_stages_keep_float32(module_name: str) -> None:
 
 
 def test_only_the_documented_sites_quantise_to_uint8() -> None:
-    allowed = {"output.py", "detail.py", "loader.py", "analyzer.py"}
+    allowed = {"output.py", "detail.py", "loader.py", "analyzer.py", "semantic_models.py"}
 
     found = {
         path.name

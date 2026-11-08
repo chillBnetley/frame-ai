@@ -22,7 +22,8 @@ from app.core.middleware import (
     RequestContextMiddleware,
 )
 from app.core.upload_limit import RequestBodyLimitMiddleware
-from app.imaging.local_masks import configure_mask_cache
+from app.imaging.local_masks import configure_mask_cache, configure_semantic_mattes
+from app.imaging.semantic_models import SemanticModelRegistry
 from app.photographer.service import PhotographerService
 from app.repositories.analysis_repo import SqliteAnalysisRepository
 from app.repositories.photographer_repo import (
@@ -37,6 +38,7 @@ from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
 from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
+from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
 
 API_PREFIX = "/api/v1"
@@ -54,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(resolved_settings.log_level)
     configure_mask_cache(resolved_settings.mask_cache_mb * 1024 * 1024)
     token_service = ApiTokenService(resolved_settings.api_token_path)
+    semantic_registry = SemanticModelRegistry(resolved_settings.data_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -62,6 +65,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service = ImageService(resolved_settings)
         service.ensure_ready()
         service.scan_consistency()
+        configure_semantic_mattes(resolved_settings.mattes_dir)
+        app.state.semantic_mask_service = SemanticMaskService(
+            resolved_settings,
+            service,
+            semantic_registry,
+        )
         session_service = SessionService(resolved_settings, service)
         render_service = RenderService(resolved_settings, service, session_service)
         render_service.previews.ensure_ready()
@@ -142,6 +151,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = resolved_settings
     app.state.api_token_service = token_service
+    app.state.semantic_registry = semantic_registry
 
     register_exception_handlers(app)
 

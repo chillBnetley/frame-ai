@@ -33,6 +33,7 @@ const webServer = [
       FRAME_PROVIDER_ALLOW_INSECURE_HTTP: "true",
       FRAME_API_AUTH_ENABLED: "true",
       FRAME_FEATURE_LAYERS: "true",
+      FRAME_FEATURE_SEMANTIC_MASKS: process.env.E2E_SEMANTIC_MASKS ?? "true",
       PYTHONUNBUFFERED: "1",
     },
     url: `${API_URL}/`,

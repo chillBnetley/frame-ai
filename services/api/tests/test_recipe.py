@@ -923,3 +923,46 @@ def test_validation_error_details_point_at_the_field_and_limit(tmp_path):
     field = response.json()["error"]["details"]["fields"][0]
     assert field["field"] == "styleStrength"
     assert field["limit"] == {"le": 100.0}
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        {
+            "id": "mask_sem",
+            "shape": "semantic",
+            "source": "semantic",
+            "semanticClass": "person",
+            "matteId": "a" * 64,
+            "matteSha256": "b" * 64,
+            "modelVersion": "1",
+            "x": 0.1,
+            "y": 0,
+            "width": 0.9,
+            "height": 1,
+        },
+        {
+            "id": "mask_sem",
+            "shape": "semantic",
+            "source": "semantic",
+            "semanticClass": "person",
+            "matteId": "a" * 64,
+            "matteSha256": "b" * 64,
+            "modelVersion": "1",
+        },
+        {
+            "id": "mask_manual",
+            "shape": "rectangle",
+            "source": "user",
+            "semanticClass": "person",
+        },
+        {
+            "id": "mask_manual",
+            "shape": "semantic",
+            "source": "user",
+        },
+    ],
+)
+def test_invalid_semantic_mask_combinations_are_rejected(mask: dict[str, object]):
+    with pytest.raises(ValidationError):
+        UserMask.model_validate(mask)
