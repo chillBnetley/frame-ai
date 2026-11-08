@@ -6,3 +6,11 @@ pillow==12.3.0
 numpy==2.5.4
 opencv-python-headless==4.14.0.94
 tifffile==2026.3.3
+# Provider secret encryption (AES-256-GCM). The published wheel is tagged
+# cp311-abi3: that is the CPython *stable ABI*, so it covers 3.11+ and was
+# verified on 3.14.7 -- it does not mean "3.11 only". Transitive versions are
+# left unpinned like every other entry here; the combination measured on
+# Windows amd64 / Python 3.14.7 is cffi==2.1.1 + pycparser==3.12.
+# Supported wheels: Windows amd64, Linux x86_64/aarch64, macOS arm64.
+# Intel Mac and 32-bit/ARM Windows have no 50.0.2 wheel (see README).
+cryptography==50.0.2
