@@ -503,6 +503,26 @@ def test_export_estimate_adds_a_surcharge_for_active_local_adjustments():
     assert estimate_export_peak_mb(12_000_000, active) < 3072
 
 
+def test_sixteen_layers_at_24mp_exceed_the_default_budget():
+    locals_ = tuple(
+        LocalAdjustment(
+            id=f"local_{index}",
+            order=index,
+            adjustments=LocalAdjustments(exposure_ev=0.1),
+        )
+        for index in range(16)
+    )
+    recipe = EditRecipe(
+        adjustments=Adjustments(exposure_ev=0.5),
+        local_adjustments=locals_,
+    )
+
+    estimate = estimate_export_peak_mb(24_000_000, recipe)
+
+    assert estimate == pytest.approx(6741.8, abs=0.1)
+    assert estimate > 3072
+
+
 def test_export_beyond_the_memory_budget_returns_413(tmp_path):
     settings = _settings(tmp_path, export_max_rss_mb=160)
     with TestClient(create_app(settings)) as client:

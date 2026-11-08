@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
     api_auth_enabled: bool = True
     api_token_file: Path | None = None
+    feature_layers: bool = Field(default=False)
     rate_limit_upload: int = Field(default=0, ge=0)
     rate_limit_export: int = Field(default=0, ge=0)
     rate_limit_analysis: int = Field(default=0, ge=0)

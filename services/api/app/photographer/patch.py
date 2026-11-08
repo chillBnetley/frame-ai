@@ -246,6 +246,11 @@ def _merge_local_intent(
     while any(item.id == local_id for item in result):
         next_id += 1
         local_id = f"local_ai_{next_id}"
+    if len(result) >= LOCAL_ADJUSTMENT_LIMIT:
+        raise RecipeValidationError(
+            (f"at most {LOCAL_ADJUSTMENT_LIMIT} local adjustments are allowed",)
+        )
+    result[:] = [item.model_copy(update={"order": index}) for index, item in enumerate(result)]
     merged = {
         field: round2(clamp_adjustment(field, delta.get(field, 0.0)))
         for field in PATCH_LOCAL_FIELDS
@@ -254,6 +259,7 @@ def _merge_local_intent(
         LocalAdjustment(
             id=local_id,
             mask_id=mask_id,
+            order=len(result),
             adjustments=LocalAdjustments.model_validate(merged),
         )
     )

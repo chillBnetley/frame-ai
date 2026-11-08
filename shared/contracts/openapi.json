@@ -6206,6 +6206,43 @@
             "title": "Enabled",
             "default": true
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "blendMode": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "multiply",
+              "screen",
+              "overlay"
+            ],
+            "title": "Blendmode",
+            "default": "normal"
+          },
+          "opacity": {
+            "type": "number",
+            "title": "Opacity",
+            "default": 100.0,
+            "ge": 0,
+            "le": 100
+          },
+          "order": {
+            "type": "integer",
+            "maximum": 19.0,
+            "minimum": 0.0,
+            "title": "Order",
+            "default": 0
+          },
           "adjustments": {
             "$ref": "#/components/schemas/LocalAdjustments"
           }
@@ -7957,6 +7994,9 @@
             },
             "type": "array",
             "title": "Allowedmimetypes"
+          },
+          "features": {
+            "$ref": "#/components/schemas/RuntimeFeatures"
           }
         },
         "additionalProperties": false,
@@ -7965,9 +8005,24 @@
           "maxUploadBytes",
           "maxJsonBodyBytes",
           "maxImagePixels",
-          "allowedMimeTypes"
+          "allowedMimeTypes",
+          "features"
         ],
         "title": "RuntimeConfigResponse"
+      },
+      "RuntimeFeatures": {
+        "properties": {
+          "layers": {
+            "type": "boolean",
+            "title": "Layers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "layers"
+        ],
+        "title": "RuntimeFeatures"
       },
       "SaturationLevel": {
         "type": "string",

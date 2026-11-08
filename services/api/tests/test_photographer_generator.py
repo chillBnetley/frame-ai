@@ -26,6 +26,7 @@ from app.models.recipe import (
     Crop,
     CurvePoint,
     CurveSet,
+    EditRecipe,
     HslAdjustments,
     HslBand,
     LocalAdjustment,
@@ -558,3 +559,48 @@ def test_already_balanced_frame_produces_no_change():
     assert result.changes == ()
     assert result.recipe.adjustments == recipe().adjustments
     assert any("未生成新的像素调整" in warning for warning in result.warnings)
+
+
+def _layered_base(orders: tuple[int, ...]) -> EditRecipe:
+    masks = (
+        MASK,
+        UserMask(id="mask_002", x=0.5, y=0.1, width=0.3, height=0.3),
+    )
+    locals_ = tuple(
+        LocalAdjustment(
+            id=f"local_base_{index}",
+            mask_id="mask_001",
+            order=order,
+            adjustments=LocalAdjustments(exposure_ev=0.1),
+        )
+        for index, order in enumerate(orders)
+    )
+    return recipe().model_copy(update={"masks": masks, "local_adjustments": locals_})
+
+
+def test_generator_rejects_the_21st_local_adjustment_with_a_recipe_error():
+    base = _layered_base(tuple(range(20)))
+    analysis = _clipped_report()
+    intent = LocalAdjustmentIntent(
+        mask_id="mask_002",
+        adjustments=AdjustmentIntent(shadows=10.0),
+    )
+
+    with pytest.raises(RecipeValidationError, match="at most 20"):
+        generate_recipe(base, analysis, _draft(analysis, local_adjustments=(intent,)))
+
+
+def test_generator_renumbers_sparse_orders_when_appending():
+    base = _layered_base((1, 2))
+    analysis = _clipped_report()
+    intent = LocalAdjustmentIntent(
+        mask_id="mask_002",
+        adjustments=AdjustmentIntent(shadows=10.0),
+    )
+
+    result = generate_recipe(base, analysis, _draft(analysis, local_adjustments=(intent,)))
+
+    orders = [item.order for item in result.recipe.local_adjustments]
+    assert orders == [0, 1, 2]
+    assert len(set(orders)) == len(orders)
+    EditRecipe.model_validate(result.recipe.model_dump())

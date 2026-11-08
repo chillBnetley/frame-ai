@@ -1733,6 +1733,24 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /** Name */
+            name?: string | null;
+            /**
+             * Blendmode
+             * @default normal
+             * @enum {string}
+             */
+            blendMode: "normal" | "multiply" | "screen" | "overlay";
+            /**
+             * Opacity
+             * @default 100
+             */
+            opacity: number;
+            /**
+             * Order
+             * @default 0
+             */
+            order: number;
             adjustments?: components["schemas"]["LocalAdjustments"];
         };
         /** LocalAdjustments */
@@ -2446,6 +2464,12 @@ export interface components {
             maxImagePixels: number;
             /** Allowedmimetypes */
             allowedMimeTypes: string[];
+            features: components["schemas"]["RuntimeFeatures"];
+        };
+        /** RuntimeFeatures */
+        RuntimeFeatures: {
+            /** Layers */
+            layers: boolean;
         };
         /**
          * SaturationLevel

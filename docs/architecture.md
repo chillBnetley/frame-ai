@@ -206,9 +206,11 @@ v1 支持 11 个局部字段：`exposureEv`、`contrast`、`highlights`、`shado
 ```
 
 - `sharpen/denoise/vignette/grain` 的 schema 字段保留，但局部非零值保存时返回 422；前端不暴露这些控件。局部降噪/锐化在代理与导出分辨率之间的语义未验证，局部暗角本质是全局径向效果。
-- 多个局部调整按 `id` 字典序依次处理，后一项看到前一项的结果；这与 canonical JSON 的排序一致，结果确定可复现。没有图层合成或蒙版布尔运算。
+- 局部调整按 `(order, id)` 依次处理，后一项看到前一项的结果；旧配方全部 `order=0`，因此仍保持 `id` 字典序与既有像素。B7 在 `LocalAdjustment` 内联可选 `name/blendMode/opacity/order`：normal 直接把本层结果作为 `f`，multiply/screen/overlay 先把本层 clip 到 `[0,1]` 再做逐通道混合；`a = mask_weight × opacity/100`，`out = clip(B + (f−B)·a)`。normal+opacity100 的全图分支仍直接返回 `A` 且不 clip，蒙版分支保留旧的 `B+(A−B)·w` 运算顺序；alpha 不参与合成。全 0 权重、`enabled=false`、`opacity=0` 的图层跳过。
+- 图层像素身份：`pixel_recipe_json` 的 locals 按 `(order, id)` 排序，只序列化非默认字段（`blendMode≠normal`、`opacity≠100`、`order≠0`），并排除 `name`。因此旧配方 `recipe_hash`/`render_key` 不变；`name` 只存在于 `stored_recipe_json`，调序/改混合/改不透明度会改变缓存键与 revision 身份。
+- 能力开关：`FRAME_FEATURE_LAYERS`（默认 false）只通过 `GET /config` 的 `features.layers` 控制前端显隐；后端始终校验与渲染。模型上限仍为 20，UI 软上限 16。
 - `full` 蒙版直接以权重 1 混合；形状蒙版按 `rgb·(1−w) + adjusted·w` 混合。全部参数为 0、`enabled=false`、`opacity=0` 或权重全 0（例如蒙版完全在裁切范围外）时不执行像素运算。
-- `maskId` 引用不存在的蒙版时，跳过该局部调整并返回 `local_mask_missing:<maskId>` warning；不崩溃，也不回退到全图或错误区域。
+- `maskId` 引用不存在的蒙版时：旧配方（无任何非默认图层字段）跳过该局部调整并返回 `local_mask_missing:<maskId>` warning；使用新图层字段写入的配方在模型校验阶段 422。不崩溃，也不回退到全图或错误区域。
 
 #### 预览 / 导出一致性与限制
 

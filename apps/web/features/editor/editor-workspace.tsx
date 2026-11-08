@@ -133,8 +133,16 @@ function useApiHealth(): ApiStatus {
   return status;
 }
 
-function useRuntimeLimits(): UploadLimits | null {
-  const [limits, setLimits] = useState<UploadLimits | null>(null);
+interface RuntimeConfigState {
+  limits: UploadLimits | null;
+  layersEnabled: boolean;
+}
+
+function useRuntimeLimits(): RuntimeConfigState {
+  const [state, setState] = useState<RuntimeConfigState>({
+    limits: null,
+    layersEnabled: false,
+  });
 
   useEffect(() => {
     let active = true;
@@ -142,9 +150,12 @@ function useRuntimeLimits(): UploadLimits | null {
     fetchConfig()
       .then((config) => {
         if (active) {
-          setLimits({
-            maxUploadBytes: config.maxUploadBytes,
-            allowedMimeTypes: config.allowedMimeTypes,
+          setState({
+            limits: {
+              maxUploadBytes: config.maxUploadBytes,
+              allowedMimeTypes: config.allowedMimeTypes,
+            },
+            layersEnabled: config.features?.layers === true,
           });
         }
       })
@@ -157,7 +168,7 @@ function useRuntimeLimits(): UploadLimits | null {
     };
   }, []);
 
-  return limits;
+  return state;
 }
 
 function saveStatusLabel(
@@ -184,6 +195,7 @@ interface CropBase {
 interface EditorStageProps {
   image: UploadedImage | null;
   uploading: boolean;
+  layersEnabled: boolean;
   onFileSelected: (file: File) => void;
   onStartOver: () => void;
   onPhotoDeleted: () => void;
@@ -192,6 +204,7 @@ interface EditorStageProps {
 function EditorStage({
   image,
   uploading,
+  layersEnabled,
   onFileSelected,
   onStartOver,
   onPhotoDeleted,
@@ -990,6 +1003,7 @@ function EditorStage({
               }
               renderWarnings={preview.warnings}
               disabled={cropMode || compareOpen}
+              layersEnabled={layersEnabled}
               onChange={(recipe) => dispatch({ type: "draft-recipe", recipe })}
               onCommit={requestCommit}
             />
@@ -1030,7 +1044,8 @@ function EditorStage({
 
 function EditorWorkspaceInner() {
   const apiStatus = useApiHealth();
-  const limits = useRuntimeLimits();
+  const runtime = useRuntimeLimits();
+  const limits = runtime.limits;
   const state = useEditorState();
   const dispatch = useEditorDispatch();
   const [image, setImage] = useState<UploadedImage | null>(null);
@@ -1181,6 +1196,7 @@ function EditorWorkspaceInner() {
             <EditorStage
               image={image}
               uploading={uploading}
+              layersEnabled={runtime.layersEnabled}
               onFileSelected={handleFileSelected}
               onStartOver={handleStartOver}
               onPhotoDeleted={handlePhotoDeleted}

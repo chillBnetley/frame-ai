@@ -11,6 +11,7 @@ import type { EditRecipe, EditorRecipe } from "@/types/session";
 interface HarnessProps {
   initial?: Partial<EditRecipe>;
   disabled?: boolean;
+  layersEnabled?: boolean;
   previewUrl?: string | null;
   previewWidth?: number;
   previewHeight?: number;
@@ -23,6 +24,7 @@ interface HarnessProps {
 function Harness({
   initial,
   disabled,
+  layersEnabled = false,
   previewUrl = "/api/v1/previews/mock",
   previewWidth = 800,
   previewHeight = 600,
@@ -41,6 +43,7 @@ function Harness({
       sourceSize={sourceSize}
       renderWarnings={renderWarnings}
       disabled={disabled}
+      layersEnabled={layersEnabled}
       onChange={(next) => {
         onChange?.(next);
         setRecipe(next);
@@ -84,6 +87,10 @@ const RECT_RECIPE: Partial<EditRecipe> = {
       id: "local_1",
       maskId: "mask_1",
       enabled: true,
+      name: null,
+      blendMode: "normal",
+      opacity: 100,
+      order: 0,
       adjustments: normalizeLocalAdjustmentValues({ exposureEv: 0.5 }),
     },
   ],
@@ -206,6 +213,10 @@ describe("LocalAdjustmentsPanel", () => {
             id: "local_missing",
             maskId: "mask_missing",
             enabled: true,
+            name: null,
+            blendMode: "normal",
+            opacity: 100,
+            order: 0,
             adjustments: normalizeLocalAdjustmentValues({ exposureEv: 1 }),
           },
         ],
@@ -233,6 +244,10 @@ describe("LocalAdjustmentsPanel", () => {
             id: "local_missing",
             maskId: "mask_missing",
             enabled: true,
+            name: null,
+            blendMode: "normal",
+            opacity: 100,
+            order: 0,
             adjustments: normalizeLocalAdjustmentValues({ exposureEv: 1 }),
           },
         ],
@@ -336,6 +351,91 @@ describe("LocalAdjustmentsPanel", () => {
     expect(screen.getByRole("slider", { name: "局部羽化" })).toBeDisabled();
     expect(
       screen.getByRole("spinbutton", { name: "区域左侧 x（%）" }),
+    ).toBeDisabled();
+  });
+});
+
+const LAYERED_RECIPE: Partial<EditRecipe> = {
+  localAdjustments: [
+    {
+      id: "local_1",
+      maskId: "full",
+      enabled: true,
+      name: null,
+      blendMode: "normal",
+      opacity: 100,
+      order: 0,
+      adjustments: normalizeLocalAdjustmentValues({ exposureEv: 0.5 }),
+    },
+    {
+      id: "local_2",
+      maskId: "full",
+      enabled: true,
+      name: "Second",
+      blendMode: "normal",
+      opacity: 100,
+      order: 1,
+      adjustments: normalizeLocalAdjustmentValues({ contrast: 10 }),
+    },
+  ],
+};
+
+describe("LocalAdjustmentsPanel layer controls", () => {
+  it("keeps the legacy panel when the feature flag is off", () => {
+    renderPanel({ initial: LAYERED_RECIPE });
+
+    expect(screen.queryByRole("button", { name: /上移图层/ })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /混合模式/ })).toBeNull();
+    expect(screen.queryByRole("spinbutton", { name: "图层不透明度" })).toBeNull();
+  });
+
+  it("reorders, renames visibility, blends and deletes rows when enabled", async () => {
+    const { onChange } = renderPanel({ initial: LAYERED_RECIPE, layersEnabled: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "上移图层 2" }));
+    expect(lastRecipe(onChange).localAdjustments.map((item) => item.id)).toEqual([
+      "local_2",
+      "local_1",
+    ]);
+    expect(lastRecipe(onChange).localAdjustments.map((item) => item.order)).toEqual([0, 1]);
+
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "混合模式 1" }),
+      "screen",
+    );
+    expect(lastRecipe(onChange).localAdjustments[0]?.blendMode).toBe("screen");
+
+    const opacity = screen.getByRole("spinbutton", { name: "图层不透明度" });
+    await userEvent.clear(opacity);
+    await userEvent.type(opacity, "40{Enter}");
+    expect(lastRecipe(onChange).localAdjustments[0]?.opacity).toBe(40);
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "启用局部 1" }));
+    expect(lastRecipe(onChange).localAdjustments[0]?.enabled).toBe(false);
+
+    await userEvent.click(screen.getByRole("button", { name: "删除局部 2" }));
+    expect(lastRecipe(onChange).localAdjustments).toHaveLength(1);
+  });
+});
+
+describe("LocalAdjustmentsPanel layer capacity", () => {
+  it("caps the layer UI at 16 even though the model allows 20", () => {
+    const many = Array.from({ length: 16 }, (_, index) => ({
+      id: `local_${index}`,
+      maskId: "full",
+      enabled: true,
+      name: null,
+      blendMode: "normal" as const,
+      opacity: 100,
+      order: index,
+      adjustments: normalizeLocalAdjustmentValues({ exposureEv: 0.1 }),
+    }));
+
+    renderPanel({ initial: { localAdjustments: many }, layersEnabled: true });
+
+    expect(screen.getByText("16 / 16")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "添加全图局部调整" }),
     ).toBeDisabled();
   });
 });

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import get_app_settings
 from app.core.config import Settings
 from app.imaging.decoder import SUPPORTED_MIME_TYPES
-from app.models.schemas import RuntimeConfigResponse
+from app.models.schemas import RuntimeConfigResponse, RuntimeFeatures
 
 router = APIRouter(tags=["system"])
 
@@ -21,4 +21,5 @@ def runtime_config(
         max_json_body_bytes=settings.max_json_body_bytes,
         max_image_pixels=settings.max_image_pixels,
         allowed_mime_types=list(SUPPORTED_MIME_TYPES),
+        features=RuntimeFeatures(layers=settings.feature_layers),
     )

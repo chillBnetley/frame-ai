@@ -328,6 +328,7 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 | `FRAME_RATE_LIMIT_SETTINGS` | `0` | 模型设置写请求每分钟上限 |
 | `FRAME_RATE_LIMIT_RENDER` | `0` | 渲染/预览写请求每分钟上限 |
 | `FRAME_RATE_LIMIT_DEFAULT` | `0` | 其他写请求每分钟上限 |
+| `FRAME_FEATURE_LAYERS` | `false` | 局部调整图层能力曝光：`true` 时前端显示排序/混合/不透明度控件；后端始终接受与渲染图层字段 |
 | `FRAME_VISION_PROVIDER` | `mock` | 视觉 Provider：`mock` 或 `openai` |
 | `FRAME_VISION_API_KEY` | 空 | 视觉 Provider 密钥；仅服务端读取，禁止提交 |
 | `FRAME_VISION_MODEL` | 空 | 视觉模型名 |
@@ -403,6 +404,13 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 - **前端路径**：Next `proxy.ts` **每个请求**读取同一个 token 文件并注入请求头；API 重启轮换 token 后无需重启 Next。默认文件是 `<仓库>/data/api-token`，Playwright/临时栈通过 `FRAME_DATA_DIR` 指向临时目录；**API 与 Next 必须指向同一个文件**（同时设置相同的 `FRAME_DATA_DIR`，或给 Next 设置 `FRAME_API_TOKEN_FILE`）。`NEXT_PUBLIC_API_BASE_URL` 直连模式绕过该代理，因此鉴权开启时**不支持直连**；只有在 `FRAME_API_AUTH_ENABLED=false` 时才可用。
 - **限流**：默认所有类别阈值都是 `0`（机制已交付、**默认不强制**，避免误伤既有 bench/eval/E2E）；设为正数后，超限的写请求返回 429 `rate_limited` + `Retry-After`，`details={category,retryAfterSeconds}`。GET/HEAD 不计数。类别：upload/export/analysis/photographer/settings/render/default。
 - **命令行**：`curl -H "X-FRAME-Token: $(cat data/api-token)" http://127.0.0.1:8000/api/v1/health`；bench/eval 脚本会自动从 `FRAME_API_TOKEN_FILE` 或 `FRAME_DATA_DIR/api-token` 读取。回滚用 `FRAME_API_AUTH_ENABLED=false`（鉴权与限流同时关闭）。
+
+### 局部调整图层（B7）
+
+- **语义**：每个局部调整新增可选 `name`、`blendMode`（normal/multiply/screen/overlay，默认 normal）、`opacity`（0–100，默认 100）、`order`（0–19，默认 0）。渲染按 `(order, id)` 顺序叠加，混合时 `a = 蒙版权重 × opacity/100`，`out = clip(B + (f−B)·a)`；alpha 不参与合成。旧配方没有新字段时走原分支，像素逐字节不变。
+- **兼容与身份**：模型上限仍为 20（旧配方 17–20 层合法）。`pixel_recipe_json` 只序列化非默认图层字段并排除 `name`，因此旧配方的 `recipe_hash`/`render_key` 不变；改 `name` 不改变 `recipe_hash`/`render_key`（仍会随提交新增一条 revision 用于保存 name），调序/改混合/改不透明度会改变它们。
+- **开关**：`FRAME_FEATURE_LAYERS` 默认 `false`，`GET /api/v1/config` 返回 `features.layers`；关闭时前端隐藏图层控件，但后端始终接受、校验和渲染，不会丢数据。UI 软上限 16，模型硬上限 20。
+- **容量（D3）**：默认 `FRAME_EXPORT_MAX_RSS_MB=3072` 下，24 MP × 16 层全配方估算 **6741.8 MB**，导出会如实返回 413；需要时可自行提高预算并承担 OOM 风险。真实 RSS/耗时只作为 opt-in bench 记录。
 
 前端读取（放在 `apps/web/.env.local` 或 shell 环境）：
 

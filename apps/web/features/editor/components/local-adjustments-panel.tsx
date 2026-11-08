@@ -6,6 +6,8 @@ import { MaskCanvas } from "./mask-canvas";
 import { SliderField } from "./slider-field";
 import {
   ADJUSTMENT_RANGES,
+  BLEND_MODES,
+  LAYER_UI_LIMIT,
   LOCAL_ADJUSTMENT_LIMIT,
   LOCAL_V1_ADJUSTMENT_KEYS,
   MASK_LIMIT,
@@ -15,14 +17,18 @@ import {
   createLocalAdjustmentId,
   createMask,
   createMaskId,
+  moveLocalAdjustment,
   normalizeRecipe,
   removeLocalAdjustment,
   resetLocalAdjustment,
   roundTo4,
+  setLocalAdjustmentBlendMode,
   setLocalAdjustmentEnabled,
   setLocalAdjustmentMask,
+  setLocalAdjustmentOpacity,
   updateLocalAdjustment,
   updateMask,
+  type BlendMode,
   type LocalV1AdjustmentKey,
 } from "@/lib/recipe";
 import {
@@ -61,6 +67,13 @@ const MASK_MODES: readonly { id: MaskMode; label: string }[] = [
   { id: "rectangle", label: "矩形" },
   { id: "ellipse", label: "椭圆" },
 ];
+
+const BLEND_LABELS: Record<BlendMode, string> = {
+  normal: "正常",
+  multiply: "正片叠底",
+  screen: "滤色",
+  overlay: "叠加",
+};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -143,6 +156,7 @@ export interface LocalAdjustmentsPanelProps {
   sourceSize: Size | null;
   renderWarnings?: readonly string[];
   disabled?: boolean;
+  layersEnabled?: boolean;
   onChange: (recipe: EditorRecipe) => void;
   onCommit: () => void;
 }
@@ -155,6 +169,7 @@ export function LocalAdjustmentsPanel({
   sourceSize,
   renderWarnings = [],
   disabled = false,
+  layersEnabled = false,
   onChange,
   onCommit,
 }: LocalAdjustmentsPanelProps) {
@@ -170,7 +185,8 @@ export function LocalAdjustmentsPanel({
     : (items[0]?.id ?? null);
   const rotationDeg = recipe.adjustments.rotationDeg;
   const crop = recipe.adjustments.crop ?? null;
-  const canAdd = !disabled && items.length < LOCAL_ADJUSTMENT_LIMIT;
+  const maxItems = layersEnabled ? LAYER_UI_LIMIT : LOCAL_ADJUSTMENT_LIMIT;
+  const canAdd = !disabled && items.length < maxItems;
   const canCreateMask = canAdd && recipe.masks.length < MASK_LIMIT;
   const geometry = previewMaskGeometry(
     { width: previewWidth, height: previewHeight },
@@ -245,7 +261,7 @@ export function LocalAdjustmentsPanel({
           局部调整
         </h4>
         <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/30">
-          {items.length} / {LOCAL_ADJUSTMENT_LIMIT}
+          {items.length} / {maxItems}
         </span>
       </div>
 
@@ -328,7 +344,7 @@ export function LocalAdjustmentsPanel({
               outlineOverlapsDisplay(maskOutlinePoints(mask, geometry.transform));
 
             return (
-              <li key={item.id}>
+              <li key={item.id} data-testid={`layer-row-${item.id}`}>
                 <div
                   className={`rounded-lg border ${
                     expanded ? "border-white/18 bg-black/20" : "border-white/8"
@@ -342,10 +358,33 @@ export function LocalAdjustmentsPanel({
                       className="min-h-9 flex-1 rounded-md px-1 text-left text-[11px] text-white/75 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     >
                       局部 {index + 1} · {summary}
+                      {item.name ? ` · ${item.name}` : ""}
                       {mask?.inverted ? " · 反选" : ""}
                       {!item.enabled ? " · 已停用" : ""}
                       {serverSkipped && !missing ? " · 已跳过" : ""}
                     </button>
+                    {layersEnabled && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={`上移图层 ${index + 1}`}
+                          disabled={disabled || index === 0}
+                          onClick={() => apply(moveLocalAdjustment(recipe, item.id, -1))}
+                          className="min-h-9 rounded-md border border-white/10 px-2 text-[10px] text-white/55 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-35"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`下移图层 ${index + 1}`}
+                          disabled={disabled || index === items.length - 1}
+                          onClick={() => apply(moveLocalAdjustment(recipe, item.id, 1))}
+                          className="min-h-9 rounded-md border border-white/10 px-2 text-[10px] text-white/55 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-35"
+                        >
+                          ↓
+                        </button>
+                      </>
+                    )}
                     <label className="inline-flex items-center gap-1.5 text-[10px] text-white/55">
                       <input
                         type="checkbox"
@@ -562,6 +601,50 @@ export function LocalAdjustmentsPanel({
                             <p className="text-[10px] leading-relaxed text-white/35">
                               全图局部调整会作用于整张画面。切换到矩形或椭圆可创建区域蒙版。
                             </p>
+                          )}
+
+                          {layersEnabled && (
+                            <div className="grid gap-3 border-t border-white/8 pt-3">
+                              <label className="grid gap-1 text-[10px] text-white/45">
+                                混合模式
+                                <select
+                                  aria-label={`混合模式 ${index + 1}`}
+                                  value={item.blendMode}
+                                  disabled={disabled}
+                                  onChange={(event) =>
+                                    apply(
+                                      setLocalAdjustmentBlendMode(
+                                        recipe,
+                                        item.id,
+                                        event.target.value as BlendMode,
+                                      ),
+                                    )
+                                  }
+                                  className="min-h-9 rounded-md border border-white/12 bg-black/35 px-2 text-[11px] text-white/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                                >
+                                  {BLEND_MODES.map((mode) => (
+                                    <option key={mode} value={mode}>
+                                      {BLEND_LABELS[mode]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <SliderField
+                                label="图层不透明度"
+                                value={item.opacity}
+                                min={0}
+                                max={100}
+                                step={1}
+                                defaultValue={100}
+                                disabled={disabled}
+                                onChange={(value) =>
+                                  onChange(
+                                    setLocalAdjustmentOpacity(recipe, item.id, value),
+                                  )
+                                }
+                                onCommit={onCommit}
+                              />
+                            </div>
                           )}
 
                           <fieldset

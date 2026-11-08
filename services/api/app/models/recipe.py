@@ -41,6 +41,8 @@ MaskShape = Literal["rectangle", "ellipse"]
 OutputFormat = Literal["jpeg", "png"]
 ColorSpace = Literal["sRGB"]
 CurveChannel = Literal["master", "red", "green", "blue"]
+BlendMode = Literal["normal", "multiply", "screen", "overlay"]
+BLEND_MODES: tuple[BlendMode, ...] = ("normal", "multiply", "screen", "overlay")
 
 RECIPE_SCHEMA_VERSION: Literal["2.0"] = "2.0"
 LEGACY_RECIPE_SCHEMA_VERSION = "1.0"
@@ -265,7 +267,20 @@ class LocalAdjustment(_Strict):
     id: LocalIdentifier
     mask_id: MaskIdentifier = "full"
     enabled: StrictBool = True
+    name: Annotated[str, Field(max_length=200)] | None = None
+    blend_mode: BlendMode = "normal"
+    opacity: U100 = 100.0
+    order: StrictInt = Field(default=0, ge=0, le=LOCAL_ADJUSTMENT_LIMIT - 1)
     adjustments: LocalAdjustments = Field(default_factory=LocalAdjustments)
+
+    @property
+    def uses_layer_fields(self) -> bool:
+        return (
+            self.name is not None
+            or self.blend_mode != "normal"
+            or self.opacity != 100.0
+            or self.order != 0
+        )
 
 
 class UserMask(_Strict):
@@ -343,6 +358,20 @@ class EditRecipe(_Strict):
         mask_ids = [mask.id for mask in self.masks]
         if len(mask_ids) != len(set(mask_ids)):
             raise ValueError("mask ids must be unique.")
+        if any(item.uses_layer_fields for item in self.local_adjustments):
+            orders = [item.order for item in self.local_adjustments if item.order > 0]
+            if len(orders) != len(set(orders)):
+                raise ValueError(
+                    "non-zero local adjustment orders must be unique when layers are used."
+                )
+            known_masks = set(mask_ids)
+            for item in self.local_adjustments:
+                if (
+                    item.uses_layer_fields
+                    and item.mask_id != "full"
+                    and item.mask_id not in known_masks
+                ):
+                    raise ValueError("a layered local adjustment references a missing mask.")
         return self
 
 
@@ -380,9 +409,22 @@ def canonical_adjustments_json(adjustments: Adjustments) -> str:
     )
 
 
+def _local_identity_payload(item: LocalAdjustment) -> dict[str, Any]:
+    """Serialize only non-default layer fields; names do not affect pixels."""
+    payload = item.model_dump(mode="json")
+    payload.pop("name", None)
+    if payload.get("blend_mode") == "normal":
+        payload.pop("blend_mode", None)
+    if payload.get("opacity") == 100.0:
+        payload.pop("opacity", None)
+    if payload.get("order") == 0:
+        payload.pop("order", None)
+    return payload
+
+
 def _canonical_local_adjustments(local_adjustments: tuple[LocalAdjustment, ...]) -> list[Any]:
-    payload = _canonicalize([item.model_dump(mode="json") for item in local_adjustments])
-    return sorted(payload, key=lambda item: str(item["id"]))
+    payload = _canonicalize([_local_identity_payload(item) for item in local_adjustments])
+    return sorted(payload, key=lambda item: (int(item.get("order", 0)), str(item["id"])))
 
 
 def _canonical_masks(masks: tuple[UserMask, ...]) -> list[Any]:
@@ -462,6 +504,8 @@ def render_key(
 
 __all__ = [
     "Adjustments",
+    "BLEND_MODES",
+    "BlendMode",
     "ColorGrading",
     "ColorGradeZone",
     "ColorSpace",

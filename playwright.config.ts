@@ -32,6 +32,7 @@ const webServer = [
       FRAME_PROVIDER_URL_POLICY: "allow-local",
       FRAME_PROVIDER_ALLOW_INSECURE_HTTP: "true",
       FRAME_API_AUTH_ENABLED: "true",
+      FRAME_FEATURE_LAYERS: "true",
       PYTHONUNBUFFERED: "1",
     },
     url: `${API_URL}/`,

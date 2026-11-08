@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.core.config import REPO_ROOT, Settings
+from app.main import create_app
 from app.services.image_service import ImageService
 from tests.conftest import make_image, upload
 
@@ -91,6 +92,7 @@ def test_config_endpoint_exposes_runtime_limits(client: TestClient, settings: Se
         "maxJsonBodyBytes": settings.max_json_body_bytes,
         "maxImagePixels": settings.max_image_pixels,
         "allowedMimeTypes": ["image/jpeg", "image/png", "image/webp", "image/tiff"],
+        "features": {"layers": False},
     }
 
 
@@ -119,7 +121,23 @@ def test_uploaded_limit_matches_runtime_config(client: TestClient, settings):
 
     assert config["maxUploadBytes"] == settings.max_upload_bytes
     assert config["maxJsonBodyBytes"] == settings.max_json_body_bytes
+    assert config["features"] == {"layers": False}
     assert upload(client, payload).status_code == 201
+
+
+def test_layer_feature_flag_is_exposed_when_enabled(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        allowed_origins="http://testserver",
+        allowed_hosts="testserver",
+        feature_layers=True,
+    )
+
+    with TestClient(create_app(settings)) as client:
+        config = client.get("/api/v1/config").json()
+
+    assert config["features"] == {"layers": True}
 
 
 B6_ENV_VARIABLES = (
@@ -137,6 +155,7 @@ B6_ENV_VARIABLES = (
     "FRAME_RATE_LIMIT_SETTINGS",
     "FRAME_RATE_LIMIT_RENDER",
     "FRAME_RATE_LIMIT_DEFAULT",
+    "FRAME_FEATURE_LAYERS",
 )
 
 

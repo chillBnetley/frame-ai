@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
+from app.imaging.blend import composite_layer
 from app.imaging.color_ops import apply_color
 from app.imaging.geometry import crop_bounds, rotation_matrix, rotation_target_size
 from app.imaging.local import apply_clarity
@@ -308,7 +309,7 @@ def local_adjustment_warnings(
     """Warnings derivable from the recipe alone, without touching pixels."""
     mask_ids = {mask.id for mask in masks}
     warnings: list[str] = []
-    for item in sorted(local_adjustments, key=lambda entry: entry.id):
+    for item in sorted(local_adjustments, key=lambda entry: (entry.order, entry.id)):
         if not item.enabled or not _has_adjustments(item):
             continue
         if item.mask_id != "full" and item.mask_id not in mask_ids:
@@ -330,12 +331,22 @@ def apply_local_adjustments(
     result = rgb
     warnings = local_adjustment_warnings(local_adjustments, masks)
 
-    for item in sorted(local_adjustments, key=lambda entry: entry.id):
-        if not item.enabled or not _has_adjustments(item):
+    for item in sorted(local_adjustments, key=lambda entry: (entry.order, entry.id)):
+        if not item.enabled or item.opacity == 0 or not _has_adjustments(item):
             continue
+        legacy_blend = item.blend_mode == "normal" and item.opacity == 100.0
 
         if item.mask_id == "full":
-            result = _render_local(result, item)
+            adjusted = _render_local(result, item)
+            if legacy_blend:
+                result = adjusted
+            else:
+                result = composite_layer(
+                    result,
+                    adjusted,
+                    float(item.opacity / 100.0),
+                    item.blend_mode,
+                )
             continue
 
         mask = masks_by_id.get(item.mask_id)
@@ -355,10 +366,16 @@ def apply_local_adjustments(
             continue
 
         adjusted = _render_local(result, item)
-        np.subtract(adjusted, result, out=adjusted)
-        adjusted *= weights[..., None]
-        adjusted += result
-        np.clip(adjusted, 0.0, 1.0, out=adjusted)
-        result = np.ascontiguousarray(adjusted)
+        if legacy_blend:
+            # Preserve the original in-place arithmetic order: old recipes must
+            # stay byte-identical to the pre-layer renderer.
+            np.subtract(adjusted, result, out=adjusted)
+            adjusted *= weights[..., None]
+            adjusted += result
+            np.clip(adjusted, 0.0, 1.0, out=adjusted)
+            result = np.ascontiguousarray(adjusted)
+        else:
+            layer_weight = weights[..., None] * float(item.opacity / 100.0)
+            result = composite_layer(result, adjusted, layer_weight, item.blend_mode)
 
     return result, tuple(warnings)

@@ -348,3 +348,38 @@ def test_capability_boundaries_are_refused_without_touching_the_recipe(instructi
     assert patched.recipe == base
     assert patched.changes == ()
     assert patched.unsupported
+
+
+def _layered_recipe(orders: tuple[int, ...]) -> EditRecipe:
+    masks = (
+        MASK,
+        UserMask(id="mask_sky", shape="ellipse", x=0.0, y=0.0, width=1.0, height=0.3),
+    )
+    locals_ = tuple(
+        LocalAdjustment(
+            id=f"local_base_{index}",
+            mask_id="mask_person",
+            order=order,
+            adjustments=LocalAdjustments(shadows=1.0),
+        )
+        for index, order in enumerate(orders)
+    )
+    return _user_recipe(masks=masks, local_adjustments=locals_)
+
+
+def test_patch_rejects_the_21st_local_adjustment_with_a_recipe_error():
+    base = _layered_recipe(tuple(range(20)))
+
+    with pytest.raises(RecipeValidationError, match="at most 20"):
+        apply_patch(base, report(), _local_draft("mask_sky", shadows=10.0))
+
+
+def test_patch_renumbers_sparse_orders_when_appending():
+    base = _layered_recipe((1, 2))
+
+    patched = apply_patch(base, report(), _local_draft("mask_sky", shadows=10.0))
+
+    orders = [item.order for item in patched.recipe.local_adjustments]
+    assert orders == [0, 1, 2]
+    assert len(set(orders)) == len(orders)
+    EditRecipe.model_validate(patched.recipe.model_dump())

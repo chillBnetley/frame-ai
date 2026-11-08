@@ -101,6 +101,9 @@ export const HSL_BAND_NAMES = [
 export const COLOR_GRADE_ZONE_NAMES = ["shadows", "midtones", "highlights"] as const;
 
 export const LOCAL_ADJUSTMENT_LIMIT = 20;
+export const LAYER_UI_LIMIT = 16;
+export const BLEND_MODES = ["normal", "multiply", "screen", "overlay"] as const;
+export type BlendMode = (typeof BLEND_MODES)[number];
 export const LOCAL_ADJUSTMENT_ID_PATTERN = /^local_[A-Za-z0-9_-]{1,58}$/;
 export const MASK_ID_PATTERN = /^(full|mask_[A-Za-z0-9_-]{1,58})$/;
 export const MASK_LIMIT = 20;
@@ -437,15 +440,57 @@ export function normalizeLocalAdjustments(
       continue;
     }
     seen.add(id);
+    const name =
+      typeof item.name === "string" && item.name.trim() !== ""
+        ? item.name.trim().slice(0, 200)
+        : null;
+    const blendMode = BLEND_MODES.includes(item.blendMode as BlendMode)
+      ? (item.blendMode as BlendMode)
+      : "normal";
+    const opacity =
+      typeof item.opacity === "number" && Number.isFinite(item.opacity)
+        ? roundTo2(clamp(item.opacity, 0, 100))
+        : 100;
+    const order =
+      typeof item.order === "number" &&
+      Number.isInteger(item.order) &&
+      item.order >= 0 &&
+      item.order <= LOCAL_ADJUSTMENT_LIMIT - 1
+        ? item.order
+        : 0;
     normalized.push({
       id,
       maskId,
       enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+      name,
+      blendMode,
+      opacity,
+      order,
       adjustments: normalizeLocalAdjustmentValues(item.adjustments),
     });
   }
-  normalized.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+  normalized.sort(
+    (left, right) =>
+      left.order - right.order || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  );
   return normalized.slice(0, LOCAL_ADJUSTMENT_LIMIT);
+}
+
+function usesLayerFields(item: LocalAdjustment): boolean {
+  return (
+    item.name !== null ||
+    item.blendMode !== "normal" ||
+    item.opacity !== 100 ||
+    item.order !== 0
+  );
+}
+
+function renumberLayers(items: LocalAdjustment[]): LocalAdjustment[] {
+  return items.map((item, index) => ({ ...item, order: index }));
+}
+
+function finalizeLayers(items: LocalAdjustment[]): LocalAdjustment[] {
+  return items.some(usesLayerFields) ? renumberLayers(items) : items;
 }
 
 export function normalizeOutput(output: Partial<OutputSettings> | undefined): OutputSettings {
@@ -613,8 +658,10 @@ export function removeMask(recipe: EditRecipe, id: string): EditorRecipe {
     masks: recipe.masks.filter((mask) => mask.id !== id),
     // An adjustment pointing at a deleted mask is silently skipped by the
     // renderer while still reading "enabled" in the panel, so it goes with it.
-    localAdjustments: normalizeLocalAdjustments(recipe.localAdjustments).filter(
-      (item) => item.maskId === "full" || item.maskId !== id,
+    localAdjustments: finalizeLayers(
+      normalizeLocalAdjustments(recipe.localAdjustments).filter(
+        (item) => item.maskId === "full" || item.maskId !== id,
+      ),
     ),
   });
 }
@@ -624,15 +671,22 @@ export function addLocalAdjustment(
   maskId = "full",
   adjustments: Partial<LocalAdjustments> = {},
 ): EditorRecipe {
+  // Normalize before appending: sparse legacy orders such as [1, 2] would
+  // otherwise produce a duplicate order and fail backend validation.
+  const existing = renumberLayers(normalizeLocalAdjustments(recipe.localAdjustments));
   const id = createLocalAdjustmentId(recipe.localAdjustments);
   return normalizeRecipe({
     ...recipe,
     localAdjustments: [
-      ...normalizeLocalAdjustments(recipe.localAdjustments),
+      ...existing,
       {
         id,
         maskId: MASK_ID_PATTERN.test(maskId) ? maskId : "full",
         enabled: true,
+        name: null,
+        blendMode: "normal",
+        opacity: 100,
+        order: existing.length,
         adjustments: normalizeLocalAdjustmentValues(adjustments),
       },
     ],
@@ -701,14 +755,61 @@ export function resetLocalAdjustment(recipe: EditRecipe, id: string): EditorReci
 }
 
 export function removeLocalAdjustment(recipe: EditRecipe, id: string): EditorRecipe {
-  const remaining = normalizeLocalAdjustments(recipe.localAdjustments).filter(
-    (item) => item.id !== id,
+  const remaining = finalizeLayers(
+    normalizeLocalAdjustments(recipe.localAdjustments).filter((item) => item.id !== id),
   );
   const referenced = new Set(remaining.map((item) => item.maskId));
   return normalizeRecipe({
     ...recipe,
     masks: recipe.masks.filter((mask) => referenced.has(mask.id)),
     localAdjustments: remaining,
+  });
+}
+
+export function moveLocalAdjustment(
+  recipe: EditRecipe,
+  id: string,
+  direction: -1 | 1,
+): EditorRecipe {
+  const items = normalizeLocalAdjustments(recipe.localAdjustments);
+  const index = items.findIndex((item) => item.id === id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= items.length) {
+    return normalizeRecipe(recipe);
+  }
+  const reordered = [...items];
+  [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+  return normalizeRecipe({
+    ...recipe,
+    localAdjustments: renumberLayers(reordered),
+  });
+}
+
+export function setLocalAdjustmentBlendMode(
+  recipe: EditRecipe,
+  id: string,
+  blendMode: BlendMode,
+): EditorRecipe {
+  const nextMode = BLEND_MODES.includes(blendMode) ? blendMode : "normal";
+  return normalizeRecipe({
+    ...recipe,
+    localAdjustments: normalizeLocalAdjustments(recipe.localAdjustments).map((item) =>
+      item.id === id ? { ...item, blendMode: nextMode } : item,
+    ),
+  });
+}
+
+export function setLocalAdjustmentOpacity(
+  recipe: EditRecipe,
+  id: string,
+  opacity: number,
+): EditorRecipe {
+  const nextOpacity = roundTo2(clamp(opacity, 0, 100));
+  return normalizeRecipe({
+    ...recipe,
+    localAdjustments: normalizeLocalAdjustments(recipe.localAdjustments).map((item) =>
+      item.id === id ? { ...item, opacity: nextOpacity } : item,
+    ),
   });
 }
 

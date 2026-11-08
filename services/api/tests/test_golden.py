@@ -10,7 +10,7 @@ from PIL import Image
 from app.imaging.loader import load_image
 from app.imaging.params_map import ENGINE_VERSION
 from app.imaging.pipeline import render
-from app.models.recipe import EditRecipe
+from app.models.recipe import EditRecipe, LocalAdjustment, LocalAdjustments
 from tests.golden_support import (
     GOLDEN_DIR,
     IMAGE_NAMES,
@@ -36,6 +36,42 @@ def test_manifest_records_engine_version_and_every_case():
     for image_name in IMAGE_NAMES:
         payload = (SOURCES_DIR / f"{image_name}.png").read_bytes()
         assert MANIFEST["sources"][image_name] == sha256(payload).hexdigest()
+
+
+@pytest.mark.parametrize("image_name,recipe_name,file_name", CASES)
+def test_legacy_recipes_render_byte_identically_on_this_machine(
+    image_name: str, recipe_name: str, file_name: str
+):
+    """B7 hard gate: recipes without layer fields must not change a single byte."""
+    payload = (SOURCES_DIR / f"{image_name}.png").read_bytes()
+    loaded = load_image(payload)
+    recipe = EditRecipe.model_validate(RECIPES[recipe_name])
+    rendered = render(
+        loaded,
+        recipe.adjustments,
+        image_sha256=sha256(payload).hexdigest(),
+        curve=recipe.curve,
+        hsl=recipe.hsl,
+        color_grading=recipe.color_grading,
+        masks=recipe.masks,
+        local_adjustments=recipe.local_adjustments,
+        quality="export",
+    )
+
+    with Image.open(GOLDEN_DIR / file_name) as golden_image:
+        golden = np.asarray(golden_image.convert("RGB"), dtype=np.uint8)
+        golden_alpha = (
+            np.asarray(golden_image.getchannel("A"), dtype=np.uint8)
+            if "A" in golden_image.getbands()
+            else None
+        )
+
+    assert np.array_equal(golden, rendered.rgb)
+    if golden_alpha is None:
+        assert rendered.alpha is None
+    else:
+        assert rendered.alpha is not None
+        assert np.array_equal(golden_alpha, rendered.alpha)
 
 
 @pytest.mark.parametrize("image_name,recipe_name,file_name", CASES)
@@ -76,3 +112,35 @@ def test_golden_images_match_within_one_gray_level(
         assert golden_alpha.shape == rendered.alpha.shape
         alpha_difference = np.abs(golden_alpha.astype(np.int16) - rendered.alpha.astype(np.int16))
         assert int(alpha_difference.max()) <= MANIFEST["tolerance"]
+
+
+def test_layers_do_not_touch_alpha():
+    payload = (SOURCES_DIR / "alpha.png").read_bytes()
+    loaded = load_image(payload)
+    assert loaded.alpha is not None
+    base = render(
+        loaded,
+        EditRecipe().adjustments,
+        image_sha256=sha256(payload).hexdigest(),
+        quality="export",
+    )
+    layered = render(
+        loaded,
+        EditRecipe().adjustments,
+        image_sha256=sha256(payload).hexdigest(),
+        local_adjustments=(
+            LocalAdjustment(
+                id="local_alpha",
+                order=1,
+                blendMode="multiply",
+                opacity=60,
+                adjustments=LocalAdjustments(exposure_ev=0.5),
+            ),
+        ),
+        quality="export",
+    )
+
+    assert layered.alpha is not None
+    assert base.alpha is not None
+    assert np.array_equal(layered.alpha, base.alpha)
+    assert not np.array_equal(layered.rgb, base.rgb)

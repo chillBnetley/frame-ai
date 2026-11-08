@@ -54,6 +54,7 @@ interface SessionErrorOption extends UploadErrorOption {
 }
 
 interface MockApiOptions {
+  layers?: boolean;
   uploadError?: UploadErrorOption;
   sessionError?: SessionErrorOption;
   revisionError?: UploadErrorOption;
@@ -94,6 +95,7 @@ function mockApi(options: MockApiOptions = {}) {
         maxUploadBytes: 20 * 1024 * 1024,
         maxImagePixels: 40_000_000,
         allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+        features: { layers: options.layers === true },
       });
     }
     if (url.endsWith("/api/v1/images") && init?.method === "POST") {
@@ -261,6 +263,7 @@ function mockSlowUpload() {
           maxUploadBytes: 20 * 1024 * 1024,
           maxImagePixels: 40_000_000,
           allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+          features: { layers: false },
         }),
       );
     }
@@ -858,5 +861,40 @@ describe("EditorWorkspace", () => {
       0.75,
     );
     expect(screen.getByTestId("mask-outline")).toBeInTheDocument();
+  });
+});
+
+describe("EditorWorkspace layer feature gate", () => {
+  it("shows layer controls when the runtime config enables layers", async () => {
+    mockApi({ layers: true });
+    render(<EditorWorkspace />);
+
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "添加全图局部调整" }),
+    );
+
+    expect(await screen.findByRole("combobox", { name: "混合模式 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上移图层 1" })).toBeDisabled();
+    expect(screen.getByRole("spinbutton", { name: "图层不透明度" })).toBeInTheDocument();
+  });
+
+  it("hides layer controls when the runtime config disables layers", async () => {
+    mockApi();
+    render(<EditorWorkspace />);
+
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "添加全图局部调整" }),
+    );
+
+    expect(screen.queryByRole("combobox", { name: "混合模式 1" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "上移图层 1" })).toBeNull();
   });
 });

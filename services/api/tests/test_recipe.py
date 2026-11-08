@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -21,8 +23,10 @@ from app.models.recipe import (
     canonical_adjustments_json,
     canonical_recipe_json,
     default_recipe,
+    pixel_recipe_json,
     recipe_hash,
     render_key,
+    stored_recipe_json,
 )
 
 NUMERIC_BOUNDS = {
@@ -715,6 +719,133 @@ def test_output_settings_validation():
     ):
         with pytest.raises(ValidationError):
             OutputSettings.model_validate(payload)
+
+
+def test_legacy_local_recipe_identity_is_unchanged():
+    from tests.golden_support import RECIPES
+
+    recipe = EditRecipe.model_validate(RECIPES["local"])
+
+    assert all(item.blend_mode == "normal" for item in recipe.local_adjustments)
+    assert all(item.opacity == 100.0 for item in recipe.local_adjustments)
+    assert all(item.order == 0 for item in recipe.local_adjustments)
+    assert recipe_hash(recipe) == "03b7e0bb43c9debd458cd536de265d4136e34ffc8ed1d2f22a11131f398c26d5"
+    assert (
+        render_key(
+            "a" * 64,
+            recipe,
+            edge=1600,
+            quality="final",
+            engine_version="frame-engine/10",
+        )
+        == "2eb872cedfcbf6acbda44bb83796a030a962ef38f286ae594c9ed0c23fe5a6cb"
+    )
+
+
+def _layered_recipe(*, name: str | None = None, order_a: int = 0, order_b: int = 1) -> EditRecipe:
+    first: dict[str, object] = {
+        "id": "local_a",
+        "order": order_a,
+        "adjustments": {"exposureEv": 0.2},
+    }
+    if name is not None:
+        first["name"] = name
+    return EditRecipe.model_validate(
+        {
+            "localAdjustments": [
+                first,
+                {
+                    "id": "local_b",
+                    "order": order_b,
+                    "blendMode": "multiply",
+                    "opacity": 60,
+                    "adjustments": {"contrast": 10},
+                },
+            ]
+        }
+    )
+
+
+def test_layer_identity_ignores_the_display_name():
+    named = _layered_recipe(name="Sky")
+    unnamed = _layered_recipe()
+
+    assert recipe_hash(named) == recipe_hash(unnamed)
+    assert pixel_recipe_json(named) == pixel_recipe_json(unnamed)
+    assert render_key("a" * 64, named, edge=800, quality="draft", engine_version="e") == (
+        render_key("a" * 64, unnamed, edge=800, quality="draft", engine_version="e")
+    )
+    assert "Sky" not in pixel_recipe_json(named)
+    assert '"name":"Sky"' in stored_recipe_json(named)
+    assert "Sky" not in stored_recipe_json(unnamed)
+
+
+def test_swapping_layer_order_changes_pixels_and_identity():
+    original = _layered_recipe()
+    swapped = _layered_recipe(order_a=1, order_b=0)
+
+    assert [item.order for item in swapped.local_adjustments] == [1, 0]
+    assert recipe_hash(original) != recipe_hash(swapped)
+    assert pixel_recipe_json(original) != pixel_recipe_json(swapped)
+    assert render_key("a" * 64, original, edge=800, quality="draft", engine_version="e") != (
+        render_key("a" * 64, swapped, edge=800, quality="draft", engine_version="e")
+    )
+    ordered = [item["id"] for item in json.loads(pixel_recipe_json(swapped))["local_adjustments"]]
+    assert ordered == ["local_b", "local_a"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"id": "local_a", "order": 20},
+        {"id": "local_a", "order": -1},
+        {"id": "local_a", "order": True},
+        {"id": "local_a", "opacity": 100.01},
+        {"id": "local_a", "opacity": -0.01},
+        {"id": "local_a", "blendMode": "difference"},
+        {"id": "local_a", "name": "x" * 201},
+    ],
+)
+def test_invalid_layer_fields_are_rejected(payload: dict[str, object]):
+    with pytest.raises(ValidationError):
+        EditRecipe.model_validate({"localAdjustments": [payload]})
+
+
+def test_duplicate_nonzero_orders_are_rejected_when_layers_are_used():
+    with pytest.raises(ValidationError, match="non-zero"):
+        EditRecipe.model_validate(
+            {
+                "localAdjustments": [
+                    {"id": "local_a", "order": 1},
+                    {"id": "local_b", "order": 1},
+                ]
+            }
+        )
+
+
+def test_old_recipes_may_repeat_order_zero():
+    recipe = EditRecipe.model_validate(
+        {
+            "localAdjustments": [
+                {"id": "local_a", "order": 0},
+                {"id": "local_b", "order": 0},
+            ]
+        }
+    )
+
+    assert [item.order for item in recipe.local_adjustments] == [0, 0]
+
+
+def test_layered_items_require_an_existing_mask():
+    with pytest.raises(ValidationError, match="missing mask"):
+        EditRecipe.model_validate(
+            {"localAdjustments": [{"id": "local_a", "order": 1, "maskId": "mask_missing"}]}
+        )
+
+    legacy = EditRecipe.model_validate(
+        {"localAdjustments": [{"id": "local_a", "maskId": "mask_missing"}]}
+    )
+    assert legacy.local_adjustments[0].mask_id == "mask_missing"
 
 
 def test_local_adjustment_order_is_canonicalized():

@@ -181,6 +181,10 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
       "id": "local_001",
       "maskId": "mask_001",
       "enabled": true,
+      "name": "Sky",
+      "blendMode": "multiply",
+      "opacity": 80,
+      "order": 1,
       "adjustments": { "exposureEv": 0.35, "contrast": 5, "saturation": -8 }
     }
   ],
@@ -211,6 +215,10 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `masks[].x/y` | 0…1；`masks[].width/height` 为 (0,1]；`x+width≤1`、`y+height≤1` |
 | `masks[].feather/opacity` | 0…100，默认分别为 15 / 100；`inverted` 必须是布尔值 |
 | `localAdjustments` | 最多 20 项；`id` 匹配 `^local_[A-Za-z0-9_-]{1,58}$` 且唯一；`maskId` 为 `full` 或 `mask_*`；`enabled` 必须是布尔值 |
+| `localAdjustments[].name` | 可选字符串，≤200；只读展示，**不参与像素身份/哈希** |
+| `localAdjustments[].blendMode` | `normal`（默认）/`multiply`/`screen`/`overlay` |
+| `localAdjustments[].opacity` | 0…100，默认 100，最多两位小数；与蒙版 `opacity/100` 相乘 |
+| `localAdjustments[].order` | 整数 0…19，默认 0；排序键为 `(order, id)`；任一项使用非默认图层字段时非零 order 必须唯一 |
 | `localAdjustments[].adjustments` | v1 支持 `exposureEv/contrast/highlights/shadows/whites/blacks/temperature/tint/saturation/vibrance/clarity`；`sharpen/denoise/vignette/grain` 必须为 0，否则 422 |
 | `output.format` | `jpeg` 或 `png` |
 | `output.quality` | 整数 1…100，默认 92 |
@@ -230,10 +238,10 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 - HSL 语义：八个色带中心为 0°/30°/60°/120°/180°/240°/285°/330°（红/橙/黄/绿/青/蓝/紫/洋红），相邻中心之间用 smoothstep 权重平滑过渡并在 0°/360° 首尾相接。由于中心不等距，每条带的有效范围（到相邻中心为止）不同：红 330°–30°（60°）、橙 0°–60°（60°）、黄 30°–120°（90°）、绿 60°–180°（120°）、青 120°–240°（120°）、蓝 180°–285°（105°）、紫 240°–330°（90°）、洋红 285°–30°（105°）；同值滑块在窄带上的覆盖范围小、在宽带上的覆盖范围大，这是保持既有配方观感的代价。`hue` 为相对色相偏移，`saturation` 为色度缩放（−100 变为灰色、+100 最多加倍），`luminance` 为明度增益（±100 对应 ±1 EV），结果截断到合法范围。色相偏移受**单调性上限**约束：相邻带心间距越小，允许的两带偏移差越小（约束为 `|ΔH_i − ΔH_j| ≤ gap·0.95/1.5`，超出的部分对半分给这一对），因此 30° 间距上的单个色带 `hue` 约在 ±20° 后不再增加，60° 间距约 ±40°；这保证了输出不会出现局部色相反序或等色轮廓带。低色度门控分两档：`hue` 在 `max−min` 0.02→0.10 上渐入（色相在色度趋零时无定义），`saturation/luminance` 在 0.005→0.03 上渐入，因此皮肤、天空与浅色背景上的明度/饱和度滑块仍然有效；完全无彩色像素不受影响，全部为 0 时恒等。HSL 在曲线之后、饱和度/自然饱和度之前执行。
 - 颜色分级语义：按 Rec.709 亮度把像素平滑分配到阴影 / 中间调 / 高光，三个权重恒和为 1；`hue` 为色偏方向，`saturation` 为该区域强度（0…100），`balance` 平移亮度锚点（±100 对应 ±0.25），`blending` 控制区域过渡宽度（0…100 映射到 0.08–0.60）。色偏使用零亮度方向向量，并把向量**等比缩放到刚好不越出 `[0,1]`**（不再逐通道裁剪），因此输出亮度严格等于输入亮度，越界像素只是分级力度减弱；三个区域强度均为 0 时恒等。颜色分级在饱和度/自然饱和度之后、清晰度/暗角之前执行。
 - 蒙版语义：`x/y/width/height` 锚定 EXIF 方向归一化后的原图坐标，不随预览/导出尺寸变化；矩形按轴对齐、椭圆为内接椭圆，羽化带完全位于形状内部，形状外权重严格为 0；`inverted` 在形状权重之后取反，`opacity` 最后缩放。`maskId:"full"` 使用内置全图蒙版，不需要对应的 `masks` 项。前端人物/天空按钮仅为禁用占位，后端没有 `person`/`sky` 类型，也不把阶段三 bbox 当作蒙版。
-- 局部调整语义：v1 只实现 11 个字段，顺序为线性光曝光/白平衡/高光/阴影/白场/黑场 → sRGB 对比度 → 饱和度/自然饱和度 → 清晰度；每个局部调整按 `id` 字典序依次混合，后一项看到前一项的结果。`sharpen/denoise/vignette/grain` 非零返回 422（避免静默忽略）。局部阶段在颜色分级之后、全局清晰度/暗角之前执行；`enabled=false`、全零参数、`opacity=0` 或蒙版完全在裁切外时等价于恒等。
-- 蒙版引用：`maskId` 不在 `masks` 中时，服务端跳过该局部调整并在渲染/导出 warnings 中返回 `local_mask_missing:<maskId>`；不回退到全图或错误区域，也不返回 5xx。前端恢复会话时若发现悬空引用，显示“蒙版缺失，已停用此局部调整”并提供删除入口。
+- 局部调整语义：v1 只实现 11 个字段，顺序为线性光曝光/白平衡/高光/阴影/白场/黑场 → sRGB 对比度 → 饱和度/自然饱和度 → 清晰度；局部调整按 `(order, id)` 依次混合，后一项看到前一项的结果（旧配方全部 `order=0`，因此仍按 `id` 字典序，像素不变）。`sharpen/denoise/vignette/grain` 非零返回 422（避免静默忽略）。混合公式：`f` = normal 时为本层调整结果，multiply/screen/overlay 时先把本层 clip 到 [0,1] 再逐通道混合；`a = mask_weight × opacity/100`；`out = clip(B + (f−B)·a)`。normal+opacity100 的全图分支仍直接返回本层结果且不 clip；normal+opacity100 的蒙版分支保留旧的 `B+(A−B)·w` 运算顺序。局部阶段在颜色分级之后、全局清晰度/暗角之前执行；`enabled=false`、全零参数、`opacity=0` 或蒙版完全在裁切外时等价于恒等。alpha 不参与局部合成。
+- 蒙版引用：`maskId` 不在 `masks` 中时，旧配方（无任何非默认图层字段）服务端跳过该局部调整并在渲染/导出 warnings 中返回 `local_mask_missing:<maskId>`；使用新图层字段写入的配方因缺少 mask 直接 422。不回退到全图或错误区域，也不返回 5xx。前端恢复会话时若发现悬空引用，显示“蒙版缺失，已停用此局部调整”并提供删除入口。
 - 引擎版本 `frame-engine/10` 改变五处像素/契约语义：Blacks 正向改为一律压暗（Lightroom 约定，掩膜端点 0.30→0.20）、HSL 低色度门控按参数分档（色相 0.02→0.10，饱和度/明度 0.005→0.03）、曲线首末节点外改为端点斜率线性外推、对比度后把色度回收至原值 ±5% 容差内，并删除遗留 `POST /images/{id}/analyze`；`frame-engine/9` 改变三处像素语义：白平衡的亮度守恒从逐像素改为全图均值标量、HSL 色相改为受单调上限约束的查表映射、颜色分级越界由逐通道裁剪改为等比缩放到边界；`frame-engine/8` 把嵌入 ICC 管理的范围从 `RGB`/`RGBA` 扩展到全部可归一为 RGB 的模式（`P`/`PA`/`1`/`L`/`LA`）；`frame-engine/7` 起局部调整参与渲染；`frame-engine/6` 引入颜色分级，`frame-engine/5` 引入 HSL，`frame-engine/4` 引入曲线。预览缓存键包含 `curve`、`hsl`、`colorGrading`、`masks` 与 `localAdjustments`，任一变化都会产生新的 `previewId`。
-- 规范化会把局部调整按 `id` 排序，保证相同语义的配方得到相同哈希。
+- 规范化会把局部调整按 `(order, id)` 排序，保证相同语义的配方得到相同哈希。`pixel_recipe_json` 只序列化非默认的图层字段（`blendMode≠normal`、`opacity≠100`、`order≠0`），并始终排除 `name`；因此旧配方哈希与 `render_key` 不变，改 `name` 不改变 `recipe_hash`/`render_key`（仍会随提交新增一条 revision 用于保存 name），调序/改 blend/opacity 会改变它们。
 
 ## 4. 端点
 
@@ -242,12 +250,14 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | 方法与路径 | 请求 | 响应 | 主要错误 |
 | --- | --- | --- | --- |
 | `GET /api/v1/health` | — | `{status, service, version, storage:{ok,writable}}` | — |
-| `GET /api/v1/config` | — | `{maxUploadBytes, maxJsonBodyBytes, maxImagePixels, allowedMimeTypes}` | — |
+| `GET /api/v1/config` | — | `{maxUploadBytes, maxJsonBodyBytes, maxImagePixels, allowedMimeTypes, features:{layers}}` | — |
 | `POST /api/v1/images` | multipart，唯一 `file` 字段 | 201 `{imageId, originalName, width, height, exifOrientation, mimeType, bytes}` | 400 `invalid_upload`/`empty_file`；413 `payload_too_large`/`file_too_large`；415 `invalid_image`/`mime_mismatch`/`unsupported_media_type`/`animated_not_supported`/`unsupported_tiff_compression`/`tiff_multipage_not_supported`/`associated_alpha_not_supported`；500 `storage_error` |
 | `GET /api/v1/images/{imageId}/original` | 可选 `?download=true` | 原始字节；`inline` 或 `attachment` | 404 `image_not_found`/`image_file_missing` |
 | `DELETE /api/v1/images/{imageId}` | — | 204，无响应体；重复删除同样 204 | 404 `image_not_found`；409 `resource_busy`（分析 pending/processing） |
 
 `DELETE /images/{imageId}` 硬删除图片及其会话、revision、分析任务/结果、方案与反馈，并在提交后删除原图、无共享引用的代理与预览缓存。删除不可恢复；编辑器在删除前要求二次确认，并在成功后回到上传态。文件删除失败不回滚 204，由 `scripts/purge_orphans.py` 重试。
+
+`features.layers` 来自 `FRAME_FEATURE_LAYERS`（默认 `false`），只用于前端能力曝光与 UI 显隐；后端始终接受、校验并渲染图层字段，关闭开关不会拒绝写入或改变像素。
 
 `width/height` 是 EXIF 方向归一后的显示尺寸；`exifOrientation` 保留原始 1–8（D-07）。原图字节从上传到导出全程不变。阶段三遗留的 `POST /api/v1/images/{imageId}/analyze` 已在阶段四复审中删除（前端无引用，且与任务化 `POST /api/v1/analysis` 重复）；图像分析统一走 `/analysis` 任务接口。
 
@@ -435,7 +445,7 @@ POST /api/v1/sessions/{sessionId}/export
 - ⊕ `colorSpace` 只接受字面量 `"sRGB"`；其他值（含小写 `"srgb"`）返回 422 `validation_error`。输出目标恒为 sRGB，因此该字段是显式声明而不是可选项。
 - 导出准入（⊕ 阶段四）：并发上限 `FRAME_EXPORT_MAX_CONCURRENCY`（默认 1，即串行）。超出并发数，或**已在跑的导出估算之和 + 本次估算**超过 `FRAME_EXPORT_MAX_RSS_MB` 时，立即返回 503 `server_busy` 并带 `Retry-After: 2`，不排队等待。通过静态估算后还有第二道实时门（复审整改 G4/P3-9）：用 `psutil.virtual_memory().available` 检查真实可用内存，若 `可用 − 本次估算 < FRAME_EXPORT_RESERVE_MB`（默认 256）同样返回 503 `server_busy`；该检查在静态估算之后执行，不替代它。
 - ⊕ 阶段四：同步端点**不支持服务端中止**。客户端断开或超时只停止前端等待，服务端会继续完成本次渲染后丢弃结果（导出不写缓存），因此期间新的导出仍可能拿到 503。需要取消请使用 §4.5.1 的异步作业端点：运行中的作业会在渲染阶段边界停止并释放槽位。
-- 解码前按**本次计划触及的像素数**与配方估算峰值内存（系数在阶段四 Task 8 按实测标定，复审整改 G4 把满配方从 240 下调到 160 B/px）：中性配方 45 B/px，其余 160 B/px；每个启用且参数非零的局部调整再加 8 B/px（一张全画布 float32 权重图约 4 B/px；实测增加局部调整对峰值的影响在 −48…+29 MB 之间，所以这 8 B/px 是余量而不是预测）；另加 150 MB 基线。**PNG/WebP/TIFF 输入再加 4 B/px**（`EXPORT_BYTES_PER_PIXEL_ALPHA`，解码与渲染各一条 float32 alpha 覆盖平面）；JPEG 输入不加。**B5b 16-bit 附加项**：源位深 16 再加 18 B/px（uint16 解码平面 + float32 转换），输出位深 16 再加 18 B/px（uint16 输出 + 编码器工作副本）。24/40 MP 实测：16-bit 中性峰值 1026/1671 MB、同尺寸 8-bit 为 966/1562 MB；16-bit 满配方 2801/4616 MB、8-bit 2801/4617 MB（渲染阶段主导，位深几乎无差）。36 B/px 合计明显保守，默认 3072 MB 预算下 24 MP 16-bit 中性可导出，而 40 MP 16-bit 中性虽实测 1671 MB 仍会被估算拒绝（413）——与既有“估算偏保守”的取舍一致，可调高 `FRAME_EXPORT_MAX_RSS_MB` 或使用 `maxEdge`。详见 [performance.md](performance.md)。
+- 解码前按**本次计划触及的像素数**与配方估算峰值内存（系数在阶段四 Task 8 按实测标定，复审整改 G4 把满配方从 240 下调到 160 B/px）：中性配方 45 B/px，其余 160 B/px；每个启用且参数非零的局部调整再加 8 B/px（一张全画布 float32 权重图约 4 B/px；实测增加局部调整对峰值的影响在 −48…+29 MB 之间，所以这 8 B/px 是余量而不是预测）；另加 150 MB 基线。**PNG/WebP/TIFF 输入再加 4 B/px**（`EXPORT_BYTES_PER_PIXEL_ALPHA`，解码与渲染各一条 float32 alpha 覆盖平面）；JPEG 输入不加。**B5b 16-bit 附加项**：源位深 16 再加 18 B/px（uint16 解码平面 + float32 转换），输出位深 16 再加 18 B/px（uint16 输出 + 编码器工作副本）。24/40 MP 实测：16-bit 中性峰值 1026/1671 MB、同尺寸 8-bit 为 966/1562 MB；16-bit 满配方 2801/4616 MB、8-bit 2801/4617 MB（渲染阶段主导，位深几乎无差）。36 B/px 合计明显保守，默认 3072 MB 预算下 24 MP 16-bit 中性可导出，而 40 MP 16-bit 中性虽实测 1671 MB 仍会被估算拒绝（413）——与既有“估算偏保守”的取舍一致，可调高 `FRAME_EXPORT_MAX_RSS_MB` 或使用 `maxEdge`。**B7 图层容量**：每个启用且参数非零的局部图层仍按 8 B/px 计入；24 MP × 16 层全配方估算 **6741.8 MB**，在默认 3072 MB 预算下返回 413 `export_too_large`（不是缺陷，UI 软上限 16 与实际内存准入分离；需要时自行提高预算并承担 OOM 风险）。详见 [performance.md](performance.md)。
 - ⊕ **解码地板**：原图始终按整尺寸解码，所以估算不低于"原图像素 × 45 B/px + 150 MB"。带 `maxEdge` 时计划项按缩放后的源像素计算，因此下采样导出可以落入全尺寸导出被拒绝的预算；但一旦计划项掉到地板以下，再小的 `maxEdge` 也不会让估算继续下降（40 MP 原图的地板是 1863 MB）。
 - 估算超过 `FRAME_EXPORT_MAX_RSS_MB`（默认 3072）时返回 413 `export_too_large`，`details.estimatedPeakMb/limitMb/pixels/maxEdge` 给出估算、上限与本次尺寸，避免大图导出拖垮进程。默认预算下的实测边界（G4，估算／实测峰值）：40 MP 中性 1867／1635 MB 与 12 MP 满配方 1981／1478 MB **可导出**；24 MP 满配方 3812／2907 MB 与 40 MP 满配方 6254／4793 MB **返回 413**（满配方系数为 160 B/px，高于本轮实测最高的 131 B/px，仍保留约 22% 余量）。同一批图片改为 `maxEdge=2400` 后可导出，估算 1180／实测 794 MB（24 MP）与 1867／实测 1209 MB（40 MP），耗时 p95 4.3 s 与 5.0 s。以上均为 8-bit；16-bit 的附加估算与实测见上一条。
 - 元数据：剥离全部 EXIF/XMP/IPTC（含 GPS）；嵌入标准 sRGB ICC；PNG 不写 `eXIf`/`tEXt`/`iTXt`（D-09）。ICC 头部创建时间固定，保证同一像素与参数跨进程编码逐字节一致；16-bit PNG/TIFF 同样嵌入固定 sRGB ICC。

@@ -7,12 +7,14 @@ import {
   createMask,
   createMaskId,
   isDefaultRecipe,
+  moveLocalAdjustment,
   normalizeAdjustments,
   normalizeColorGrading,
   normalizeCrop,
   normalizeCurveChannel,
   normalizeCurveSet,
   normalizeHsl,
+  normalizeLocalAdjustmentValues,
   normalizeLocalAdjustments,
   normalizeMask,
   normalizeMasks,
@@ -26,7 +28,9 @@ import {
   roundTo4,
   roundTo6,
   setLocalAdjustmentEnabled,
+  setLocalAdjustmentBlendMode,
   setLocalAdjustmentMask,
+  setLocalAdjustmentOpacity,
   updateLocalAdjustment,
   updateMask,
   withAdjustment,
@@ -215,6 +219,146 @@ describe("recipe schema 2.0 groups", () => {
     expect(normalized).toHaveLength(20);
     expect(normalized[0]?.id).toBe("local_000");
     expect(normalized[19]?.id).toBe("local_019");
+  });
+
+  it("preserves layer fields and sorts by order", () => {
+    const items = normalizeLocalAdjustments([
+      {
+        id: "local_b",
+        maskId: "full",
+        enabled: true,
+        name: "Second",
+        blendMode: "screen",
+        opacity: 35,
+        order: 1,
+      },
+      {
+        id: "local_a",
+        maskId: "full",
+        enabled: false,
+        name: null,
+        blendMode: "normal",
+        opacity: 100,
+        order: 0,
+      },
+    ]);
+
+    expect(items.map((item) => item.id)).toEqual(["local_a", "local_b"]);
+    expect(items[1]).toMatchObject({
+      name: "Second",
+      blendMode: "screen",
+      opacity: 35,
+      order: 1,
+    });
+  });
+
+  it("adds layers in order, moves them, and renumbers after removal", () => {
+    const one = addLocalAdjustment(DEFAULT_RECIPE);
+    const two = addLocalAdjustment(one);
+    expect(two.localAdjustments.map((item) => item.order)).toEqual([0, 1]);
+
+    const three = addLocalAdjustment(two);
+    const secondId = three.localAdjustments[2]!.id;
+    const moved = moveLocalAdjustment(three, secondId, -1);
+    expect(moved.localAdjustments.map((item) => item.order)).toEqual([0, 1, 2]);
+    expect(moved.localAdjustments[1]!.id).toBe(secondId);
+
+    const removed = removeLocalAdjustment(moved, secondId);
+    expect(removed.localAdjustments.map((item) => item.order)).toEqual([0, 1]);
+    expect(removed.localAdjustments.map((item) => item.id)).not.toContain(secondId);
+  });
+
+  it("renumbers sparse orders before appending a new layer", () => {
+    const sparse = normalizeRecipe({
+      localAdjustments: [
+        {
+          id: "local_a",
+          maskId: "full",
+          enabled: true,
+          name: null,
+          blendMode: "normal",
+          opacity: 100,
+          order: 1,
+          adjustments: normalizeLocalAdjustmentValues({ exposureEv: 0.2 }),
+        },
+        {
+          id: "local_b",
+          maskId: "full",
+          enabled: true,
+          name: null,
+          blendMode: "normal",
+          opacity: 100,
+          order: 2,
+          adjustments: normalizeLocalAdjustmentValues({ contrast: 5 }),
+        },
+      ],
+    });
+
+    const added = addLocalAdjustment(sparse);
+
+    expect(added.localAdjustments.map((item) => item.order)).toEqual([0, 1, 2]);
+    expect(new Set(added.localAdjustments.map((item) => item.order)).size).toBe(3);
+  });
+
+  it("normalizes legacy all-zero orders before appending", () => {
+    const legacy = normalizeRecipe({
+      localAdjustments: [
+        {
+          id: "local_a",
+          maskId: "full",
+          enabled: true,
+          name: null,
+          blendMode: "normal",
+          opacity: 100,
+          order: 0,
+          adjustments: normalizeLocalAdjustmentValues({ exposureEv: 0.2 }),
+        },
+        {
+          id: "local_b",
+          maskId: "full",
+          enabled: true,
+          name: null,
+          blendMode: "normal",
+          opacity: 100,
+          order: 0,
+          adjustments: normalizeLocalAdjustmentValues({ contrast: 5 }),
+        },
+      ],
+    });
+
+    const added = addLocalAdjustment(legacy);
+
+    expect(added.localAdjustments.map((item) => item.order)).toEqual([0, 1, 2]);
+  });
+
+  it("updates blend mode and opacity with clamping", () => {
+    const recipe = addLocalAdjustment(DEFAULT_RECIPE);
+    const id = recipe.localAdjustments[0]!.id;
+
+    const blended = setLocalAdjustmentBlendMode(recipe, id, "multiply");
+    expect(blended.localAdjustments[0]!.blendMode).toBe("multiply");
+
+    const faded = setLocalAdjustmentOpacity(blended, id, 150);
+    expect(faded.localAdjustments[0]!.opacity).toBe(100);
+    const transparent = setLocalAdjustmentOpacity(faded, id, -5);
+    expect(transparent.localAdjustments[0]!.opacity).toBe(0);
+  });
+
+  it("keeps layer fields on the remaining rows after a deletion", () => {
+    const first = addLocalAdjustment(DEFAULT_RECIPE);
+    const second = addLocalAdjustment(first);
+    const firstId = second.localAdjustments[0]!.id;
+    const secondId = second.localAdjustments[1]!.id;
+    const blended = setLocalAdjustmentBlendMode(second, firstId, "overlay");
+
+    const removed = removeLocalAdjustment(blended, secondId);
+
+    expect(removed.localAdjustments).toHaveLength(1);
+    expect(removed.localAdjustments[0]).toMatchObject({
+      id: firstId,
+      blendMode: "overlay",
+      order: 0,
+    });
   });
 
   it("normalizes output settings", () => {

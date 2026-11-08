@@ -35,11 +35,16 @@ class HealthResponse(CamelModel):
     storage: StorageHealth
 
 
+class RuntimeFeatures(CamelModel):
+    layers: bool
+
+
 class RuntimeConfigResponse(CamelModel):
     max_upload_bytes: int
     max_json_body_bytes: int
     max_image_pixels: int
     allowed_mime_types: list[str]
+    features: RuntimeFeatures
 
 
 class UploadImageResponse(CamelModel):
