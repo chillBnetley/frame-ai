@@ -585,3 +585,120 @@ def test_style_plan_with_semantic_mask_renders_and_tracks_the_ai_revision(tmp_pa
         assert row["style_id"] == "environmental_portrait"
         assert row["style_version"] == "1.0"
         assert row["conversion_mode"] == "style"
+
+
+def test_accepting_a_plan_writes_an_ai_revision_with_creation_metadata(
+    plan_client: TestClient,
+    plan_settings: Settings,
+):
+    payload = make_image("PNG", (96, 64), (120, 80, 40))
+    uploaded = upload(plan_client, payload)
+    assert uploaded.status_code == 201, uploaded.text
+    image_id = str(uploaded.json()["imageId"])
+    session = plan_client.post("/api/v1/sessions", json={"imageId": image_id})
+    assert session.status_code == 201, session.text
+    session_id = str(session.json()["sessionId"])
+    base_revision_id = session.json()["activeRevisionId"]
+    analysis_id = _analyze(plan_client, image_id)
+
+    plan_response = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "environmental_portrait",
+            "styleStrength": 0.6,
+            "conversionMode": "natural",
+        },
+    )
+    assert plan_response.status_code == 200, plan_response.text
+    plan = plan_response.json()
+    assert plan["baseRevisionId"] == base_revision_id
+
+    render_key = "a" * 64
+    accepted = plan_client.post(
+        f"/api/v1/ai/photographer/plan/{plan['planId']}/accept",
+        headers={"Idempotency-Key": "accept-1"},
+        json={"parentRevisionId": base_revision_id, "renderKey": render_key},
+    )
+    assert accepted.status_code == 200, accepted.text
+    state = accepted.json()
+    assert state["activeRevisionId"] != base_revision_id
+    assert state["revision"]["source"] == "ai"
+    creation = state["revision"]["creation"]
+    assert creation == {
+        "planId": plan["planId"],
+        "styleId": "environmental_portrait",
+        "styleVersion": "1.0",
+        "conversionMode": "natural",
+        "styleStrength": 0.6,
+        "renderKey": render_key,
+    }
+
+    replay = plan_client.post(
+        f"/api/v1/ai/photographer/plan/{plan['planId']}/accept",
+        headers={"Idempotency-Key": "accept-1"},
+        json={"parentRevisionId": base_revision_id, "renderKey": render_key},
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["activeRevisionId"] == state["activeRevisionId"]
+
+    history = plan_client.get(f"/api/v1/sessions/{session_id}/revisions").json()
+    assert history["items"][0]["creation"]["planId"] == plan["planId"]
+    assert history["items"][0]["creation"]["renderKey"] == render_key
+
+    original = plan_client.get(f"/api/v1/images/{image_id}/original")
+    assert original.status_code == 200
+    assert original.content == payload
+
+    undone = plan_client.post(f"/api/v1/sessions/{session_id}/undo", json={})
+    assert undone.status_code == 200, undone.text
+    assert undone.json()["activeRevisionId"] == base_revision_id
+
+    connection = connect(plan_settings.database_path)
+    try:
+        row = connection.execute(
+            "SELECT plan_id, style_id, conversion_mode, style_strength, render_key "
+            "FROM edit_revision WHERE id = ?",
+            (state["activeRevisionId"],),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert row is not None
+    assert row["plan_id"] == plan["planId"]
+    assert row["style_id"] == "environmental_portrait"
+    assert row["conversion_mode"] == "natural"
+    assert row["style_strength"] == 0.6
+    assert row["render_key"] == render_key
+
+
+def test_accepting_a_plan_rejects_a_stale_base_revision(plan_client: TestClient):
+    image_id, session_id = _prepare(plan_client)
+    analysis_id = _analyze(plan_client, image_id)
+    base_revision_id = plan_client.get(f"/api/v1/sessions/{session_id}").json()["activeRevisionId"]
+
+    plan_response = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "environmental_portrait",
+        },
+    )
+    assert plan_response.status_code == 200, plan_response.text
+    plan = plan_response.json()
+    first = plan_client.post(
+        f"/api/v1/ai/photographer/plan/{plan['planId']}/accept",
+        json={"parentRevisionId": base_revision_id},
+    )
+    assert first.status_code == 200, first.text
+    new_head = first.json()["activeRevisionId"]
+
+    stale = plan_client.post(
+        f"/api/v1/ai/photographer/plan/{plan['planId']}/accept",
+        json={"parentRevisionId": new_head},
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["error"]["code"] == "plan_base_mismatch"

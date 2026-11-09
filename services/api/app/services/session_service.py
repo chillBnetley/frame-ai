@@ -7,9 +7,11 @@ from uuid import UUID
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.models.conversion import ConversionMode
 from app.models.recipe import EditRecipe, default_recipe, recipe_hash, stored_recipe_json
 from app.models.sessions import (
     CreateRevisionRequest,
+    RevisionCreationSummary,
     RevisionListResponse,
     RevisionSource,
     RevisionSummary,
@@ -19,6 +21,7 @@ from app.models.sessions import (
 from app.repositories.session_repo import (
     IdempotencyKeyReuseError,
     RevisionConflictError,
+    RevisionCreation,
     RevisionNotFoundError,
     RevisionRecord,
     SessionNotFoundError,
@@ -95,6 +98,7 @@ class SessionService:
         request: CreateRevisionRequest,
         *,
         idempotency_key: str | None,
+        creation: RevisionCreation | None = None,
     ) -> tuple[SessionState, bool]:
         key = _session_key(session_id)
         with _mapped():
@@ -105,9 +109,21 @@ class SessionService:
                 recipe_hash=recipe_hash(request.recipe),
                 source=request.source,
                 idempotency_key=idempotency_key,
+                creation=creation,
             )
             session = self.repository.get(key)
         return self._state(session), replayed
+
+    def idempotent_revision(
+        self,
+        session_id: str,
+        idempotency_key: str | None,
+    ) -> RevisionRecord | None:
+        if idempotency_key is None:
+            return None
+        key = _session_key(session_id)
+        with _mapped():
+            return self.repository.get_by_idempotency(key, idempotency_key)
 
     def undo(self, session_id: str, expected_revision_id: UUID | None = None) -> SessionState:
         key = _session_key(session_id)
@@ -219,6 +235,7 @@ def _view(record: RevisionRecord) -> RevisionView:
         parent_id=None if record.parent_id is None else UUID(record.parent_id),
         source=cast(RevisionSource, record.source),
         recipe=EditRecipe.model_validate_json(record.recipe_json),
+        creation=_creation(record),
         created_at=record.created_at,
     )
 
@@ -230,5 +247,21 @@ def _summary(record: RevisionRecord) -> RevisionSummary:
         parent_id=None if record.parent_id is None else UUID(record.parent_id),
         source=cast(RevisionSource, record.source),
         recipe_hash=record.recipe_hash,
+        creation=_creation(record),
         created_at=record.created_at,
+    )
+
+
+def _creation(record: RevisionRecord) -> RevisionCreationSummary | None:
+    if record.plan_id is None:
+        return None
+    return RevisionCreationSummary(
+        plan_id=UUID(record.plan_id),
+        style_id=record.style_id,
+        style_version=record.style_version,
+        conversion_mode=(
+            None if record.conversion_mode is None else ConversionMode(record.conversion_mode)
+        ),
+        style_strength=record.style_strength,
+        render_key=record.render_key,
     )

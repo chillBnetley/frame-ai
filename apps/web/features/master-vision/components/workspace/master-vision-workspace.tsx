@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { RefreshIcon, SparkleIcon, UploadCloudIcon } from "@/components/icons";
+import { CompareView } from "@/features/editor/components/compare-view";
 import { UploadDropzone } from "@/features/editor/upload-dropzone";
+import { apiUrl } from "@/lib/api/client";
 import { formatBytes } from "@/lib/format";
+import type { RevisionSummary } from "@/types/session";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-validation";
 
 import {
@@ -12,6 +16,7 @@ import {
   FIT_DIMENSION_LABELS,
   FIT_LEVEL_LABELS,
   STYLE_KIND_LABELS,
+  formatDate,
   sceneLabel,
 } from "../../presentation";
 import { MasterVisionNav } from "../master-vision-nav";
@@ -50,6 +55,8 @@ export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: stri
     selectStyle,
     conversionModes,
     conversionModesError,
+    sessionId,
+    session,
     uploading,
     uploadError,
     upload,
@@ -75,7 +82,16 @@ export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: stri
     saveState,
     saveError,
     save,
+    revisions,
+    historyLoading,
+    historyError,
+    historyBusy,
+    reloadHistory,
+    undo,
+    redo,
+    activate,
   } = workspace;
+  const [compareRevisionId, setCompareRevisionId] = useState<string | null>(null);
 
   const analysisReady = analysis.report !== null;
   const busy =
@@ -89,7 +105,8 @@ export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: stri
   const recommendedMode = fit?.recommendedMode ?? null;
   const generationDisabled =
     !analysisReady || planLoading || uploading || uploadError !== null;
-  const saveDisabled = plan === null || planStale || saveState !== "idle";
+  const saveDisabled =
+    plan === null || planStale || saveState !== "idle" || resultUrl === null;
   const masters = styles.filter((item) => item.kind === "master");
   const genres = styles.filter((item) => item.kind === "genre");
 
@@ -572,6 +589,197 @@ export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: stri
           </div>
         </aside>
       </div>
+
+      <section
+        aria-labelledby="history-heading"
+        className="mt-6 rounded-2xl border border-[#dfe5e1] bg-white p-4 sm:p-5"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#eef1ef] pb-3">
+          <div>
+            <h2 id="history-heading" className="text-sm font-semibold text-[#2c3a34]">
+              编辑历史
+            </h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#8a9690]">
+              每个版本保存独立配方；原图始终保留，失败保存不会覆盖现有作品。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => void undo()}
+              disabled={!session?.canUndo || historyBusy !== null}
+              className="min-h-9 rounded-lg border border-[#dfe5e1] bg-white px-3 text-[11px] text-[#5f6d66] hover:bg-[#f5f8f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+            >
+              {historyBusy === "undo" ? "撤销中…" : "撤销"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void redo()}
+              disabled={!session?.canRedo || historyBusy !== null}
+              className="min-h-9 rounded-lg border border-[#dfe5e1] bg-white px-3 text-[11px] text-[#5f6d66] hover:bg-[#f5f8f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+            >
+              {historyBusy === "redo" ? "重做中…" : "重做"}
+            </button>
+            <button
+              type="button"
+              onClick={reloadHistory}
+              disabled={historyBusy !== null}
+              className="min-h-9 rounded-lg border border-[#dfe5e1] bg-white px-3 text-[11px] text-[#5f6d66] hover:bg-[#f5f8f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+            >
+              刷新历史
+            </button>
+          </div>
+        </div>
+
+        {historyError && (
+          <div className="mt-3">
+            <MasterVisionStatus tone="error" title="历史操作未完成">
+              {historyError}
+            </MasterVisionStatus>
+          </div>
+        )}
+
+        {sessionId === null ? (
+          <p className="py-8 text-center text-xs text-[#8a9690]">上传照片后，这里会记录每一次保存。</p>
+        ) : historyLoading ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="正在加载编辑历史" role="status">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="h-32 animate-pulse rounded-xl bg-[#f1f4f2]" />
+            ))}
+          </div>
+        ) : revisions.length === 0 ? (
+          <p className="py-8 text-center text-xs text-[#8a9690]">还没有保存的版本。</p>
+        ) : (
+          <ol className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {revisions.map((revision) => {
+              const active = session?.activeRevisionId === revision.id;
+              const creation = revision.creation;
+              const styleName =
+                styles.find((item) => item.id === creation?.styleId)?.name ??
+                creation?.styleId ??
+                null;
+              return (
+                <li
+                  key={revision.id}
+                  className={[
+                    "overflow-hidden rounded-xl border bg-white",
+                    active ? "border-[#9dbdaf] ring-1 ring-[#c4d9cf]" : "border-[#e4e8e5]",
+                  ].join(" ")}
+                >
+                  {creation?.renderKey && (
+                    // eslint-disable-next-line @next/next/no-img-element -- content-addressed previews are served by the API
+                    <img
+                      src={apiUrl(`/api/v1/previews/${creation.renderKey}`)}
+                      alt={`版本 ${revision.revisionNo} 的渲染结果`}
+                      className="aspect-[16/9] w-full bg-[#eef1ef] object-contain"
+                      onError={(event) => {
+                        event.currentTarget.style.display = "none";
+                      }}
+                    />
+                  )}
+                  <div className="space-y-2 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-[#35473e]">
+                        v{revision.revisionNo} · {historySourceLabel(revision.source)}
+                      </p>
+                      {active && (
+                        <span className="rounded-full bg-[#eaf3ef] px-2 py-0.5 text-[9px] font-medium text-[#1f6a5a]">
+                          当前版本
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-[#66716b]">
+                      {styleName ??
+                        (revision.source === "initial"
+                          ? "原始配方"
+                          : revision.source === "reset"
+                            ? "重置为原始配方"
+                            : "手动调整")}
+                    </p>
+                    <p className="text-[10px] text-[#98a39e]">
+                      {creation?.conversionMode
+                        ? `${CONVERSION_MODE_LABELS[creation.conversionMode]} · 强度 ${Math.round(
+                            (creation.styleStrength ?? 0) * 100,
+                          )}`
+                        : revision.source === "ai"
+                          ? "AI 编辑"
+                          : "未关联风格"}
+                      {" · "}
+                      {formatDate(revision.createdAt)}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setCompareRevisionId(revision.id)}
+                        className="min-h-8 rounded-lg border border-[#dfe5e1] px-2.5 text-[10px] text-[#5f6d66] hover:bg-[#f5f8f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      >
+                        对比
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void activate(revision.id)}
+                        disabled={active || historyBusy !== null}
+                        className="min-h-8 rounded-lg border border-[#c9d8d0] bg-[#f4f9f6] px-2.5 text-[10px] text-[#1f6a5a] hover:bg-[#eaf3ef] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-45"
+                      >
+                        {historyBusy === revision.id
+                          ? "切换中…"
+                          : active
+                            ? "当前版本"
+                            : "恢复并继续"}
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+
+      {compareRevisionId !== null && sessionId !== null && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="版本对比"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#101713]/55 p-3 sm:p-6"
+        >
+          <div className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#dfe5e1] bg-white shadow-[0_30px_90px_-30px_rgba(10,25,18,.6)]">
+            <div className="flex items-center justify-between gap-3 border-b border-[#eef1ef] px-4 py-3">
+              <h2 className="text-sm font-semibold text-[#2c3a34]">版本对比</h2>
+              <button
+                type="button"
+                onClick={() => setCompareRevisionId(null)}
+                className="min-h-9 rounded-lg border border-[#dfe5e1] px-3 text-xs text-[#5f6d66] hover:bg-[#f5f8f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                关闭
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              <CompareView
+                sessionId={sessionId}
+                revisionId={compareRevisionId}
+                dirty={false}
+                onClose={() => setCompareRevisionId(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
+}
+
+function historySourceLabel(source: RevisionSummary["source"]): string {
+  switch (source) {
+    case "initial":
+      return "初始版本";
+    case "user":
+      return "手动编辑";
+    case "ai":
+      return "AI 创作";
+    case "reset":
+      return "重置";
+    default:
+      return source;
+  }
 }

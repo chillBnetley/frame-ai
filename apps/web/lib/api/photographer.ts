@@ -1,5 +1,7 @@
 import { apiJson, apiRequest } from "@/lib/api/client";
+import type { SessionState } from "@/types/session";
 import type {
+  AcceptPlanRequest,
   CritiqueApplyRequest,
   CritiqueApplyResponse,
   FeedbackListResponse,
@@ -35,6 +37,26 @@ export async function createPlan(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+    { signal, timeoutMs: PLANNER_TIMEOUT_MS },
+  );
+}
+
+export async function acceptPlan(
+  planId: string,
+  request: AcceptPlanRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<SessionState> {
+  return apiJson<SessionState>(
+    `/api/v1/ai/photographer/plan/${encodeURIComponent(planId)}/accept`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
       body: JSON.stringify(request),
     },
     { signal, timeoutMs: PLANNER_TIMEOUT_MS },

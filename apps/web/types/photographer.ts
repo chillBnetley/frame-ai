@@ -4,6 +4,7 @@ export type PhotographerPlanRequest =
   components["schemas"]["PhotographerPlanRequest"];
 export type PhotographerPlanResponse =
   components["schemas"]["PhotographerPlanResponse"];
+export type AcceptPlanRequest = components["schemas"]["AcceptPlanRequest"];
 export type PhotographerPatchRequest =
   components["schemas"]["PhotographerPatchRequest"];
 export type PhotographerPatchResponse =

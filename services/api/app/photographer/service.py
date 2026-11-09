@@ -25,6 +25,7 @@ from app.models.analysis_task import TaskStatus
 from app.models.conversion import ConversionMode
 from app.models.photographer import (
     MAX_NOTES,
+    AcceptPlanRequest,
     AdjustmentIntent,
     ConversionModeListResponse,
     CreativeDirection,
@@ -53,6 +54,7 @@ from app.models.photographer import (
     StyleListResponse,
 )
 from app.models.recipe import EditRecipe, recipe_hash, stored_recipe_json
+from app.models.sessions import CreateRevisionRequest, SessionState
 from app.models.style_profile import StyleProfile
 from app.photographer.critique import build_critique
 from app.photographer.diagnosis import AnalysisAdvice, diagnose
@@ -83,6 +85,7 @@ from app.repositories.photographer_repo import (
     SqlitePhotographerFeedbackRepository,
     SqlitePhotographerPlanRepository,
 )
+from app.repositories.session_repo import RevisionCreation
 from app.repositories.style_repo import SqliteStyleProfileRepository
 
 if TYPE_CHECKING:
@@ -322,6 +325,7 @@ class PhotographerService:
             analysis_id=report.analysis_id,
             session_id=session.session_id,
             image_id=session.image_id,
+            base_revision_id=session.revision.id,
             mode=request.mode,
             is_mock=planner.is_mock,
             degraded=degraded,
@@ -360,8 +364,88 @@ class PhotographerService:
         )
         return response
 
+    def accept_plan(
+        self,
+        plan_id: str,
+        request: AcceptPlanRequest,
+        *,
+        idempotency_key: str | None,
+    ) -> SessionState:
+        """Commit a stored style plan as an AI revision with its creation record."""
+        _, sessions, _, plans = self._plan_dependencies()
+        record = plans.get(plan_id)
+        if record is None:
+            raise AppError(404, "plan_not_found", "The referenced photography plan does not exist.")
+        session = sessions.get(record.session_id)
+        if str(session.image_id).lower() != record.image_id.lower():
+            raise AppError(
+                409,
+                "plan_session_mismatch",
+                "The plan does not belong to the current image session.",
+            )
+
+        existing = sessions.idempotent_revision(str(session.session_id), idempotency_key)
+        if existing is not None:
+            if existing.plan_id is not None and existing.plan_id.lower() == record.id.lower():
+                return sessions.get(str(session.session_id))
+            raise AppError(
+                409,
+                "idempotency_key_reuse",
+                "This idempotency key belongs to a different revision.",
+            )
+
+        plan = PhotographerPlanResponse.model_validate_json(record.plan_json)
+        parent = str(request.parent_revision_id).lower()
+        base = None if plan.base_revision_id is None else str(plan.base_revision_id).lower()
+        if base is None or parent != base or str(session.active_revision_id).lower() != base:
+            raise AppError(
+                409,
+                "plan_base_mismatch",
+                "The photo has newer edits. Regenerate the style plan before applying it.",
+                {"planId": record.id, "baseRevisionId": base},
+            )
+
+        recipe = EditRecipe.model_validate_json(record.recipe_json)
+        if recipe_hash(recipe) != record.recipe_hash:
+            raise AppError(
+                409,
+                "plan_recipe_mismatch",
+                "The stored plan recipe no longer matches its recorded hash.",
+            )
+        if recipe_hash(plan.recipe) != record.recipe_hash:
+            raise AppError(
+                409,
+                "plan_recipe_mismatch",
+                "The stored plan payload no longer matches its recorded hash.",
+            )
+
+        creation = RevisionCreation(
+            plan_id=record.id,
+            style_id=record.style_id,
+            style_version=record.style_version,
+            conversion_mode=record.conversion_mode,
+            style_strength=record.style_strength,
+            render_key=request.render_key,
+        )
+        state, _ = sessions.add_revision(
+            str(session.session_id),
+            CreateRevisionRequest(
+                recipe=recipe,
+                parent_revision_id=request.parent_revision_id,
+                source="ai",
+            ),
+            idempotency_key=idempotency_key,
+            creation=creation,
+        )
+        logger.info(
+            "photographer_plan_accepted plan_id=%s session_id=%s revision_id=%s",
+            record.id,
+            session.session_id,
+            state.active_revision_id,
+        )
+        return state
+
     def patch(self, request: PhotographerPatchRequest) -> PhotographerPatchResponse:
-        """Apply one natural-language instruction to the recipe the user is looking at."""
         analysis_service, sessions, images, plans = self._plan_dependencies()
         record = plans.get(str(request.plan_id))
         if record is None:
@@ -731,6 +815,9 @@ class PhotographerService:
             style_strength=strength,
             conversion_mode=(
                 None if response.conversion_mode is None else response.conversion_mode.value
+            ),
+            base_revision_id=(
+                None if response.base_revision_id is None else str(response.base_revision_id)
             ),
             provider=response.provider.name,
             model=response.provider.model,

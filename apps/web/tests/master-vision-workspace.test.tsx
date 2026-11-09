@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -14,7 +14,13 @@ import {
   styleFit,
   styleItem,
 } from "./master-vision-fixtures";
-import { IMAGE_ID, NEXT_REVISION_ID, SESSION_ID, sessionState } from "./session-fixtures";
+import {
+  IMAGE_ID,
+  NEXT_REVISION_ID,
+  REVISION_ID,
+  SESSION_ID,
+  sessionState,
+} from "./session-fixtures";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -92,7 +98,7 @@ function installWorkspaceMock() {
       if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/render`)) {
         renders += 1;
         return jsonResponse({
-          previewUrl: `/preview-${renders}.jpg`,
+          previewUrl: `/api/v1/previews/${(renders === 1 ? "a" : "b").repeat(64)}`,
           width: 1600,
           height: 1200,
           quality: "draft",
@@ -103,18 +109,59 @@ function installWorkspaceMock() {
       if (url.endsWith("/api/v1/ai/photographer/plan") && method === "POST") {
         return jsonResponse(plan);
       }
-      if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/revisions`) && method === "POST") {
-        return jsonResponse(
-          sessionState({
-            recipe: plan.recipe,
-            revisionId: NEXT_REVISION_ID,
-            headRevisionId: NEXT_REVISION_ID,
-            revisionNo: 2,
-            source: "ai",
-            canUndo: true,
-          }),
-          201,
-        );
+      if (url.includes(`/api/v1/sessions/${SESSION_ID}/revisions`) && method === "GET") {
+        return jsonResponse({
+          items: [
+            {
+              id: NEXT_REVISION_ID,
+              revisionNo: 2,
+              parentId: REVISION_ID,
+              source: "ai",
+              recipeHash: "hash-2",
+              creation: {
+                planId: plan.planId,
+                styleId: MASTER_STYLE_ID,
+                styleVersion: "1.0",
+                conversionMode: "style",
+                styleStrength: 0.6,
+                renderKey: "b".repeat(64),
+              },
+              createdAt: "2026-11-08T00:00:02Z",
+            },
+            {
+              id: REVISION_ID,
+              revisionNo: 1,
+              parentId: null,
+              source: "initial",
+              recipeHash: "hash-1",
+              creation: null,
+              createdAt: "2026-11-08T00:00:00Z",
+            },
+          ],
+          nextCursor: null,
+        });
+      }
+      if (url.endsWith(`/api/v1/sessions/${SESSION_ID}/undo`) && method === "POST") {
+        return jsonResponse(sessionState());
+      }
+      if (url.endsWith(`/api/v1/ai/photographer/plan/${plan.planId}/accept`) && method === "POST") {
+        const accepted = sessionState({
+          recipe: plan.recipe,
+          revisionId: NEXT_REVISION_ID,
+          headRevisionId: NEXT_REVISION_ID,
+          revisionNo: 2,
+          source: "ai",
+          canUndo: true,
+        });
+        accepted.revision.creation = {
+          planId: plan.planId,
+          styleId: MASTER_STYLE_ID,
+          styleVersion: "1.0",
+          conversionMode: "style",
+          styleStrength: 0.6,
+          renderKey: "b".repeat(64),
+        };
+        return jsonResponse(accepted);
       }
       return jsonResponse(
         { error: { code: "not_found", message: `missing ${url}`, details: {} } },
@@ -172,10 +219,22 @@ describe("MasterVisionWorkspace", () => {
       styleStrength: 0.6,
       conversionMode: "style",
     });
-    const revision = calls.find(
-      (call) => call.method === "POST" && call.url.endsWith(`/sessions/${SESSION_ID}/revisions`),
+    const accepted = calls.find(
+      (call) => call.method === "POST" && call.url.includes("/photographer/plan/") && call.url.endsWith("/accept"),
     );
-    expect(revision?.body).toMatchObject({ source: "ai" });
+    expect(accepted?.body).toMatchObject({
+      parentRevisionId: REVISION_ID,
+      renderKey: "b".repeat(64),
+    });
+    const savedItem = (await screen.findByText(/v2 · AI 创作/)).closest("li");
+    expect(savedItem).not.toBeNull();
+    expect(within(savedItem as HTMLElement).getByRole("button", { name: "当前版本" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "撤销" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled());
+    const initialItem = screen.getByText(/v1 · 初始版本/).closest("li");
+    expect(initialItem).not.toBeNull();
+    expect(within(initialItem as HTMLElement).getByRole("button", { name: "当前版本" })).toBeDisabled();
   });
 
   it("reports an upload failure without leaving the empty state", async () => {

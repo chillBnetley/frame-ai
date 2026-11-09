@@ -52,6 +52,10 @@ const EDITOR_MESSAGES: Record<string, string> = {
   photographer_usage_unavailable: "用量统计暂时不可用，请稍后重试。",
   style_required: "请先选择摄影风格。",
   style_not_found: "找不到所选风格，请重新选择。",
+  plan_not_found: "找不到这次风格方案，请重新生成。",
+  plan_base_mismatch: "照片已有更新的编辑，请重新生成风格方案后再应用。",
+  plan_recipe_mismatch: "方案配方与记录不一致，请重新生成。",
+  plan_session_mismatch: "方案不属于当前照片会话，请重新生成。",
 };
 
 export function validationFields(details: Record<string, unknown>): string[] {

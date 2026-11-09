@@ -539,6 +539,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/photographer/plan/{plan_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Plan */
+        post: operations["accept_plan_api_v1_ai_photographer_plan__plan_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/photographer/chat": {
         parameters: {
             query?: never;
@@ -783,6 +800,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptPlanRequest */
+        AcceptPlanRequest: {
+            /**
+             * Parentrevisionid
+             * Format: uuid
+             */
+            parentRevisionId: string;
+            /** Renderkey */
+            renderKey?: string | null;
+        };
         /** ActivateRevisionRequest */
         ActivateRevisionRequest: {
             /**
@@ -2334,6 +2361,8 @@ export interface components {
              * Format: uuid
              */
             imageId: string;
+            /** Baserevisionid */
+            baseRevisionId?: string | null;
             mode: components["schemas"]["PlannerMode"];
             /** Ismock */
             isMock: boolean;
@@ -2659,6 +2688,20 @@ export interface components {
             /** Sha256 */
             sha256: string;
         };
+        /** RevisionCreationSummary */
+        RevisionCreationSummary: {
+            /** Planid */
+            planId?: string | null;
+            /** Styleid */
+            styleId?: string | null;
+            /** Styleversion */
+            styleVersion?: string | null;
+            conversionMode?: components["schemas"]["ConversionMode"] | null;
+            /** Stylestrength */
+            styleStrength?: number | null;
+            /** Renderkey */
+            renderKey?: string | null;
+        };
         /** RevisionListResponse */
         RevisionListResponse: {
             /** Items */
@@ -2684,6 +2727,7 @@ export interface components {
             source: "initial" | "user" | "ai" | "reset";
             /** Recipehash */
             recipeHash: string;
+            creation?: components["schemas"]["RevisionCreationSummary"] | null;
             /**
              * Createdat
              * Format: date-time
@@ -2707,6 +2751,7 @@ export interface components {
              */
             source: "initial" | "user" | "ai" | "reset";
             recipe: components["schemas"]["EditRecipe"];
+            creation?: components["schemas"]["RevisionCreationSummary"] | null;
             /**
              * Createdat
              * Format: date-time
@@ -5746,6 +5791,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PhotographerPlanResponse"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    accept_plan_api_v1_ai_photographer_plan__plan_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
                 };
             };
             /** @description Session, analysis, plan, style, or feedback record not found */

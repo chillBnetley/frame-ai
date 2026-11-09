@@ -4,11 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAnalysis } from "@/features/analysis/hooks/use-analysis";
 import { uploadImage } from "@/lib/api/client";
-import { createPlan } from "@/lib/api/photographer";
+import { acceptPlan, createPlan } from "@/lib/api/photographer";
 import {
-  createRevision,
+  activateRevision,
   createSession,
+  listRevisions,
+  redoSession,
   renderPreview,
+  undoSession,
 } from "@/lib/api/sessions";
 import {
   fetchConversionModes,
@@ -19,7 +22,7 @@ import {
 import { describeEditorError } from "@/lib/error-messages";
 import { validateUploadFile } from "@/lib/upload-validation";
 import type { PhotographerPlanResponse } from "@/types/photographer";
-import type { EditRecipe, SessionState } from "@/types/session";
+import type { EditRecipe, RevisionSummary, SessionState } from "@/types/session";
 import type {
   ConversionMode,
   ConversionModeInfo,
@@ -78,6 +81,15 @@ export interface MasterVisionWorkspaceState {
   saveError: string | null;
   save: () => Promise<void>;
   resetSave: () => void;
+
+  revisions: RevisionSummary[];
+  historyLoading: boolean;
+  historyError: string | null;
+  historyBusy: string | null;
+  reloadHistory: () => void;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
+  activate: (revisionId: string) => Promise<void>;
 }
 
 function newIdempotencyKey(): string {
@@ -85,6 +97,12 @@ function newIdempotencyKey(): string {
     return crypto.randomUUID();
   }
   return `mv-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function previewKeyFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  const match = /\/api\/v1\/previews\/([0-9a-f]{64})$/i.exec(url);
+  return match?.[1]?.toLowerCase() ?? null;
 }
 
 function messageFor(error: unknown, fallback: string): string {
@@ -136,6 +154,13 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
   const [saveState, setSaveState] = useState<WorkspaceSaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [revisions, setRevisions] = useState<RevisionSummary[]>([]);
+  const [historyLoadedKey, setHistoryLoadedKey] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyErrorKey, setHistoryErrorKey] = useState<string | null>(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const [historyBusy, setHistoryBusy] = useState<string | null>(null);
+
   const fitRequestRef = useRef<AbortController | null>(null);
   const planRequestRef = useRef<AbortController | null>(null);
   const renderRequestRef = useRef<AbortController | null>(null);
@@ -152,6 +177,13 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
     styleId !== "" &&
     fitKey !== fitRequestKey &&
     fitErrorKey !== fitRequestKey;
+  const historyKey = `${sessionId ?? ""}:${historyVersion}`;
+  const currentRevisions = historyLoadedKey === historyKey ? revisions : [];
+  const currentHistoryError = historyErrorKey === historyKey ? historyError : null;
+  const historyLoading =
+    sessionId !== null &&
+    historyLoadedKey !== historyKey &&
+    historyErrorKey !== historyKey;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -268,6 +300,31 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
       });
     return () => controller.abort();
   }, [baseRecipe, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const controller = new AbortController();
+    const requestKey = `${sessionId}:${historyVersion}`;
+    listRevisions(sessionId, { limit: 40 }, controller.signal)
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setRevisions(response.items);
+          setHistoryLoadedKey(requestKey);
+          setHistoryError(null);
+          setHistoryErrorKey(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setHistoryError(messageFor(error, "编辑历史加载失败，请重试。"));
+          setHistoryErrorKey(requestKey);
+          setRevisions([]);
+          setHistoryLoadedKey(null);
+        }
+      });
+    return () => controller.abort();
+    // historyVersion deliberately re-runs after a save, undo, redo, or restore.
+  }, [historyVersion, sessionId]);
 
   const selectStyle = useCallback((nextStyleId: string) => {
     if (nextStyleId === styleId) return;
@@ -414,29 +471,107 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
     setRenderError("预览图片加载失败，请重试渲染或检查网络连接。");
   }, []);
 
+  const resetGenerated = useCallback(() => {
+    planRequestRef.current?.abort();
+    renderRequestRef.current?.abort();
+    setPlan(null);
+    setPlanLoading(false);
+    setPlanError(null);
+    setResultUrl(null);
+    setRenderError(null);
+    setRenderLoading(false);
+    setPlannedKey(null);
+    setSaveState("idle");
+    setSaveError(null);
+    idempotencyKeyRef.current = null;
+  }, []);
+
   const save = useCallback(async () => {
     if (!sessionId || !session || !plan) return;
+    const renderKey = previewKeyFromUrl(resultUrl);
+    if (renderKey === null) {
+      setSaveError("请等待真实预览渲染完成后再保存。");
+      return;
+    }
     setSaveState("saving");
     setSaveError(null);
     try {
       const key = idempotencyKeyRef.current ?? newIdempotencyKey();
       idempotencyKeyRef.current = key;
-      const result = await createRevision(
-        sessionId,
+      const state = await acceptPlan(
+        plan.planId,
         {
-          recipe: plan.recipe,
           parentRevisionId: session.activeRevisionId,
-          source: "ai",
+          renderKey,
         },
         key,
       );
-      setSession(result.state);
+      setSession(state);
       setSaveState("saved");
+      setHistoryVersion((value) => value + 1);
     } catch (error) {
       setSaveState("idle");
       setSaveError(describeEditorError(error).message);
     }
-  }, [plan, session, sessionId]);
+  }, [plan, resultUrl, session, sessionId]);
+
+  const undo = useCallback(async () => {
+    if (!sessionId) return;
+    setHistoryBusy("undo");
+    setHistoryError(null);
+    try {
+      const state = await undoSession(sessionId);
+      setSession(state);
+      resetGenerated();
+      setHistoryVersion((value) => value + 1);
+    } catch (error) {
+      setHistoryError(describeEditorError(error).message);
+      setHistoryErrorKey(historyKey);
+    } finally {
+      setHistoryBusy(null);
+    }
+  }, [historyKey, resetGenerated, sessionId]);
+
+  const redo = useCallback(async () => {
+    if (!sessionId) return;
+    setHistoryBusy("redo");
+    setHistoryError(null);
+    try {
+      const state = await redoSession(sessionId);
+      setSession(state);
+      resetGenerated();
+      setHistoryVersion((value) => value + 1);
+    } catch (error) {
+      setHistoryError(describeEditorError(error).message);
+      setHistoryErrorKey(historyKey);
+    } finally {
+      setHistoryBusy(null);
+    }
+  }, [historyKey, resetGenerated, sessionId]);
+
+  const activate = useCallback(
+    async (revisionId: string) => {
+      if (!sessionId) return;
+      setHistoryBusy(revisionId);
+      setHistoryError(null);
+      try {
+        const state = await activateRevision(sessionId, revisionId);
+        setSession(state);
+        resetGenerated();
+        setHistoryVersion((value) => value + 1);
+      } catch (error) {
+        setHistoryError(describeEditorError(error).message);
+        setHistoryErrorKey(historyKey);
+      } finally {
+        setHistoryBusy(null);
+      }
+    },
+    [historyKey, resetGenerated, sessionId],
+  );
+
+  const reloadHistory = useCallback(() => {
+    setHistoryVersion((value) => value + 1);
+  }, []);
 
   const resetSave = useCallback(() => {
     setSaveState("idle");
@@ -483,5 +618,13 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
     saveError,
     save,
     resetSave,
+    revisions: currentRevisions,
+    historyLoading,
+    historyError: currentHistoryError,
+    historyBusy,
+    reloadHistory,
+    undo,
+    redo,
+    activate,
   };
 }

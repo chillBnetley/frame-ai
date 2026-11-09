@@ -4,11 +4,21 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from app.models.conversion import ConversionMode
 from app.models.recipe import EditRecipe
 from app.models.schemas import CamelModel
 
 RevisionSource = Literal["initial", "user", "ai", "reset"]
 WritableRevisionSource = Literal["user", "ai"]
+
+
+class RevisionCreationSummary(CamelModel):
+    plan_id: UUID | None = None
+    style_id: str | None = None
+    style_version: str | None = None
+    conversion_mode: ConversionMode | None = None
+    style_strength: float | None = None
+    render_key: str | None = None
 
 
 class CreateSessionRequest(CamelModel):
@@ -35,6 +45,7 @@ class RevisionView(CamelModel):
     parent_id: UUID | None
     source: RevisionSource
     recipe: EditRecipe
+    creation: RevisionCreationSummary | None = None
     created_at: datetime
 
 
@@ -54,6 +65,7 @@ class RevisionSummary(CamelModel):
     parent_id: UUID | None
     source: RevisionSource
     recipe_hash: str
+    creation: RevisionCreationSummary | None = None
     created_at: datetime
 
 

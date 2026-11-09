@@ -2962,6 +2962,136 @@
         }
       }
     },
+    "/api/v1/ai/photographer/plan/{plan_id}/accept": {
+      "post": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "Accept Plan",
+        "operationId": "accept_plan_api_v1_ai_photographer_plan__plan_id__accept_post",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Plan Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/photographer/chat": {
       "post": {
         "tags": [
@@ -4501,6 +4631,33 @@
   },
   "components": {
     "schemas": {
+      "AcceptPlanRequest": {
+        "properties": {
+          "parentRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parentrevisionid"
+          },
+          "renderKey": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renderkey"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "parentRevisionId"
+        ],
+        "title": "AcceptPlanRequest"
+      },
       "ActivateRevisionRequest": {
         "properties": {
           "revisionId": {
@@ -8324,6 +8481,18 @@
             "format": "uuid",
             "title": "Imageid"
           },
+          "baseRevisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baserevisionid"
+          },
           "mode": {
             "$ref": "#/components/schemas/PlannerMode"
           },
@@ -9225,6 +9394,79 @@
         ],
         "title": "ReportImage"
       },
+      "RevisionCreationSummary": {
+        "properties": {
+          "planId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planid"
+          },
+          "styleId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleid"
+          },
+          "styleVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleversion"
+          },
+          "conversionMode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "styleStrength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stylestrength"
+          },
+          "renderKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renderkey"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RevisionCreationSummary"
+      },
       "RevisionListResponse": {
         "properties": {
           "items": {
@@ -9290,6 +9532,16 @@
             "type": "string",
             "title": "Recipehash"
           },
+          "creation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionCreationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -9343,6 +9595,16 @@
           },
           "recipe": {
             "$ref": "#/components/schemas/EditRecipe"
+          },
+          "creation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionCreationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "createdAt": {
             "type": "string",

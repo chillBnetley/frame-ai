@@ -20,6 +20,7 @@ export type OutputSettings = components["schemas"]["OutputSettings"];
 export type SessionState = components["schemas"]["SessionState"];
 export type RevisionView = components["schemas"]["RevisionView"];
 export type RevisionSummary = components["schemas"]["RevisionSummary"];
+export type RevisionCreation = components["schemas"]["RevisionCreationSummary"];
 export type RevisionListResponse = components["schemas"]["RevisionListResponse"];
 export type RevisionSource = RevisionSummary["source"];
 export type RenderRequest = components["schemas"]["RenderRequest"];

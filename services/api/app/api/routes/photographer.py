@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Response
 
 from app.ai.contracts import SceneLabel
 from app.api.deps import get_photographer_service
 from app.models.photographer import (
     MAX_FEEDBACK_ROWS,
+    AcceptPlanRequest,
     ConversionModeListResponse,
     CritiqueApplyRequest,
     CritiqueApplyResponse,
@@ -27,6 +28,7 @@ from app.models.photographer import (
     StyleListResponse,
 )
 from app.models.schemas import ErrorResponse
+from app.models.sessions import SessionState
 from app.photographer.service import PhotographerService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -84,6 +86,17 @@ def create_plan(
     service: Annotated[PhotographerService, Depends(get_photographer_service)],
 ) -> PhotographerPlanResponse:
     return service.plan(payload)
+
+
+@router.post("/plan/{plan_id}/accept", response_model=SessionState)
+def accept_plan(
+    plan_id: UUID,
+    payload: AcceptPlanRequest,
+    service: Annotated[PhotographerService, Depends(get_photographer_service)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=200)] = None,
+) -> SessionState:
+    key = idempotency_key.strip() if idempotency_key else None
+    return service.accept_plan(str(plan_id), payload, idempotency_key=key or None)
 
 
 @router.post(

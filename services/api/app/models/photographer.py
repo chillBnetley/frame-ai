@@ -355,6 +355,7 @@ class PhotographerPlanResponse(_PhotographerModel):
     analysis_id: UUID
     session_id: UUID
     image_id: UUID
+    base_revision_id: UUID | None = None
     mode: PlannerMode
     is_mock: bool
     degraded: bool = False
@@ -619,6 +620,14 @@ class PhotographerPatchRequest(_PhotographerModel):
     preferences: PhotographerPreferences = Field(default_factory=PhotographerPreferences)
 
 
+class AcceptPlanRequest(_PhotographerModel):
+    parent_revision_id: UUID
+    render_key: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+
+
 class PhotographerCritiqueRequest(_PhotographerModel):
     analysis_id: UUID
     preferences: PhotographerPreferences = Field(default_factory=PhotographerPreferences)
@@ -653,6 +662,7 @@ def canonical_evidence_refs(refs: object) -> object:
 
 
 __all__ = [
+    "AcceptPlanRequest",
     "AdjustmentIntent",
     "ChangePath",
     "ConversionMode",

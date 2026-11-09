@@ -10,7 +10,7 @@ import type {
 
 import { ANALYSIS_ID } from "./analysis-fixtures";
 import { photographerPlan } from "./photographer-fixtures";
-import { IMAGE_ID, SESSION_ID } from "./session-fixtures";
+import { IMAGE_ID, REVISION_ID, SESSION_ID } from "./session-fixtures";
 
 export const MASTER_STYLE_ID = "fan_ho";
 export const GENRE_STYLE_ID = "environmental_portrait";
@@ -218,6 +218,7 @@ export function masterVisionPlan(): PhotographerPlanResponse {
     analysisId: ANALYSIS_ID,
     sessionId: SESSION_ID,
     imageId: IMAGE_ID,
+    baseRevisionId: REVISION_ID,
     mode: "style",
     styleId: MASTER_STYLE_ID,
     styleVersion: "1.0",

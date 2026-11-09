@@ -42,6 +42,16 @@ class SessionRecord:
 
 
 @dataclass(frozen=True)
+class RevisionCreation:
+    plan_id: str
+    style_id: str | None
+    style_version: str | None
+    conversion_mode: str | None
+    style_strength: float | None
+    render_key: str | None
+
+
+@dataclass(frozen=True)
 class RevisionRecord:
     id: str
     session_id: str
@@ -52,6 +62,12 @@ class RevisionRecord:
     source: str
     idempotency_key: str | None
     created_at: datetime
+    plan_id: str | None = None
+    style_id: str | None = None
+    style_version: str | None = None
+    conversion_mode: str | None = None
+    style_strength: float | None = None
+    render_key: str | None = None
 
 
 _SESSION_COLUMNS = (
@@ -59,7 +75,8 @@ _SESSION_COLUMNS = (
 )
 _REVISION_COLUMNS = (
     "id, session_id, parent_id, revision_no, recipe_json, recipe_hash, "
-    "source, idempotency_key, created_at"
+    "source, idempotency_key, created_at, plan_id, style_id, style_version, "
+    "conversion_mode, style_strength, render_key"
 )
 _REDO_QUERY = """
 WITH RECURSIVE ancestors(id, parent_id) AS (
@@ -121,6 +138,12 @@ def _to_revision(row: sqlite3.Row) -> RevisionRecord:
         source=str(row["source"]),
         idempotency_key=str(idempotency_key) if idempotency_key is not None else None,
         created_at=_parse_time(str(row["created_at"])),
+        plan_id=None if row["plan_id"] is None else str(row["plan_id"]),
+        style_id=None if row["style_id"] is None else str(row["style_id"]),
+        style_version=(None if row["style_version"] is None else str(row["style_version"])),
+        conversion_mode=(None if row["conversion_mode"] is None else str(row["conversion_mode"])),
+        style_strength=(None if row["style_strength"] is None else float(row["style_strength"])),
+        render_key=None if row["render_key"] is None else str(row["render_key"]),
     )
 
 
@@ -198,6 +221,23 @@ class SqliteSessionRepository:
             raise RevisionNotFoundError(normalized_revision)
         return _to_revision(row)
 
+    def get_by_idempotency(
+        self,
+        session_id: str,
+        idempotency_key: str,
+    ) -> RevisionRecord | None:
+        normalized_session = _normalize_id(session_id)
+        connection = connect(self._path)
+        try:
+            row = connection.execute(
+                f"SELECT {_REVISION_COLUMNS} FROM edit_revision "
+                "WHERE session_id = ? AND idempotency_key = ?",
+                (normalized_session, idempotency_key),
+            ).fetchone()
+        finally:
+            connection.close()
+        return _to_revision(row) if row is not None else None
+
     def add_revision(
         self,
         session_id: str,
@@ -207,6 +247,7 @@ class SqliteSessionRepository:
         recipe_hash: str,
         source: str,
         idempotency_key: str | None,
+        creation: RevisionCreation | None = None,
     ) -> tuple[RevisionRecord, bool]:
         normalized_session = _normalize_id(session_id)
         connection = connect(self._path)
@@ -248,8 +289,9 @@ class SqliteSessionRepository:
                 connection.execute(
                     "INSERT INTO edit_revision "
                     "(id, session_id, parent_id, revision_no, recipe_json, recipe_hash, "
-                    " source, idempotency_key, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " source, idempotency_key, created_at, plan_id, style_id, style_version, "
+                    " conversion_mode, style_strength, render_key) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         revision_id,
                         normalized_session,
@@ -260,6 +302,12 @@ class SqliteSessionRepository:
                         source,
                         idempotency_key,
                         now,
+                        None if creation is None else creation.plan_id.lower(),
+                        None if creation is None else creation.style_id,
+                        None if creation is None else creation.style_version,
+                        None if creation is None else creation.conversion_mode,
+                        None if creation is None else creation.style_strength,
+                        None if creation is None else creation.render_key,
                     ),
                 )
                 connection.execute(

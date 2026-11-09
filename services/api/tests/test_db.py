@@ -37,12 +37,15 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
         plan_columns = {
             str(row["name"]) for row in connection.execute("PRAGMA table_info(photographer_plan)")
         }
+        revision_columns = {
+            str(row["name"]) for row in connection.execute("PRAGMA table_info(edit_revision)")
+        }
         foreign_key_issues = connection.execute("PRAGMA foreign_key_check").fetchall()
         journal_mode = str(connection.execute("PRAGMA journal_mode").fetchone()[0])
     finally:
         connection.close()
 
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert {
         "image_asset",
         "edit_session",
@@ -57,6 +60,10 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
         "style_favorite",
     } <= tables
     assert "conversion_mode" in plan_columns
+    assert "base_revision_id" in plan_columns
+    assert {"plan_id", "style_id", "conversion_mode", "style_strength", "render_key"} <= (
+        revision_columns
+    )
     assert foreign_key_issues == []
     assert journal_mode == "wal"
 

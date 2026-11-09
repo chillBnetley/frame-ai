@@ -11,8 +11,8 @@ from app.repositories.db import connect
 
 _PLAN_COLUMNS = (
     "id, image_id, session_id, analysis_id, mode, style_id, style_version, "
-    "style_strength, conversion_mode, provider, model, prompt_version, is_mock, "
-    "degraded, confidence, plan_json, recipe_json, recipe_hash, created_at"
+    "style_strength, conversion_mode, base_revision_id, provider, model, prompt_version, "
+    "is_mock, degraded, confidence, plan_json, recipe_json, recipe_hash, created_at"
 )
 
 _FEEDBACK_COLUMNS = (
@@ -46,6 +46,7 @@ class PhotographerPlanRecord:
     recipe_hash: str
     created_at: datetime
     conversion_mode: str | None = None
+    base_revision_id: str | None = None
 
 
 def _iso(value: datetime) -> str:
@@ -102,7 +103,7 @@ class SqlitePhotographerPlanRepository:
             connection.execute(
                 "INSERT INTO photographer_plan "
                 f"({_PLAN_COLUMNS}) VALUES "
-                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     _normalize_id(record.id),
                     _normalize_id(record.image_id),
@@ -113,6 +114,7 @@ class SqlitePhotographerPlanRepository:
                     record.style_version,
                     record.style_strength,
                     record.conversion_mode,
+                    record.base_revision_id,
                     record.provider,
                     record.model,
                     record.prompt_version,
