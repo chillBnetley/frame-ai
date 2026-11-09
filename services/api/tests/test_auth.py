@@ -109,6 +109,30 @@ def test_style_library_routes_use_the_same_token_gate(tmp_path: Path):
     assert allowed.json()["styles"]
 
 
+def test_personal_style_routes_use_the_same_token_gate(tmp_path: Path):
+    settings = _settings(tmp_path)
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/api/v1/personal-styles").status_code == 401
+        assert (
+            client.post(
+                "/api/v1/personal-styles",
+                json={
+                    "name": "私有风格",
+                    "description": "只有本机用户可读。",
+                    "source": "custom",
+                },
+            ).status_code
+            == 401
+        )
+        allowed = client.get(
+            "/api/v1/personal-styles",
+            headers=auth_headers(settings),
+        )
+
+    assert allowed.status_code == 200
+    assert allowed.json()["styles"] == []
+
+
 def test_api_requires_a_matching_token(tmp_path: Path):
     settings = _settings(tmp_path)
     with TestClient(create_app(settings)) as client:

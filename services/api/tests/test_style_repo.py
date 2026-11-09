@@ -75,7 +75,7 @@ def test_migration_creates_style_tables(tmp_path: Path) -> None:
     finally:
         connection.close()
     assert {"style_profile", "style_profile_version", "style_favorite", "image_asset"} <= tables
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     assert issues == []
 
 

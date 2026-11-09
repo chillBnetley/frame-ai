@@ -4,6 +4,7 @@ from fastapi import Request
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.core.identity import OwnerScope
 from app.imaging.semantic_models import SemanticModelRegistry
 from app.photographer.service import PhotographerService
 from app.services.analysis_task_service import AnalysisTaskService
@@ -11,6 +12,7 @@ from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
+from app.services.personal_style_service import PersonalStyleService
 from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
@@ -38,6 +40,13 @@ def get_semantic_mask_service(request: Request) -> SemanticMaskService:
     if not isinstance(service, SemanticMaskService):
         raise AppError(503, "semantic_mask_unavailable", "Semantic masks are not available.")
     return service
+
+
+def get_owner_scope(request: Request) -> OwnerScope:
+    scope = getattr(request.app.state, "owner_scope", None)
+    if not isinstance(scope, OwnerScope):
+        raise AppError(503, "service_unavailable", "The service is not ready.")
+    return scope
 
 
 def get_image_service(request: Request) -> ImageService:
@@ -93,6 +102,17 @@ def get_style_library_service(request: Request) -> StyleLibraryService:
     service = getattr(request.app.state, "style_library_service", None)
     if not isinstance(service, StyleLibraryService):
         raise AppError(503, "style_library_unavailable", "The style library is not available.")
+    return service
+
+
+def get_personal_style_service(request: Request) -> PersonalStyleService:
+    service = getattr(request.app.state, "personal_style_service", None)
+    if not isinstance(service, PersonalStyleService):
+        raise AppError(
+            503,
+            "personal_style_unavailable",
+            "The personal style service is not available.",
+        )
     return service
 
 

@@ -49,6 +49,7 @@ class _StyleProfileModel(BaseModel):
 class StyleKind(StrEnum):
     MASTER = "master"
     GENRE = "genre"
+    PERSONAL = "personal"
 
 
 class StyleColorTraits(_StyleProfileModel):
@@ -137,7 +138,9 @@ class StyleProfile(_StyleProfileModel):
             version=self.version,
             name=self.name,
             category=(
-                StyleCategory.CREATIVE if self.kind is StyleKind.MASTER else StyleCategory.SCENE
+                StyleCategory.CREATIVE
+                if self.kind in {StyleKind.MASTER, StyleKind.PERSONAL}
+                else StyleCategory.SCENE
             ),
             description=self.description,
             supported_scenes=self.scene_fit.suitable,

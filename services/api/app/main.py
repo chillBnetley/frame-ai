@@ -11,11 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.ai.factory import ProviderBundle
 from app.api.errors import register_exception_handlers
 from app.api.routes import analysis, config, exports, health, images, previews, sessions
+from app.api.routes import personal_styles as personal_style_routes
 from app.api.routes import photographer as photographer_routes
 from app.api.routes import settings as settings_routes
 from app.api.routes import styles as style_routes
 from app.core.auth import ApiTokenService
 from app.core.config import Settings, get_settings
+from app.core.identity import LOCAL_OWNER_ID, OwnerScope
 from app.core.logging import configure_logging
 from app.core.middleware import (
     ApiAuthMiddleware,
@@ -28,6 +30,7 @@ from app.imaging.local_masks import configure_mask_cache, configure_semantic_mat
 from app.imaging.semantic_models import SemanticModelRegistry
 from app.photographer.service import PhotographerService
 from app.repositories.analysis_repo import SqliteAnalysisRepository
+from app.repositories.personal_style_repo import SqlitePersonalStyleRepository
 from app.repositories.photographer_repo import (
     SqlitePhotographerFeedbackRepository,
     SqlitePhotographerPlanRepository,
@@ -38,6 +41,7 @@ from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
+from app.services.personal_style_service import PersonalStyleService
 from app.services.preview_store import PreviewStore
 from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
@@ -136,6 +140,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             images=service,
             analysis=analysis_tasks,
         )
+        personal_style_service = PersonalStyleService(
+            SqlitePersonalStyleRepository(resolved_settings.database_path),
+            images=service,
+            analysis=analysis_tasks,
+        )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -157,6 +166,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.photographer_service = photographer_service
         app.state.style_library_service = style_library_service
         app.state.style_matching_service = style_matching_service
+        app.state.personal_style_service = personal_style_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,
@@ -180,6 +190,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved_settings
     app.state.api_token_service = token_service
     app.state.semantic_registry = semantic_registry
+    app.state.owner_scope = OwnerScope(owner_id=LOCAL_OWNER_ID)
 
     register_exception_handlers(app)
 
@@ -239,6 +250,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(previews.router, prefix=API_PREFIX)
     app.include_router(photographer_routes.router, prefix=API_PREFIX)
     app.include_router(style_routes.router, prefix=API_PREFIX)
+    app.include_router(personal_style_routes.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict[str, str]:

@@ -22,6 +22,11 @@ const COPY: Record<StyleKind, { eyebrow: string; title: string; description: str
     title: "摄影流派",
     description: "不指定某一位摄影师，也可以直接使用成熟的摄影类型语言。",
   },
+  personal: {
+    eyebrow: "PERSONAL ARCHIVE",
+    title: "我的风格",
+    description: "由你自己的参考照片与审美偏好形成的个人视觉风格。",
+  },
 };
 
 export function StyleLibraryPage({ kind }: { kind: StyleKind }) {

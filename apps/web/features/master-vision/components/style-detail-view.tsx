@@ -129,7 +129,12 @@ function StyleDetailContent({
   favoriteError: string | null;
   onToggleFavorite: () => void;
 }) {
-  const backHref = profile.kind === "master" ? "/master-vision/masters" : "/master-vision/genres";
+  const backHref =
+    profile.kind === "master"
+      ? "/master-vision/masters"
+      : profile.kind === "genre"
+        ? "/master-vision/genres"
+        : "/visual-dna";
   return (
     <>
       <div className="mt-4">

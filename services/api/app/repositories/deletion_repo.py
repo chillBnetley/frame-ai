@@ -72,6 +72,7 @@ class SqliteDeletionRepository:
                     "DELETE FROM edit_session WHERE image_id = ?",
                     (normalized,),
                 )
+                self._detach_personal_references(connection, normalized)
                 connection.execute("DELETE FROM image_asset WHERE id = ?", (normalized,))
                 self._remember(connection, "image", normalized)
             except BaseException:
@@ -150,6 +151,22 @@ class SqliteDeletionRepository:
             )
             for row in rows
         ]
+
+    @staticmethod
+    def _detach_personal_references(connection: sqlite3.Connection, image_id: str) -> None:
+        """Keep the personal style but drop per-photo evidence of a deleted image."""
+
+        connection.execute(
+            "DELETE FROM personal_style_photo_feature "
+            "WHERE reference_id IN ("
+            "  SELECT id FROM personal_style_reference WHERE image_id = ?"
+            ")",
+            (image_id,),
+        )
+        connection.execute(
+            "UPDATE personal_style_reference SET status = 'missing' WHERE image_id = ?",
+            (image_id,),
+        )
 
     @staticmethod
     def _tombstoned(connection: sqlite3.Connection, kind: str, resource_id: str) -> bool:

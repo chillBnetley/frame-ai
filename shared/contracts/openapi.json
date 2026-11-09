@@ -4627,6 +4627,1230 @@
           }
         }
       }
+    },
+    "/api/v1/personal-styles": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "List Personal Styles",
+        "operationId": "list_personal_styles_api_v1_personal_styles_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PersonalStyleStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by draft, published, or disabled.",
+              "title": "Status"
+            },
+            "description": "Filter by draft, published, or disabled."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Create Personal Style",
+        "operationId": "create_personal_style_api_v1_personal_styles_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalStyleCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Read Personal Style",
+        "operationId": "read_personal_style_api_v1_personal_styles__style_id__get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d+\\.\\d+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read an archived version instead of the current one.",
+              "title": "Version"
+            },
+            "description": "Read an archived version instead of the current one."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Update Personal Style",
+        "operationId": "update_personal_style_api_v1_personal_styles__style_id__patch",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalStyleUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Delete Personal Style",
+        "operationId": "delete_personal_style_api_v1_personal_styles__style_id__delete",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Must be true; deletion removes versions and reference features.",
+              "default": false,
+              "title": "Confirm"
+            },
+            "description": "Must be true; deletion removes versions and reference features."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/status": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Set Personal Style Status",
+        "operationId": "set_personal_style_status_api_v1_personal_styles__style_id__status_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalStyleStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleStatusResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/favorite": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Favorite Personal Style",
+        "operationId": "favorite_personal_style_api_v1_personal_styles__style_id__favorite_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleFavoriteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Unfavorite Personal Style",
+        "operationId": "unfavorite_personal_style_api_v1_personal_styles__style_id__favorite_delete",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleFavoriteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/references": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "List Personal Style References",
+        "operationId": "list_personal_style_references_api_v1_personal_styles__style_id__references_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleReferenceListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Add Personal Style References",
+        "operationId": "add_personal_style_references_api_v1_personal_styles__style_id__references_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalStyleReferenceAddRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleReferenceListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/references/{reference_id}": {
+      "delete": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Remove Personal Style Reference",
+        "operationId": "remove_personal_style_reference_api_v1_personal_styles__style_id__references__reference_id__delete",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "reference_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Reference photo identifier.",
+              "title": "Reference Id"
+            },
+            "description": "Reference photo identifier."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/versions": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "List Personal Style Versions",
+        "operationId": "list_personal_style_versions_api_v1_personal_styles__style_id__versions_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleVersionListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/versions/{version}": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Read Personal Style Version",
+        "operationId": "read_personal_style_version_api_v1_personal_styles__style_id__versions__version__get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+$",
+              "description": "Archived version.",
+              "title": "Version"
+            },
+            "description": "Archived version."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleVersionDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/versions/{version}/restore": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Restore Personal Style Version",
+        "operationId": "restore_personal_style_version_api_v1_personal_styles__style_id__versions__version__restore_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+$",
+              "description": "Archived version.",
+              "title": "Version"
+            },
+            "description": "Archived version."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/compare": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Compare Personal Style Versions",
+        "operationId": "compare_personal_style_versions_api_v1_personal_styles__style_id__compare_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+$",
+              "description": "Older version.",
+              "title": "From"
+            },
+            "description": "Older version."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+$",
+              "description": "Newer version.",
+              "title": "To"
+            },
+            "description": "Newer version."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleCompareResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8061,6 +9285,969 @@
         ],
         "title": "ParameterChange"
       },
+      "PersonalAvoidEffect": {
+        "type": "string",
+        "enum": [
+          "oversaturated",
+          "crushed_blacks",
+          "clipped_highlights",
+          "color_cast",
+          "unnatural_skin",
+          "heavy_filter",
+          "over_sharpened",
+          "flat_contrast"
+        ],
+        "title": "PersonalAvoidEffect"
+      },
+      "PersonalStyleChangeSource": {
+        "type": "string",
+        "enum": [
+          "analysis",
+          "user",
+          "custom",
+          "mix",
+          "evolution",
+          "restore"
+        ],
+        "title": "PersonalStyleChangeSource"
+      },
+      "PersonalStyleCompareResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "fromVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Fromversion"
+          },
+          "toVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Toversion"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleFieldChange"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Changes",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "fromVersion",
+          "toVersion"
+        ],
+        "title": "PersonalStyleCompareResponse"
+      },
+      "PersonalStyleConsentScope": {
+        "type": "string",
+        "enum": [
+          "analysis_only"
+        ],
+        "title": "PersonalStyleConsentScope"
+      },
+      "PersonalStyleCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PersonalStyleSource",
+            "default": "photos"
+          },
+          "suitableScenes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Suitablescenes",
+            "default": []
+          },
+          "targets": {
+            "additionalProperties": {
+              "type": "number",
+              "maximum": 100.0,
+              "minimum": -100.0
+            },
+            "type": "object",
+            "title": "Targets"
+          },
+          "avoid": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalAvoidEffect"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Avoid",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "PersonalStyleCreateRequest"
+      },
+      "PersonalStyleDefinition": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "personal-definition/1",
+            "title": "Schemaversion",
+            "default": "personal-definition/1"
+          },
+          "userOverrides": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Useroverrides"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonalStyleDefinition",
+        "description": "Editable metadata kept beside the immutable profile snapshot."
+      },
+      "PersonalStyleDetailResponse": {
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/PersonalStyleProfile"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PersonalStyleDefinition"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PersonalStyleStatus"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PersonalStyleSource"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleReference"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "References",
+            "default": []
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "style",
+          "definition",
+          "status",
+          "source",
+          "favorite",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "PersonalStyleDetailResponse"
+      },
+      "PersonalStyleFavoriteResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "favorite"
+        ],
+        "title": "PersonalStyleFavoriteResponse"
+      },
+      "PersonalStyleFieldChange": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "after": {
+            "title": "After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "PersonalStyleFieldChange"
+      },
+      "PersonalStyleHints": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "personal/1",
+            "title": "Schemaversion",
+            "default": "personal/1"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PersonalStyleSource"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.0
+          },
+          "stability": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Stability"
+          },
+          "targets": {
+            "additionalProperties": {
+              "type": "number",
+              "maximum": 100.0,
+              "minimum": -100.0
+            },
+            "type": "object",
+            "title": "Targets"
+          },
+          "sceneTargets": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -100.0
+              },
+              "type": "object"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "object",
+            "title": "Scenetargets"
+          },
+          "protected": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionConstraint"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Protected",
+            "default": []
+          },
+          "avoid": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalAvoidEffect"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Avoid",
+            "default": []
+          },
+          "userOverrides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "Useroverrides",
+            "default": []
+          },
+          "sampleCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Samplecount",
+            "default": 0
+          },
+          "anomalyCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Anomalycount",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "PersonalStyleHints",
+        "description": "Structured personal bias used by the existing style decision chain.\n\nThese values are bounded suggestions, not recipe parameters: the stage 5\ngenerator still applies the profile envelope, conversion-mode scaling, and\nthe stage 4 validator before anything reaches the renderer."
+      },
+      "PersonalStyleItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PersonalStyleSource"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PersonalStyleStatus"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "sampleCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Samplecount"
+          },
+          "referenceCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Referencecount"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "source",
+          "status",
+          "version",
+          "favorite",
+          "confidence",
+          "sampleCount",
+          "referenceCount",
+          "updatedAt"
+        ],
+        "title": "PersonalStyleItem"
+      },
+      "PersonalStyleListResponse": {
+        "properties": {
+          "styles": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleItem"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Styles",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonalStyleListResponse"
+      },
+      "PersonalStyleProfile": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "personal",
+            "title": "Kind",
+            "default": "personal"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version",
+            "default": "1.0"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "philosophy": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Philosophy"
+          },
+          "color": {
+            "$ref": "#/components/schemas/StyleColorTraits"
+          },
+          "light": {
+            "$ref": "#/components/schemas/StyleLightTraits"
+          },
+          "composition": {
+            "$ref": "#/components/schemas/StyleCompositionTraits"
+          },
+          "texture": {
+            "$ref": "#/components/schemas/StyleTextureTraits"
+          },
+          "sceneFit": {
+            "$ref": "#/components/schemas/StyleSceneFit"
+          },
+          "postStrategy": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Poststrategy"
+          },
+          "captureTechniques": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Capturetechniques"
+          },
+          "constraints": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionConstraint"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Constraints",
+            "default": []
+          },
+          "preserveNotes": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Preservenotes"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/StyleSource"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Sources"
+          },
+          "engineStyle": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "portrait",
+              "landscape",
+              "street",
+              "documentary",
+              "film",
+              "cinematic"
+            ],
+            "title": "Enginestyle",
+            "default": "natural"
+          },
+          "envelope": {
+            "$ref": "#/components/schemas/StyleEnvelope"
+          },
+          "defaultStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Defaultstrength",
+            "default": 0.5
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "personal": {
+            "$ref": "#/components/schemas/PersonalStyleHints"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "philosophy",
+          "color",
+          "light",
+          "composition",
+          "texture",
+          "sceneFit",
+          "postStrategy",
+          "captureTechniques",
+          "preserveNotes",
+          "sources",
+          "personal"
+        ],
+        "title": "PersonalStyleProfile",
+        "description": "A personal style snapshot that can enter the V6.1 style pipeline."
+      },
+      "PersonalStyleReference": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "imageId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageid"
+          },
+          "imageSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Imagesha256"
+          },
+          "originalName": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Originalname"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PersonalStyleReferenceStatus",
+            "default": "active"
+          },
+          "consentScope": {
+            "$ref": "#/components/schemas/PersonalStyleConsentScope",
+            "default": "analysis_only"
+          },
+          "consentAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Consentat"
+          },
+          "addedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Addedat"
+          },
+          "analysisId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysisid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "imageSha256",
+          "originalName",
+          "consentAt",
+          "addedAt"
+        ],
+        "title": "PersonalStyleReference"
+      },
+      "PersonalStyleReferenceAddRequest": {
+        "properties": {
+          "imageIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Imageids"
+          },
+          "consent": {
+            "type": "boolean",
+            "title": "Consent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "imageIds",
+          "consent"
+        ],
+        "title": "PersonalStyleReferenceAddRequest"
+      },
+      "PersonalStyleReferenceListResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleReference"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "References",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId"
+        ],
+        "title": "PersonalStyleReferenceListResponse"
+      },
+      "PersonalStyleReferenceStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "removed",
+          "missing"
+        ],
+        "title": "PersonalStyleReferenceStatus"
+      },
+      "PersonalStyleSource": {
+        "type": "string",
+        "enum": [
+          "photos",
+          "custom",
+          "mixed",
+          "evolution"
+        ],
+        "title": "PersonalStyleSource"
+      },
+      "PersonalStyleStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "published",
+          "disabled"
+        ],
+        "title": "PersonalStyleStatus"
+      },
+      "PersonalStyleStatusRequest": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/PersonalStyleStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "PersonalStyleStatusRequest"
+      },
+      "PersonalStyleStatusResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PersonalStyleStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "status"
+        ],
+        "title": "PersonalStyleStatusResponse"
+      },
+      "PersonalStyleUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "suitableScenes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SceneLabel"
+                },
+                "type": "array",
+                "maxItems": 9
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suitablescenes"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number",
+                  "maximum": 100.0,
+                  "minimum": -100.0
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targets"
+          },
+          "avoid": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonalAvoidEffect"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avoid"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonalStyleUpdateRequest"
+      },
+      "PersonalStyleVersionDetailResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/PersonalStyleProfile"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PersonalStyleDefinition"
+          },
+          "changeSource": {
+            "$ref": "#/components/schemas/PersonalStyleChangeSource"
+          },
+          "changeNote": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changenote"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "version",
+          "profile",
+          "definition",
+          "changeSource",
+          "createdAt"
+        ],
+        "title": "PersonalStyleVersionDetailResponse"
+      },
+      "PersonalStyleVersionListResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleVersionSummary"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Versions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId"
+        ],
+        "title": "PersonalStyleVersionListResponse"
+      },
+      "PersonalStyleVersionSummary": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version"
+          },
+          "changeSource": {
+            "$ref": "#/components/schemas/PersonalStyleChangeSource"
+          },
+          "changeNote": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changenote"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "changeSource",
+          "createdAt"
+        ],
+        "title": "PersonalStyleVersionSummary"
+      },
       "PhotographerCritiqueRequest": {
         "properties": {
           "analysisId": {
@@ -10513,7 +12700,8 @@
         "type": "string",
         "enum": [
           "master",
-          "genre"
+          "genre",
+          "personal"
         ],
         "title": "StyleKind"
       },

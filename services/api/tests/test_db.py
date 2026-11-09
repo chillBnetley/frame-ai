@@ -45,7 +45,7 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
     finally:
         connection.close()
 
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     assert {
         "image_asset",
         "edit_session",
@@ -58,6 +58,12 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
         "style_profile",
         "style_profile_version",
         "style_favorite",
+        "personal_style",
+        "personal_style_version",
+        "personal_style_reference",
+        "personal_style_photo_feature",
+        "personal_style_feedback",
+        "personal_style_tombstone",
     } <= tables
     assert "conversion_mode" in plan_columns
     assert "base_revision_id" in plan_columns

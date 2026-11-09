@@ -52,7 +52,9 @@ class StyleLibraryItem(_StyleLibraryModel):
             name=profile.name,
             description=profile.description,
             category=(
-                StyleCategory.CREATIVE if profile.kind is StyleKind.MASTER else StyleCategory.SCENE
+                StyleCategory.CREATIVE
+                if profile.kind in {StyleKind.MASTER, StyleKind.PERSONAL}
+                else StyleCategory.SCENE
             ),
             signature=(
                 profile.color.tendency,

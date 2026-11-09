@@ -22,6 +22,7 @@ export const SCENE_LABELS: Record<SceneLabel, string> = {
 export const STYLE_KIND_LABELS: Record<StyleKind, string> = {
   master: "大师",
   genre: "流派",
+  personal: "我的风格",
 };
 
 export const FIT_LEVEL_LABELS: Record<FitLevel, string> = {
