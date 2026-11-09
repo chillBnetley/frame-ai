@@ -35,6 +35,7 @@ const EDITOR_MESSAGES: Record<string, string> = {
   export_timeout: "导出作业超时，已请求取消，请稍后重试。",
   request_timeout: "请求超时，请稍后重试。",
   network_error: "无法连接后端服务。请确认已启动 API。",
+  origin_not_allowed: "当前页面来源未被 API 允许，请检查 FRAME_ALLOWED_ORIGINS 配置。",
   storage_error: "服务保存数据失败，请稍后重试。",
   internal_error: "服务出现未预期错误，请稍后重试。",
   http_error: "请求失败，请稍后重试。",

@@ -31,7 +31,27 @@ export function SiteHeader() {
             FRAME AI
           </span>
         </Link>
+        <nav aria-label="主导航" className="hidden items-center gap-1 md:flex">
+          <Link
+            href="/"
+            className="inline-flex min-h-9 items-center rounded-full px-3 text-xs font-medium text-[#69716c] transition-colors hover:bg-[#f1f4f2] hover:text-[#2c3a34] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            照片工作台
+          </Link>
+          <Link
+            href="/master-vision"
+            className="inline-flex min-h-9 items-center rounded-full bg-[#eaf3ef] px-3 text-xs font-medium text-[#1f6a5a] transition-colors hover:bg-[#dfeee8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Master Vision
+          </Link>
+        </nav>
         <div className="flex items-center gap-2">
+          <Link
+            href="/master-vision"
+            className="inline-flex min-h-11 items-center rounded-xl border border-[#d7dfda] bg-white px-3 text-xs font-medium text-[#277a68] md:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Master Vision
+          </Link>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -42,7 +62,7 @@ export function SiteHeader() {
             <span className="hidden sm:inline">模型设置</span>
             <span className="sr-only sm:hidden">模型设置</span>
           </button>
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/55">
+          <span className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/55 sm:inline-flex">
             <span className="size-1.5 rounded-full bg-accent" />
             本地工作区
           </span>
