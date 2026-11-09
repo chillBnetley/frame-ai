@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import app.ai  # noqa: F401  # initialise the ai package before model imports
 from app.ai.contracts import SceneLabel
 from app.models.style_fit import ConversionMode, FitDimension, FitLevel
 from app.photographer.validator import known_evidence_refs
