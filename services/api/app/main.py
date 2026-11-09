@@ -121,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             images=service,
             plans=plan_repository,
             feedback=SqlitePhotographerFeedbackRepository(resolved_settings.database_path),
+            styles=style_profiles,
         )
         style_library_service = StyleLibraryService(
             style_profiles,

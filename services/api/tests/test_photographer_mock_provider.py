@@ -8,6 +8,7 @@ from app.ai.contracts import (
     SceneLabel,
     Severity,
 )
+from app.ai.prompts import PLANNER_PROMPT_VERSION
 from app.ai.providers.mock import MockPlannerProvider
 from app.models.photographer import CreativeChoiceType, PhotographerPreferences
 from app.models.recipe import UserMask
@@ -32,7 +33,7 @@ def test_mock_planner_is_deterministic():
     assert provider.name == "mock"
     assert provider.model == "mock-planner"
     assert provider.is_mock is True
-    assert provider.prompt_version == "stage5-planner/2"
+    assert provider.prompt_version == PLANNER_PROMPT_VERSION
 
 
 def test_mock_planner_uses_scene_direction_and_issue_evidence():

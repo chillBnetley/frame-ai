@@ -250,6 +250,27 @@ def resolve_conversion_mode(
     return requested if requested is not None else ConversionMode.STYLE
 
 
+def constrain_style_values(
+    values: Mapping[str, float],
+    style: StyleDefinition,
+    mode: ConversionMode,
+) -> dict[str, float]:
+    """Apply one mode's envelope scale and field caps to raw style deltas."""
+    profile = conversion_profile(mode)
+    envelope = style.envelope.model_dump(by_alias=True)
+    result: dict[str, float] = {}
+    for field, delta in values.items():
+        if mode is ConversionMode.STYLE:
+            scaled = delta
+        else:
+            limit = profile.field_cap(field, float(envelope[field]))
+            scaled = clamp(delta * profile.field_scale(field), -limit, limit)
+        rounded = round2(clamp_adjustment(field, scaled))
+        if abs(rounded) >= 0.005:
+            result[field] = rounded
+    return result
+
+
 def mode_style_intent(
     style: StyleDefinition,
     strength: float,
@@ -259,18 +280,7 @@ def mode_style_intent(
     if strength <= 0.0:
         return {}
     base = style_adjustment_intent(style, strength, preferences)
-    profile = conversion_profile(mode)
-    if mode is ConversionMode.STYLE:
-        return base
-    envelope = style.envelope.model_dump(by_alias=True)
-    result: dict[str, float] = {}
-    for field, delta in base.items():
-        limit = profile.field_cap(field, float(envelope[field]))
-        scaled = clamp(delta * profile.field_scale(field), -limit, limit)
-        rounded = round2(clamp_adjustment(field, scaled))
-        if abs(rounded) >= 0.005:
-            result[field] = rounded
-    return result
+    return constrain_style_values(base, style, mode)
 
 
 def mode_local_intent(
@@ -334,6 +344,7 @@ __all__ = [
     "STYLE_PROFILE",
     "conversion_mode_infos",
     "conversion_profile",
+    "constrain_style_values",
     "interpolate_intent",
     "mode_curve_points",
     "mode_grading",

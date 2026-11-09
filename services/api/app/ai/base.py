@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from app.ai.contracts import (
     AnalysisOptions,
@@ -20,6 +20,9 @@ from app.models.photographer import (
     StyleDefinition,
 )
 from app.models.recipe import EditRecipe
+
+if TYPE_CHECKING:
+    from app.ai.style_context import StyleGenerationContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +56,7 @@ class PlannerRequest:
     mode: PlannerMode = PlannerMode.AUTO
     style: StyleDefinition | None = None
     style_strength: float | None = None
+    style_context: StyleGenerationContext | None = None
 
 
 @dataclass(frozen=True, slots=True)

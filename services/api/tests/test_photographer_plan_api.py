@@ -451,3 +451,53 @@ def test_plan_rejects_a_conversion_mode_without_a_style(plan_client: TestClient)
     )
 
     assert response.status_code == 422, response.text
+
+
+def test_plan_resolves_seeded_master_and_genre_archives(
+    plan_client: TestClient,
+    plan_settings: Settings,
+):
+    image_id, session_id = _prepare(plan_client)
+    analysis_id = _analyze(plan_client, image_id)
+
+    response = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "environmental_portrait",
+            "styleStrength": 0.6,
+            "conversionMode": "natural",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["styleId"] == "environmental_portrait"
+    assert body["styleVersion"] == "1.0"
+    assert body["conversionMode"] == "natural"
+    assert body["provider"]["promptVersion"] == PLANNER_PROMPT_VERSION
+    assert body["recipe"]["styleId"] == "portrait"
+    assert body["recipe"]["styleStrength"] == 60.0
+    assert any(change["path"].startswith("adjustments.") for change in body["changes"])
+
+    connection = connect(plan_settings.database_path)
+    try:
+        connection.execute(
+            "UPDATE style_profile SET enabled = 0 WHERE id = ?",
+            ("environmental_portrait",),
+        )
+    finally:
+        connection.close()
+    disabled = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "environmental_portrait",
+        },
+    )
+    assert disabled.status_code == 404, disabled.text
+    assert disabled.json()["error"]["code"] == "style_not_found"

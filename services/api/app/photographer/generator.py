@@ -129,6 +129,7 @@ def generate_recipe(
     style_strength: float | None = None,
     *,
     conversion_mode: ConversionMode | None = None,
+    dynamic_style: bool = False,
 ) -> GeneratedRecipe:
     """Turn an untrusted planner draft into a validated recipe based on the current recipe."""
     prefs = preferences or PhotographerPreferences()
@@ -146,7 +147,16 @@ def generate_recipe(
     values = base.adjustments.model_dump(by_alias=True)
     values.pop("crop", None)
     values.pop("rotationDeg", None)
-    intent, style_intent = _planned_intent(analysis, draft, prefs, style, strength, mode, warnings)
+    intent, style_intent = _planned_intent(
+        analysis,
+        draft,
+        prefs,
+        style,
+        strength,
+        mode,
+        dynamic_style,
+        warnings,
+    )
     values = _apply_intent(values, intent, style_intent, prefs, style, profile, warnings)
     values, conflict_warnings = enforce_conflicts(analysis, base.adjustments, values)
     warnings.extend(conflict_warnings)
@@ -197,18 +207,23 @@ def _planned_intent(
     style: StyleDefinition | None,
     strength: float,
     mode: ConversionMode | None,
+    dynamic_style: bool,
     warnings: list[str],
 ) -> tuple[dict[str, float], dict[str, float]]:
     has_findings = bool(draft.diagnosis.confirmed or draft.diagnosis.possible or analysis.issues)
+    model_values = draft.adjustments.model_dump(by_alias=True, exclude_none=True)
     intent: dict[str, float] = {}
     if has_findings:
         rule_values = suggest_adjustments(analysis, preferences, style).model_dump(
             by_alias=True, exclude_none=True
         )
-        model_values = draft.adjustments.model_dump(by_alias=True, exclude_none=True)
         intent.update(rule_values)
         intent.update(model_values)
-    elif style is None and draft.adjustments.model_dump(exclude_none=True):
+    elif style is not None and dynamic_style:
+        # An explicit style archive is an opt-in to expression even when the
+        # report found no defect; the model still decides those deltas.
+        intent.update(model_values)
+    elif style is None and model_values:
         warnings.append("诊断没有明确问题，已忽略模型提出的额外参数调整。")
 
     style_intent = (

@@ -47,7 +47,8 @@ from app.models.photographer import (
 )
 from app.photographer.diagnosis import diagnose
 from app.photographer.direction import determine_direction
-from app.photographer.rules import suggest_adjustments
+from app.photographer.rules import round2, suggest_adjustments
+from app.photographer.style_generation import dynamic_style_adjustments
 
 MOCK_LIMITATION = "模拟数据：未调用真实视觉模型。"
 MOCK_DECISION_LIMITATION = "模拟数据：未调用真实决策模型。"
@@ -395,6 +396,22 @@ class MockDecisionProvider:
         return 0
 
 
+def _planner_adjustments(request: PlannerRequest, dynamic: dict[str, float]) -> AdjustmentIntent:
+    base = suggest_adjustments(
+        request.analysis,
+        request.preferences,
+        request.style,
+    ).model_dump(by_alias=True, exclude_none=True)
+    if not dynamic:
+        return AdjustmentIntent(**base)
+    merged: dict[str, float] = {field: float(value) for field, value in base.items()}
+    for field, delta in dynamic.items():
+        merged[field] = merged.get(field, 0.0) + delta
+    return AdjustmentIntent(
+        **{field: round2(value) for field, value in merged.items() if abs(value) >= 0.005}
+    )
+
+
 class MockPlannerProvider:
     name = "mock"
     model = "mock-planner"
@@ -410,24 +427,43 @@ class MockPlannerProvider:
             request.style,
             style_strength=request.style_strength,
         )
-        adjustments = suggest_adjustments(
-            request.analysis,
-            request.preferences,
-            request.style,
+        context = request.style_context
+        dynamic = (
+            dynamic_style_adjustments(
+                context.profile,
+                request.analysis,
+                mode=context.conversion_mode,
+                strength=context.strength,
+                preferences=request.preferences,
+            )
+            if context is not None
+            else {}
         )
+        adjustments = _planner_adjustments(request, dynamic)
+        if context is not None:
+            fit = context.fit
+            rationale = [
+                f"依据「{context.profile.name}」档案与阶段三证据制定方案。",
+                f"适配度 {fit.overall_score:.0f}（{fit.overall_level.value}）：{fit.summary}",
+                f"转换模式 {context.conversion_mode.value}，强度 {context.strength:.2f}。",
+            ]
+        else:
+            rationale = [
+                "根据阶段三的诊断证据与场景规则生成方案。",
+                "参数幅度受自然度、调整强度与风格包络共同限制。",
+            ]
+        if diagnosis.creative_choices:
+            rationale.append("低曝光、低饱和或暖色等表现被视为创作选择，未机械纠正。")
 
         warnings: list[str] = []
-        if not request.analysis.issues:
+        if not request.analysis.issues and context is None:
             warnings.append("阶段三未提供明确问题，方案以保持自然观感为主。")
         if not adjustments.model_dump(exclude_none=True):
             warnings.append("当前画面已接近自然平衡，未生成参数调整。")
 
-        rationale = [
-            "根据阶段三的诊断证据与场景规则生成方案。",
-            "参数幅度受自然度、调整强度与风格包络共同限制。",
-        ]
-        if diagnosis.creative_choices:
-            rationale.append("低曝光、低饱和或暖色等表现被视为创作选择，未机械纠正。")
+        limitations = [MOCK_PLANNER_LIMITATION, MOCK_PLANNER_MASK_LIMITATION]
+        if context is not None and dynamic:
+            limitations.append("模拟规划器以确定性规则近似档案特征，真实效果需由真实模型生成。")
 
         return PlannerDraft(
             diagnosis=diagnosis,
@@ -436,10 +472,7 @@ class MockPlannerProvider:
             local_adjustments=(),
             rationale=tuple(rationale),
             warnings=tuple(warnings),
-            limitations=(
-                MOCK_PLANNER_LIMITATION,
-                MOCK_PLANNER_MASK_LIMITATION,
-            ),
+            limitations=tuple(limitations),
             confidence=diagnosis.confidence,
         )
 

@@ -22,8 +22,10 @@ from app.ai.errors import ProviderError
 from app.core.errors import AppError
 from app.models.analysis_report import AnalysisReport
 from app.models.analysis_task import TaskStatus
+from app.models.conversion import ConversionMode
 from app.models.photographer import (
     MAX_NOTES,
+    AdjustmentIntent,
     ConversionModeListResponse,
     CreativeDirection,
     CritiqueApplyRequest,
@@ -51,6 +53,7 @@ from app.models.photographer import (
     StyleListResponse,
 )
 from app.models.recipe import EditRecipe, recipe_hash, stored_recipe_json
+from app.models.style_profile import StyleProfile
 from app.photographer.critique import build_critique
 from app.photographer.diagnosis import AnalysisAdvice, diagnose
 from app.photographer.direction import determine_direction
@@ -66,6 +69,10 @@ from app.photographer.modes import (
     resolve_conversion_mode,
 )
 from app.photographer.patch import apply_patch
+from app.photographer.style_generation import (
+    build_style_context,
+    dynamic_style_adjustments,
+)
 from app.photographer.styles import STYLE_CATALOG, get_style
 from app.photographer.validator import RecipeValidationError, validate_critique
 from app.repositories.photographer_repo import (
@@ -75,6 +82,7 @@ from app.repositories.photographer_repo import (
     SqlitePhotographerFeedbackRepository,
     SqlitePhotographerPlanRepository,
 )
+from app.repositories.style_repo import SqliteStyleProfileRepository
 
 if TYPE_CHECKING:
     from app.services.analysis_task_service import AnalysisTaskService
@@ -97,6 +105,7 @@ class PhotographerService:
         images: ImageService | None = None,
         plans: SqlitePhotographerPlanRepository | None = None,
         feedback: SqlitePhotographerFeedbackRepository | None = None,
+        styles: SqliteStyleProfileRepository | None = None,
     ) -> None:
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be at least 1")
@@ -108,6 +117,7 @@ class PhotographerService:
         self._images = images
         self._plans = plans
         self._feedback = feedback
+        self._styles = styles
 
     @property
     def planner(self) -> PhotographyPlannerProvider:
@@ -129,14 +139,28 @@ class PhotographerService:
         mode: PlannerMode,
         style_id: PhotographerStyleId | None,
     ) -> StyleDefinition | None:
+        style, _ = self._resolve_style_with_archive(mode, style_id)
+        return style
+
+    def _resolve_style_with_archive(
+        self,
+        mode: PlannerMode,
+        style_id: PhotographerStyleId | None,
+    ) -> tuple[StyleDefinition | None, StyleProfile | None]:
         if mode is PlannerMode.AUTO:
-            return None
+            return None, None
         if style_id is None:
             raise AppError(422, "style_required", "styleId is required when mode is 'style'.")
         style = get_style(style_id)
-        if style is None or not style.enabled:
-            raise AppError(404, "style_not_found", "The requested style is not available.")
-        return style
+        if style is not None:
+            if not style.enabled:
+                raise AppError(404, "style_not_found", "The requested style is not available.")
+            return style, None
+        if self._styles is not None:
+            profile = self._styles.get(style_id)
+            if profile is not None and profile.enabled:
+                return profile.to_style_definition(), profile
+        raise AppError(404, "style_not_found", "The requested style is not available.")
 
     def list_styles(
         self,
@@ -191,9 +215,21 @@ class PhotographerService:
             analysis_service, images, image_id, request.analysis_id
         )
 
-        style = self.resolve_style(request.mode, request.style_id)
+        style, profile = self._resolve_style_with_archive(request.mode, request.style_id)
         strength = _style_strength(request, style)
         conversion_mode = resolve_conversion_mode(request.mode, request.conversion_mode)
+        style_context = (
+            build_style_context(
+                profile,
+                report,
+                mode=conversion_mode,
+                strength=strength if strength is not None else 0.0,
+                image_id=str(image_id),
+                image_sha256=report.image.sha256,
+            )
+            if profile is not None and conversion_mode is not None
+            else None
+        )
         current_recipe = session.revision.recipe
         planner_request = PlannerRequest(
             analysis=report,
@@ -202,6 +238,7 @@ class PhotographerService:
             mode=request.mode,
             style=style,
             style_strength=strength,
+            style_context=style_context,
         )
 
         degraded = False
@@ -211,7 +248,9 @@ class PhotographerService:
         except AppError as exc:
             if exc.code != "photographer_invalid_output":
                 raise
-            draft = self._deterministic_draft(report, request.preferences, style, strength)
+            draft = self._deterministic_draft(
+                report, request.preferences, style, strength, profile, conversion_mode
+            )
             degraded = True
             fallback_warnings.append("模型输出不可用，已回退到确定性规则方案。")
 
@@ -224,11 +263,14 @@ class PhotographerService:
                 style,
                 strength,
                 conversion_mode=conversion_mode,
+                dynamic_style=profile is not None,
             )
         except (RecipeValidationError, ValidationError) as exc:
             if degraded:
                 raise _invalid_recipe(exc) from exc
-            draft = self._deterministic_draft(report, request.preferences, style, strength)
+            draft = self._deterministic_draft(
+                report, request.preferences, style, strength, profile, conversion_mode
+            )
             try:
                 generated = generate_recipe(
                     current_recipe,
@@ -238,6 +280,7 @@ class PhotographerService:
                     style,
                     strength,
                     conversion_mode=conversion_mode,
+                    dynamic_style=profile is not None,
                 )
             except (RecipeValidationError, ValidationError) as fallback_exc:
                 raise _invalid_recipe(fallback_exc) from fallback_exc
@@ -621,11 +664,25 @@ class PhotographerService:
         preferences: PhotographerPreferences,
         style: StyleDefinition | None,
         strength: float | None,
+        profile: StyleProfile | None = None,
+        conversion_mode: ConversionMode | None = None,
     ) -> PlannerDraft:
         advice = self.analyze(report, preferences, style=style, style_strength=strength)
+        adjustments = AdjustmentIntent()
+        if profile is not None and conversion_mode is not None:
+            dynamic = dynamic_style_adjustments(
+                profile,
+                report,
+                mode=conversion_mode,
+                strength=strength if strength is not None else 0.0,
+                preferences=preferences,
+            )
+            if dynamic:
+                adjustments = AdjustmentIntent(**dynamic)
         return PlannerDraft(
             diagnosis=advice.diagnosis,
             direction=advice.direction,
+            adjustments=adjustments,
             confidence=advice.diagnosis.confidence,
         )
 
