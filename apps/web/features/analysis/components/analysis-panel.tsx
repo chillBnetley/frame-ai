@@ -75,7 +75,7 @@ export function AnalysisPanel({
 
       <div className="grid gap-3 p-4">
         {isMock && (
-          <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+          <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950">
             模拟分析（未调用真实视觉模型）
           </p>
         )}
@@ -166,7 +166,7 @@ export function AnalysisPanel({
         )}
 
         {!analysis.error && analysis.status === "completed" && !report && (
-          <p className="rounded-lg border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2 text-[11px] text-amber-100">
+          <p className="rounded-lg border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2 text-[11px] text-amber-950">
             分析已完成，但结果暂时不可用。
           </p>
         )}

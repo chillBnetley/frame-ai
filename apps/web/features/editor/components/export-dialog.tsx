@@ -380,7 +380,7 @@ export function ExportDialog({
         </div>
 
         {dirty && (
-          <p className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+          <p className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950">
             当前有未保存的调整。请先保存修改，再导出对应的终稿。
           </p>
         )}
@@ -406,13 +406,13 @@ export function ExportDialog({
         )}
 
         {state.status === "success" && state.warnings.includes("denoise_simplified") && (
-          <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+          <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950">
             降噪已简化（导出尺寸超过 12 MP），细节表现可能与预览不同。若需要全量降噪，请改用更小的长边（使总像素不超过 12 MP）后重新导出。
           </p>
         )}
 
         {state.status === "success" && state.warnings.includes("denoise_skipped_for_16bit") && (
-          <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+          <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950">
             16-bit 导出已跳过降噪（降噪会降为 8-bit 处理）。如需降噪，请改用 8-bit 导出。
           </p>
         )}
@@ -422,7 +422,7 @@ export function ExportDialog({
             <button
               type="button"
               onClick={onCancel}
-              className="min-h-11 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 text-xs text-amber-100 transition-colors hover:bg-amber-300/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
+              className="min-h-11 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 text-xs text-amber-950 transition-colors hover:bg-amber-300/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
             >
               取消导出
             </button>

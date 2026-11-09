@@ -44,6 +44,8 @@ from app.photographer.styles import (
 )
 from app.photographer.validator import (
     RecipeValidationError,
+    evidence_ref_issues,
+    known_evidence_refs,
     validate_recipe,
 )
 from tests.golden_support import source_bytes
@@ -604,3 +606,11 @@ def test_generator_renumbers_sparse_orders_when_appending():
     assert orders == [0, 1, 2]
     assert len(set(orders)) == len(orders)
     EditRecipe.model_validate(result.recipe.model_dump())
+
+
+def test_validator_accepts_plural_measurement_alias():
+    known = known_evidence_refs(report())
+    ref = next(item for item in sorted(known) if item.startswith("measurement."))
+    alias = ref.replace("measurement.", "measurements.", 1)
+
+    assert evidence_ref_issues("change adjustments.exposureEv", (alias,), known) == ()

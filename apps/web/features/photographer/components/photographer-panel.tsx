@@ -411,7 +411,7 @@ function ReviewActions({
         </p>
       )}
       {dirty && (
-        <p className="rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[11px] text-amber-100">
+        <p className="rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[11px] text-amber-950">
           有未保存的调整，请先保存或放弃后再接受 AI 方案。
         </p>
       )}
@@ -470,7 +470,7 @@ function PatchCard({
       {refused && (
         <div
           role="alert"
-          className="rounded-lg border border-amber-300/25 bg-amber-300/[0.08] px-3 py-2 text-[11px] text-amber-100"
+          className="rounded-lg border border-amber-300/25 bg-amber-300/[0.08] px-3 py-2 text-[11px] text-amber-950"
         >
           <p>当前配方未发生变化，画面保持你已有的调整。</p>
           <ul className="mt-1 grid gap-1">
@@ -606,7 +606,7 @@ function CritiqueSection({ critique, busy }: CritiqueSectionProps) {
       ) : (
         <>
           {body.isMock && (
-            <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+            <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950">
               本次点评基于模拟分析结果（未调用真实视觉模型）
             </p>
           )}
@@ -886,12 +886,12 @@ export function PhotographerPanel({
 
       <div className="grid gap-3 p-4">
         {plan?.isMock === true && (
-          <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+          <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950">
             模拟方案（未调用真实 Planner 模型）
           </p>
         )}
         {plan?.degraded === true && (
-          <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+          <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950">
             确定性回退方案（模型输出未通过校验）
           </p>
         )}

@@ -361,3 +361,24 @@ def test_token_write_failure_preserves_the_previous_file(
 
     assert path.read_text(encoding="ascii") == original
     assert not path.with_name(path.name + ".tmp").exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows ACL semantics")
+def test_token_rotation_survives_a_hardened_acl(tmp_path: Path):
+    import subprocess
+
+    service = ApiTokenService(tmp_path / "api-token")
+    service.ensure_token()
+    path = tmp_path / "api-token"
+    user = os.environ.get("USERNAME") or ""
+    assert user
+    subprocess.run(
+        ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(R,W)"],
+        check=False,
+        capture_output=True,
+        timeout=10,
+    )
+
+    second = service.ensure_token()
+
+    assert path.read_text(encoding="ascii") == second

@@ -95,7 +95,7 @@ const NON_RETRYABLE_CODES = new Set([
 ]);
 
 const toolButtonBase =
-  "inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 text-xs text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-accent/40 aria-pressed:bg-accent/10 aria-pressed:text-accent";
+  "inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-white/12 bg-gradient-to-b from-white/[0.12] to-white/[0.03] px-3 text-xs text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_8px_rgba(20,35,28,0.04)] transition-all duration-200 hover:-translate-y-px hover:border-accent/30 hover:from-accent/[0.12] hover:to-accent/[0.04] hover:text-white hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.32),0_5px_14px_rgba(39,122,104,0.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 aria-pressed:border-accent/40 aria-pressed:from-accent/15 aria-pressed:to-accent/[0.06] aria-pressed:text-accent";
 
 const CROP_BASE_MAX_AUTO_RETRIES = 1;
 const CROP_BASE_RETRYABLE_CODES = new Set([
@@ -506,8 +506,8 @@ function EditorStage({
     <div
       className={
         panelOpen
-          ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px_360px]"
-          : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]"
+          ? "grid gap-4 lg:grid-cols-[minmax(0,2.2fr)_minmax(280px,0.9fr)] xl:grid-cols-[minmax(0,2fr)_320px_300px]"
+          : "grid gap-4 lg:grid-cols-[minmax(0,2.2fr)_minmax(280px,0.9fr)]"
       }
     >
       <div
@@ -517,7 +517,7 @@ function EditorStage({
       >
         <section
           aria-labelledby="editor-preview-heading"
-          className="editor-preview-card rounded-2xl border border-white/8 bg-black/20 p-4 sm:p-5"
+          className="editor-preview-card rounded-[28px] border border-white/10 bg-black/20 p-3 shadow-[0_18px_50px_-32px_rgba(24,50,38,0.22),inset_0_1px_0_rgba(255,255,255,0.8)] sm:p-4"
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -549,7 +549,7 @@ function EditorStage({
                   state.save.status === "error"
                     ? "border-red-300/30 text-red-100"
                     : state.save.status === "unsaved"
-                      ? "border-amber-300/30 text-amber-100"
+                    ? "border-amber-300/30 text-amber-950"
                       : "border-white/10 text-white/45"
                 }`}
               >
@@ -692,14 +692,14 @@ function EditorStage({
           {state.notice && (
             <p
               role="status"
-              className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs text-amber-100"
+              className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs text-amber-950"
             >
               {state.notice}
               <button
                 type="button"
                 onClick={() => dispatch({ type: "notice-cleared" })}
                 aria-label="关闭提示"
-                className="ml-2 text-amber-200/70 underline-offset-2 hover:underline"
+                className="ml-2 text-amber-900 underline-offset-2 hover:underline"
               >
                 知道了
               </button>
@@ -716,7 +716,7 @@ function EditorStage({
             </div>
           )}
 
-          <div className="mt-3">
+          <div className="editor-preview-body mt-3">
             {compareOpen && state.activeRevisionId ? (
               <CompareView
                 sessionId={state.sessionId}
@@ -764,7 +764,7 @@ function EditorStage({
             ) : proposalOriginal && state.imageId ? (
               <div
                 data-testid="photographer-original"
-                className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-black/35 p-3 ring-1 ring-white/8 sm:min-h-64"
+                className="editor-preview-canvas relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-black/35 p-3 ring-1 ring-white/8 sm:min-h-64"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- the API serves the read-only original */}
                 <img
@@ -823,7 +823,7 @@ function EditorStage({
 
           {(dirty || state.save.status === "error") && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2">
-              <p className="text-[11px] text-amber-100/85">
+              <p className="text-[11px] text-amber-950">
                 {state.save.status === "error"
                   ? (state.save.error?.message ?? "保存失败，请稍后重试。")
                   : "调整会自动提交；也可以手动保存当前版本。"}
@@ -833,7 +833,7 @@ function EditorStage({
                   type="button"
                   onClick={requestCommit}
                   disabled={!canSave && state.save.status !== "error"}
-                  className="min-h-11 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 text-xs text-amber-100 transition-colors hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 disabled:opacity-40"
+                  className="min-h-11 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 text-xs text-amber-950 transition-colors hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 disabled:opacity-40"
                 >
                   {state.save.status === "error" ? "重试保存" : "保存修改"}
                 </button>

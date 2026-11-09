@@ -6,6 +6,7 @@ import pytest
 
 from app.ai.errors import ProviderError
 from app.ai.providers.openai_compatible import OpenAICompatiblePlannerProvider
+from app.photographer.validator import known_evidence_refs
 from tests.ai_support import chat_response, json_response
 from tests.photographer_support import (
     issue,
@@ -80,6 +81,18 @@ def test_planner_posts_structured_context_without_image_bytes():
     assert "data:image" not in user_content
     assert "available local mask ids" in user_content.lower()
     assert API_KEY not in str(call["payload"])
+
+
+def test_planner_prompt_lists_allowed_evidence_refs_verbatim():
+    request = planner_request(analysis=report(issues=(issue(),)))
+    client = FakeClient([json_response(planner_draft_payload())])
+
+    provider(client).plan(request)
+
+    user_content = client.calls[0]["payload"]["messages"][1]["content"]
+    assert "Allowed evidence refs" in user_content
+    for ref in known_evidence_refs(request.analysis):
+        assert ref in user_content
 
 
 def test_planner_logs_usage_without_prompt_content(caplog):
@@ -170,3 +183,19 @@ def test_patch_schema_mismatch_uses_the_patch_prefix():
         provider(client).adjust(patch_request("把饱和度降低一点"))
 
     assert error.value.code == "patch_invalid_output"
+
+
+def test_planner_normalises_plural_measurement_evidence_refs():
+    payload = planner_draft_payload()
+    payload["diagnosis"]["confirmed"][0]["evidenceRefs"] = [
+        "measurements.color.cast.temperature",
+        "measurements.color.cast.tint",
+    ]
+    client = FakeClient([json_response(payload)])
+
+    result = provider(client).plan(planner_request())
+
+    assert result.diagnosis.confirmed[0].evidence_refs == (
+        "measurement.color.cast.temperature",
+        "measurement.color.cast.tint",
+    )

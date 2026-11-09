@@ -23,7 +23,7 @@ const sectionTitle = "text-[11px] font-medium text-white/70";
 const chip =
   "inline-flex min-h-6 items-center rounded-md border px-2 text-[10px]";
 const neutralChip = `${chip} border-white/12 bg-white/[0.03] text-white/55`;
-const warnChip = `${chip} border-amber-300/25 bg-amber-300/10 text-amber-100`;
+const warnChip = `${chip} border-amber-300/25 bg-amber-300/10 text-amber-950`;
 const dangerButton =
   "inline-flex min-h-8 items-center rounded-md border border-white/12 px-2 text-[10px] text-white/50 transition-colors hover:border-red-300/40 hover:text-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40";
 const dialogButton =
@@ -333,7 +333,7 @@ export function FeedbackSection({ feedback }: FeedbackSectionProps) {
       )}
 
       {feedback.sendError !== null && (
-        <p role="alert" className="text-[10px] text-amber-100">
+        <p role="alert" className="text-[10px] text-amber-950">
           反馈未能保存：{feedback.sendError.message}
         </p>
       )}

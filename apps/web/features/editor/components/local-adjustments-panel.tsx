@@ -391,7 +391,7 @@ export function LocalAdjustmentsPanel({
                 : "天空模型未安装（实验性）。"}
             </p>
             {semanticError && (
-              <p role="alert" className="text-[10px] leading-relaxed text-amber-200/80">
+              <p role="alert" className="text-[10px] leading-relaxed text-amber-900">
                 {semanticError}
               </p>
             )}
@@ -510,7 +510,7 @@ export function LocalAdjustmentsPanel({
                         <div className="grid gap-2">
                           <p
                             role="alert"
-                            className="rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100"
+                            className="rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950"
                           >
                             {serverSkipped
                               ? "服务器渲染已跳过此调整：引用的选区已不存在。"
@@ -522,7 +522,7 @@ export function LocalAdjustmentsPanel({
                             onClick={() =>
                               apply(removeLocalAdjustment(recipe, item.id))
                             }
-                            className="min-h-9 justify-self-start rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 text-[11px] text-amber-100 transition-colors hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                            className="min-h-9 justify-self-start rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 text-[11px] text-amber-950 transition-colors hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
                           >
                             删除该局部调整
                           </button>
@@ -532,7 +532,7 @@ export function LocalAdjustmentsPanel({
                           {serverSkipped && (
                             <p
                               role="status"
-                              className="rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100"
+                              className="rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-950"
                             >
                               最近一次预览渲染已跳过此调整：请求时的选区引用已失效。
                             </p>
@@ -693,7 +693,7 @@ export function LocalAdjustmentsPanel({
                                 反选蒙版（调整区域外）
                               </label>
                               {!maskVisible && (
-                                <p className="text-[10px] leading-relaxed text-amber-200/80">
+                                <p className="text-[10px] leading-relaxed text-amber-900">
                                   当前裁切范围内看不到该蒙版，局部调整可能不会产生可见效果。
                                 </p>
                               )}

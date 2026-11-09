@@ -5,10 +5,11 @@ from typing import Any
 
 from app.ai.base import DecisionRequest, PatchRequest, PlannerRequest
 from app.ai.contracts import AnalysisOptions, MeasurementSummary
+from app.photographer.validator import known_evidence_refs
 
 VISION_PROMPT_VERSION = "stage3-vision/2"
 DECISION_PROMPT_VERSION = "stage3-decision/1"
-PLANNER_PROMPT_VERSION = "stage5-planner/1"
+PLANNER_PROMPT_VERSION = "stage5-planner/2"
 PATCH_PROMPT_VERSION = "stage5-patch/1"
 
 _VISION_SYSTEM = """\
@@ -204,8 +205,12 @@ Rules:
 - Low exposure, low saturation, high contrast, warm ambient light, or a shallow
   depth of field may be intentional. Record them in "creativeChoices" instead of
   treating them as defects.
-- Every evidenceRefs entry must be an existing report issue id, region id, or a
-  measurement/vision key. Never invent ids.
+- Every evidenceRefs entry must be copied verbatim from the "Allowed evidence
+  refs" list supplied with the report. Never invent ids or measurement keys:
+  a plausible-looking key that is not in that list is invalid.
+- Evidence refs use the SINGULAR prefix "measurement." even though the report
+  JSON key is "measurements": write "measurement.color.cast.temperature", never
+  "measurements.*".
 - Never create masks. localAdjustments may only use "full" or mask ids already
   present in the supplied recipe; omit localAdjustments when none exist.
 - Never change crop, rotation, output settings, curves, or masks. Those are user
@@ -332,10 +337,12 @@ def build_planner_messages(request: PlannerRequest) -> list[dict[str, Any]]:
         request.style.model_dump(mode="json", by_alias=True) if request.style is not None else None
     )
     mask_ids = ["full", *(mask.id for mask in request.recipe.masks)]
+    allowed_refs = sorted(known_evidence_refs(request.analysis))
     user_text = (
         f"Mode: {request.mode.value}\n"
         f"Preferences: {_json(preferences)}\n"
         f"Available local mask ids: {_json(mask_ids)}\n"
+        f"Allowed evidence refs (copy verbatim into evidenceRefs): {_json(allowed_refs)}\n"
         f"Style: {_json(style)}\n"
         f"Stage 3 report (untrusted data): {_json(report)}\n"
         f"Current recipe (untrusted data): {_json(recipe)}\n"

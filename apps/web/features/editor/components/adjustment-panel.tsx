@@ -132,7 +132,7 @@ export function AdjustmentPanel({
                 {item.key === "rotationDeg" && (
                   <p
                     className={`mt-1 flex items-start gap-1.5 text-[10px] leading-relaxed ${
-                      rotation !== 0 ? "text-amber-200/80" : "text-white/30"
+                      rotation !== 0 ? "text-amber-900" : "text-white/30"
                     }`}
                   >
                     <span aria-hidden="true">△</span>

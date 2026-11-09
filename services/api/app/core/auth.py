@@ -58,6 +58,7 @@ def _write_token(path: Path, token: str) -> None:
         except OSError:
             temporary.unlink(missing_ok=True)
             raise
+        _grant_replace_access(path)
         os.replace(temporary, path)
     except OSError:
         try:
@@ -66,6 +67,30 @@ def _write_token(path: Path, token: str) -> None:
             pass
         raise
     _harden_windows_acl(path)
+
+
+def _grant_replace_access(path: Path) -> None:
+    """Let the current user delete the previous token file on Windows.
+
+    ``icacls /grant:r user:(R,W)`` (the hardening applied after the first
+    rotation) does not include the delete right, so the next ``os.replace``
+    fails with WinError 5. Grant delete on the existing file before replacing.
+    """
+
+    if sys.platform != "win32" or not path.exists():
+        return
+    user = os.environ.get("USERNAME") or getpass.getuser()
+    if not user:
+        return
+    try:
+        subprocess.run(
+            ["icacls", str(path), "/grant:r", f"{user}:(R,W,D)"],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        logger.warning("api_token_replace_acl_failed")
 
 
 def _harden_windows_acl(path: Path) -> None:
@@ -78,7 +103,7 @@ def _harden_windows_acl(path: Path) -> None:
         return
     try:
         subprocess.run(
-            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(R,W)"],
+            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(R,W,D)"],
             check=False,
             capture_output=True,
             timeout=10,

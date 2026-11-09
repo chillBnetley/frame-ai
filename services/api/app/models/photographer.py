@@ -584,6 +584,34 @@ class PhotographerCritiqueRequest(_PhotographerModel):
     preferences: PhotographerPreferences = Field(default_factory=PhotographerPreferences)
 
 
+_EVIDENCE_REF_PREFIX_ALIASES: tuple[tuple[str, str], ...] = (
+    ("measurements.", "measurement."),
+    ("report.measurement.", "measurement."),
+    ("analysis.measurement.", "measurement."),
+)
+
+
+def canonical_evidence_ref(ref: str) -> str:
+    """Normalise the model's common ``measurements.*`` spelling to ``measurement.*``.
+
+    The analysis report is exposed to the planner as a ``measurements`` object,
+    but evidence references are defined with the singular prefix. Models
+    sometimes mirror the JSON key instead of the documented prefix, which would
+    otherwise fail recipe validation and force a deterministic fallback.
+    """
+
+    for alias, canonical in _EVIDENCE_REF_PREFIX_ALIASES:
+        if ref.startswith(alias):
+            return canonical + ref[len(alias) :]
+    return ref
+
+
+def canonical_evidence_refs(refs: object) -> object:
+    if not isinstance(refs, list):
+        return refs
+    return [canonical_evidence_ref(item) if isinstance(item, str) else item for item in refs]
+
+
 __all__ = [
     "AdjustmentIntent",
     "ChangePath",
@@ -635,4 +663,6 @@ __all__ = [
     "StyleDefinition",
     "StyleEnvelope",
     "StyleListResponse",
+    "canonical_evidence_ref",
+    "canonical_evidence_refs",
 ]

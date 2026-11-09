@@ -361,3 +361,75 @@ test("deleting a photo removes the original permanently and survives reload", as
   await expect(page.getByText("拖入一张照片")).toBeVisible();
   await expect(page.getByRole("heading", { name: "编辑预览" })).toHaveCount(0);
 });
+
+test("preview and compare frames show the whole image without clipping", async ({
+  page,
+}) => {
+  await openApp(page);
+  await uploadFixture(page);
+
+  const preview = page.getByRole("img", { name: "编辑后的预览" });
+  await expect(preview).toBeVisible();
+  const previewFit = await preview.evaluate((element) => {
+    const image = element as HTMLImageElement;
+    const canvas = image.closest(".editor-preview-canvas")!;
+    const card = image.closest(".editor-preview-card")!;
+    const imageRect = image.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    return {
+      objectFit: getComputedStyle(image).objectFit,
+      insideCanvas:
+        imageRect.top >= canvasRect.top - 1 &&
+        imageRect.left >= canvasRect.left - 1 &&
+        imageRect.bottom <= canvasRect.bottom + 1 &&
+        imageRect.right <= canvasRect.right + 1,
+      insideCard: imageRect.bottom <= cardRect.bottom + 1,
+    };
+  });
+  expect(previewFit.objectFit).toBe("contain");
+  expect(previewFit.insideCanvas).toBe(true);
+  expect(previewFit.insideCard).toBe(true);
+
+  await page.getByRole("button", { name: "前后对比" }).click();
+  const original = page.getByRole("img", { name: "原图" });
+  await expect(original).toBeVisible();
+  const compareFit = await original.evaluate((element) => {
+    const image = element as HTMLImageElement;
+    const frame = image.parentElement!;
+    const card = image.closest(".editor-preview-card")!;
+    const imageRect = image.getBoundingClientRect();
+    const frameRect = frame.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    return {
+      objectFit: getComputedStyle(image).objectFit,
+      insideFrame:
+        imageRect.top >= frameRect.top - 1 &&
+        imageRect.left >= frameRect.left - 1 &&
+        imageRect.bottom <= frameRect.bottom + 1 &&
+        imageRect.right <= frameRect.right + 1,
+      insideCard: frameRect.bottom <= cardRect.bottom + 1,
+    };
+  });
+  expect(compareFit.objectFit).toBe("contain");
+  expect(compareFit.insideFrame).toBe(true);
+  expect(compareFit.insideCard).toBe(true);
+
+  await page.getByRole("button", { name: "退出对比" }).click();
+  await page.getByRole("button", { name: "裁切", exact: true }).click();
+  const cropImage = page.getByRole("img", { name: "裁切基准画面" });
+  await expect(cropImage).toBeVisible();
+  const cropFit = await cropImage.evaluate((element) => {
+    const image = element as HTMLImageElement;
+    const frame = image.parentElement!;
+    const card = image.closest(".editor-preview-card")!;
+    const frameRect = frame.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    return {
+      insideCard: frameRect.bottom <= cardRect.bottom + 1,
+      largeEnough: frameRect.width >= 200 && frameRect.height >= 150,
+    };
+  });
+  expect(cropFit.insideCard).toBe(true);
+  expect(cropFit.largeEnough).toBe(true);
+});

@@ -196,7 +196,7 @@ export function CropOverlay({
   };
 
   return (
-    <section aria-labelledby="crop-heading" className="grid gap-3">
+    <section aria-labelledby="crop-heading" className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 id="crop-heading" className="text-xs font-medium text-white/80">
@@ -212,13 +212,21 @@ export function CropOverlay({
       </div>
 
       <div
-        ref={containerRef}
-        className="relative overflow-hidden rounded-xl bg-black ring-1 ring-white/10"
-        style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        className="flex flex-1 items-center justify-center"
+        style={{ minHeight: "260px" }}
       >
+        <div
+          ref={containerRef}
+          className="relative overflow-hidden rounded-xl bg-black ring-1 ring-white/10"
+          style={{
+            aspectRatio: `${canvasWidth} / ${canvasHeight}`,
+            height: "100%",
+            maxWidth: "100%",
+          }}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
         {/* eslint-disable-next-line @next/next/no-img-element -- content-addressed previews are served by the API */}
         <img
           src={imageUrl}
@@ -262,6 +270,7 @@ export function CropOverlay({
             className="absolute -bottom-2 -right-2 size-6 rounded-sm border-2 border-accent bg-black/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
         </div>
+      </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

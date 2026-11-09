@@ -32,7 +32,7 @@ def test_mock_planner_is_deterministic():
     assert provider.name == "mock"
     assert provider.model == "mock-planner"
     assert provider.is_mock is True
-    assert provider.prompt_version == "stage5-planner/1"
+    assert provider.prompt_version == "stage5-planner/2"
 
 
 def test_mock_planner_uses_scene_direction_and_issue_evidence():

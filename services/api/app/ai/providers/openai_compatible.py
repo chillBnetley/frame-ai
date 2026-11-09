@@ -23,7 +23,11 @@ from app.ai.prompts import (
     build_vision_messages,
 )
 from app.ai.transport import JsonHttpClient
-from app.models.photographer import PatchDraft, PlannerDraft
+from app.models.photographer import (
+    PatchDraft,
+    PlannerDraft,
+    canonical_evidence_refs,
+)
 from app.models.provider_settings import SecretKind
 from app.services.usage_meter import UsageMeter
 
@@ -140,6 +144,7 @@ class _OpenAICompatibleBase:
             try:
                 content = _extract_content(response, prefix)
                 raw = _extract_json_object(content, prefix)
+                _normalise_evidence_refs(raw)
                 parsed = model_type.model_validate(raw)
             except ProviderError as exc:
                 self._log_model_call(prefix, attempt, usage, latency_ms, "invalid")
@@ -360,6 +365,20 @@ def _extract_json_object(content: str, prefix: str) -> dict[str, Any]:
             retryable=False,
         )
     return payload
+
+
+def _normalise_evidence_refs(value: object) -> None:
+    """Rewrite model evidence refs to the documented singular prefix in place."""
+
+    if isinstance(value, dict):
+        for key, entry in value.items():
+            if key in {"evidenceRefs", "evidence_refs"}:
+                value[key] = canonical_evidence_refs(entry)
+            else:
+                _normalise_evidence_refs(entry)
+    elif isinstance(value, list):
+        for entry in value:
+            _normalise_evidence_refs(entry)
 
 
 def _extract_usage(response: dict[str, Any]) -> UsageInfo | None:

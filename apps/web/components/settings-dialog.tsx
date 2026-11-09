@@ -549,7 +549,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
             {confirmReset && (
               <div className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2.5">
-                <p className="text-[11px] text-amber-100">
+                <p className="text-[11px] text-amber-950">
                   恢复后将删除本地保存的模型配置，并重新使用 .env 中的设置。
                 </p>
                 <div className="mt-2 flex items-center gap-2">

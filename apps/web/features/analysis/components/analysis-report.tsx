@@ -36,13 +36,13 @@ import { SubjectOverlay } from "./subject-overlay";
 
 const SEVERITY_STYLES: Record<IssueSeverity, string> = {
   high: "border-red-300/30 bg-red-300/10 text-red-200",
-  medium: "border-amber-300/30 bg-amber-300/10 text-amber-100",
+  medium: "border-amber-300/30 bg-amber-300/10 text-amber-950",
   low: "border-white/12 bg-white/[0.04] text-white/60",
 };
 
 const PRIORITY_STYLES: Record<RecommendationPriority, string> = {
   high: "border-accent/30 bg-accent/10 text-accent",
-  medium: "border-amber-300/25 bg-amber-300/[0.07] text-amber-100",
+  medium: "border-amber-300/25 bg-amber-300/[0.07] text-amber-950",
   low: "border-white/12 bg-white/[0.04] text-white/60",
 };
 
@@ -469,13 +469,13 @@ export function AnalysisReportView({
 
       <section
         aria-labelledby="analysis-limitations-heading"
-        className="rounded-xl border border-amber-300/20 bg-amber-300/[0.04] p-3"
+        className="rounded-xl border border-amber-200 bg-amber-50 p-3"
       >
         <SectionHeading id="analysis-limitations-heading">
           局限与说明
         </SectionHeading>
         {report.limitations.length > 0 ? (
-          <ul className="mt-2 grid gap-1 text-[11px] leading-relaxed text-amber-100/80">
+          <ul className="mt-2 grid gap-1 text-[11px] leading-relaxed text-amber-950">
             {report.limitations.map((limitation) => (
               <li key={limitation}>· {limitation}</li>
             ))}

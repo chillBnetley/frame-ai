@@ -9,6 +9,7 @@ from app.models.recipe import (
     Adjustments,
     EditRecipe,
 )
+from app.models.photographer import canonical_evidence_ref
 from app.photographer.rules import (
     available_mask_ids,
     clamp,
@@ -258,7 +259,9 @@ def evidence_ref_issues(
     known: frozenset[str],
 ) -> tuple[str, ...]:
     unknown = [
-        ref for ref in refs if ref not in known and not ref.startswith(_ALLOWED_REF_PREFIXES)
+        ref
+        for ref in refs
+        if canonical_evidence_ref(ref) not in known and not ref.startswith(_ALLOWED_REF_PREFIXES)
     ]
     return (f"{label} cites unknown evidence: {', '.join(unknown)}",) if unknown else ()
 

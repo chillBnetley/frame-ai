@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 
-import { FrameMark, SettingsIcon } from "@/components/icons";
+import { SettingsIcon } from "@/components/icons";
 import { SettingsDialog } from "@/components/settings-dialog";
 
 export function SiteHeader() {
@@ -11,24 +12,31 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-white/8 bg-[#08090a]/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-15 w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 border-b border-white/8 bg-[#08090a]/80 shadow-[0_4px_24px_rgba(24,50,38,0.04)] backdrop-blur-xl">
+      <div className="mx-auto flex h-15 w-full max-w-[1680px] items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="group flex min-h-11 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
           aria-label="FRAME AI 首页"
         >
-          <span className="grid size-8 place-items-center rounded-lg border border-white/12 bg-white/[0.04] text-accent transition-colors group-hover:bg-white/[0.08]">
-            <FrameMark className="size-4.5" />
+          <Image
+            src="/brand/frame-ai-mark-light.png"
+            alt=""
+            width={36}
+            height={36}
+            className="size-9 rounded-[10px] border border-[#e0e6e1] bg-white object-cover shadow-[0_2px_8px_rgba(30,55,42,0.10)] transition-transform duration-200 group-hover:scale-[1.04]"
+            priority
+          />
+          <span className="pl-0.5 text-[13px] font-light tracking-[0.24em] text-white sm:text-sm" style={{ fontFamily: 'Avenir, "Avenir Next", Montserrat, Inter, sans-serif' }}>
+            FRAME AI
           </span>
-          <span className="text-sm font-semibold tracking-tight text-white">FRAME AI</span>
         </Link>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
             aria-haspopup="dialog"
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 text-xs text-white/65 transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-white/12 bg-gradient-to-b from-white/[0.12] to-white/[0.03] px-3 text-xs text-white/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-all duration-200 hover:-translate-y-px hover:border-accent/30 hover:from-accent/[0.12] hover:to-accent/[0.04] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.32),0_5px_14px_rgba(39,122,104,0.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <SettingsIcon className="size-4" />
             <span className="hidden sm:inline">模型设置</span>

@@ -74,10 +74,9 @@ export function CompareView({
     ) /
       (data.revision.width / data.revision.height) >
       0.01;
-  const imageFitClass = aspectMismatch ? "object-contain" : "object-fill";
 
   return (
-    <section aria-labelledby="compare-heading" className="grid gap-3">
+    <section aria-labelledby="compare-heading" className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 id="compare-heading" className="text-xs font-medium text-white/80">
@@ -147,17 +146,16 @@ export function CompareView({
           <p className="text-xs text-white/45">正在生成对比图…</p>
         </div>
       ) : (
-        <div className="grid gap-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div
-            className="relative select-none overflow-hidden rounded-xl bg-black ring-1 ring-white/10"
-            style={{ aspectRatio: `${data.revision.width} / ${data.revision.height}` }}
+            className="relative min-h-[240px] flex-1 select-none overflow-hidden rounded-xl bg-black ring-1 ring-white/10"
           >
             {!holding && (
               // eslint-disable-next-line @next/next/no-img-element -- content-addressed previews are served by the API
               <img
                 src={data.revision.previewUrl}
                 alt="编辑后的版本"
-                className={`absolute inset-0 h-full w-full ${imageFitClass}`}
+                className="absolute inset-0 h-full w-full object-contain"
                 draggable={false}
               />
             )}
@@ -165,7 +163,7 @@ export function CompareView({
             <img
               src={data.original.previewUrl}
               alt="原图"
-              className={`absolute inset-0 h-full w-full ${imageFitClass}`}
+              className="absolute inset-0 h-full w-full object-contain"
               style={holding ? undefined : { clipPath: `inset(0 ${100 - split}% 0 0)` }}
               draggable={false}
             />
@@ -202,7 +200,7 @@ export function CompareView({
             {data.revision.width} × {data.revision.height}
           </p>
           {aspectMismatch && (
-            <p className="text-[10px] text-amber-200/70">
+            <p className="text-[10px] text-amber-900">
               原图与编辑版本比例不同，已按完整画布显示以避免拉伸。
             </p>
           )}
