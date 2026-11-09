@@ -64,6 +64,7 @@ from app.photographer.feedback import (
     summarize,
 )
 from app.photographer.generator import generate_recipe
+from app.photographer.local_strategy import plan_semantic_masks
 from app.photographer.modes import (
     conversion_mode_infos,
     resolve_conversion_mode,
@@ -87,6 +88,7 @@ from app.repositories.style_repo import SqliteStyleProfileRepository
 if TYPE_CHECKING:
     from app.services.analysis_task_service import AnalysisTaskService
     from app.services.image_service import ImageService
+    from app.services.semantic_mask_service import SemanticMaskService
     from app.services.session_service import SessionService
 
 logger = logging.getLogger("frame_ai.photographer")
@@ -106,6 +108,7 @@ class PhotographerService:
         plans: SqlitePhotographerPlanRepository | None = None,
         feedback: SqlitePhotographerFeedbackRepository | None = None,
         styles: SqliteStyleProfileRepository | None = None,
+        semantic_masks: SemanticMaskService | None = None,
     ) -> None:
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be at least 1")
@@ -118,6 +121,7 @@ class PhotographerService:
         self._plans = plans
         self._feedback = feedback
         self._styles = styles
+        self._semantic_masks = semantic_masks
 
     @property
     def planner(self) -> PhotographyPlannerProvider:
@@ -231,9 +235,23 @@ class PhotographerService:
             else None
         )
         current_recipe = session.revision.recipe
+        semantic_notes: tuple[str, ...] = ()
+        semantic_limitations: tuple[str, ...] = ()
+        planning_recipe = current_recipe
+        if profile is not None:
+            semantic = plan_semantic_masks(
+                profile,
+                report,
+                current_recipe,
+                image_id=str(image_id),
+                service=self._semantic_masks,
+            )
+            planning_recipe = semantic.recipe
+            semantic_notes = semantic.notes
+            semantic_limitations = semantic.limitations
         planner_request = PlannerRequest(
             analysis=report,
-            recipe=current_recipe,
+            recipe=planning_recipe,
             preferences=request.preferences,
             mode=request.mode,
             style=style,
@@ -256,7 +274,7 @@ class PhotographerService:
 
         try:
             generated = generate_recipe(
-                current_recipe,
+                planning_recipe,
                 report,
                 draft,
                 request.preferences,
@@ -273,7 +291,7 @@ class PhotographerService:
             )
             try:
                 generated = generate_recipe(
-                    current_recipe,
+                    planning_recipe,
                     report,
                     draft,
                     request.preferences,
@@ -288,8 +306,17 @@ class PhotographerService:
             fallback_warnings.append("模型方案未通过校验，已回退到确定性规则方案。")
 
         planner = self.planner
-        warnings = _merge_notes(fallback_warnings, draft.warnings, generated.warnings)
-        limitations = _merge_notes(draft.limitations, generated.limitations)
+        warnings = _merge_notes(
+            fallback_warnings,
+            semantic_notes,
+            draft.warnings,
+            generated.warnings,
+        )
+        limitations = _merge_notes(
+            draft.limitations,
+            generated.limitations,
+            semantic_limitations,
+        )
         response = PhotographerPlanResponse(
             plan_id=uuid4(),
             analysis_id=report.analysis_id,

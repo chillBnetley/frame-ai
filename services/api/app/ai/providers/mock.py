@@ -47,6 +47,7 @@ from app.models.photographer import (
 )
 from app.photographer.diagnosis import diagnose
 from app.photographer.direction import determine_direction
+from app.photographer.local_strategy import semantic_local_intent
 from app.photographer.rules import round2, suggest_adjustments
 from app.photographer.style_generation import dynamic_style_adjustments
 
@@ -412,6 +413,31 @@ def _planner_adjustments(request: PlannerRequest, dynamic: dict[str, float]) -> 
     )
 
 
+def _semantic_local_adjustments(
+    request: PlannerRequest,
+) -> tuple[LocalAdjustmentIntent, ...]:
+    context = request.style_context
+    if context is None:
+        return ()
+    intents: list[LocalAdjustmentIntent] = []
+    for mask in request.recipe.masks:
+        if mask.source != "semantic" or mask.semantic_class is None:
+            continue
+        values = semantic_local_intent(
+            mask.semantic_class,
+            context.strength,
+            context.conversion_mode,
+        )
+        if values:
+            intents.append(
+                LocalAdjustmentIntent(
+                    mask_id=mask.id,
+                    adjustments=AdjustmentIntent(**values),
+                )
+            )
+    return tuple(intents)
+
+
 class MockPlannerProvider:
     name = "mock"
     model = "mock-planner"
@@ -440,6 +466,7 @@ class MockPlannerProvider:
             else {}
         )
         adjustments = _planner_adjustments(request, dynamic)
+        local_adjustments = _semantic_local_adjustments(request)
         if context is not None:
             fit = context.fit
             rationale = [
@@ -454,6 +481,8 @@ class MockPlannerProvider:
             ]
         if diagnosis.creative_choices:
             rationale.append("低曝光、低饱和或暖色等表现被视为创作选择，未机械纠正。")
+        if local_adjustments:
+            rationale.append("局部调整只作用于已准备好的真实语义蒙版。")
 
         warnings: list[str] = []
         if not request.analysis.issues and context is None:
@@ -469,7 +498,7 @@ class MockPlannerProvider:
             diagnosis=diagnosis,
             direction=direction,
             adjustments=adjustments,
-            local_adjustments=(),
+            local_adjustments=local_adjustments,
             rationale=tuple(rationale),
             warnings=tuple(warnings),
             limitations=tuple(limitations),

@@ -77,11 +77,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if seeded.created:
             logger.info("style_library_seeded created=%s", len(seeded.created))
         configure_semantic_mattes(resolved_settings.mattes_dir)
-        app.state.semantic_mask_service = SemanticMaskService(
+        semantic_mask_service = SemanticMaskService(
             resolved_settings,
             service,
             semantic_registry,
         )
+        app.state.semantic_mask_service = semantic_mask_service
         session_service = SessionService(resolved_settings, service)
         render_service = RenderService(resolved_settings, service, session_service)
         render_service.previews.ensure_ready()
@@ -122,6 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             plans=plan_repository,
             feedback=SqlitePhotographerFeedbackRepository(resolved_settings.database_path),
             styles=style_profiles,
+            semantic_masks=semantic_mask_service,
         )
         style_library_service = StyleLibraryService(
             style_profiles,

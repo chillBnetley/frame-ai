@@ -46,7 +46,7 @@ class FailingPlanner:
         raise self.error
 
 
-def _settings(tmp_path: Path) -> Settings:
+def _settings(tmp_path: Path, *, semantic_masks: bool = False) -> Settings:
     return Settings(
         _env_file=None,
         data_dir=tmp_path / "data",
@@ -60,6 +60,7 @@ def _settings(tmp_path: Path) -> Settings:
         mock_scenario="portrait",
         analysis_max_concurrency=1,
         analysis_max_attempts=2,
+        feature_semantic_masks=semantic_masks,
     )
 
 
@@ -481,6 +482,8 @@ def test_plan_resolves_seeded_master_and_genre_archives(
     assert body["recipe"]["styleId"] == "portrait"
     assert body["recipe"]["styleStrength"] == 60.0
     assert any(change["path"].startswith("adjustments.") for change in body["changes"])
+    assert body["recipe"]["masks"] == []
+    assert any("语义蒙版不可用" in item for item in body["limitations"])
 
     connection = connect(plan_settings.database_path)
     try:
@@ -501,3 +504,84 @@ def test_plan_resolves_seeded_master_and_genre_archives(
     )
     assert disabled.status_code == 404, disabled.text
     assert disabled.json()["error"]["code"] == "style_not_found"
+
+
+def test_style_plan_with_semantic_mask_renders_and_tracks_the_ai_revision(tmp_path: Path):
+    settings = _settings(tmp_path, semantic_masks=True)
+    payload = make_image("PNG", (96, 64), (120, 80, 40))
+    with TestClient(create_app(settings)) as client:
+        uploaded = upload(client, payload)
+        assert uploaded.status_code == 201, uploaded.text
+        image_id = str(uploaded.json()["imageId"])
+        session = client.post("/api/v1/sessions", json={"imageId": image_id})
+        assert session.status_code == 201, session.text
+        session_id = str(session.json()["sessionId"])
+        original_revision_id = session.json()["activeRevisionId"]
+        analysis_id = _analyze(client, image_id)
+
+        plan_response = client.post(
+            "/api/v1/ai/photographer/plan",
+            json={
+                "sessionId": session_id,
+                "analysisId": analysis_id,
+                "mode": "style",
+                "styleId": "environmental_portrait",
+                "styleStrength": 0.6,
+                "conversionMode": "style",
+            },
+        )
+        assert plan_response.status_code == 200, plan_response.text
+        plan = plan_response.json()
+        semantic_masks = [mask for mask in plan["recipe"]["masks"] if mask["source"] == "semantic"]
+        assert len(semantic_masks) == 1
+        semantic_mask = semantic_masks[0]
+        assert semantic_mask["semanticClass"] == "person"
+        assert semantic_mask["matteId"]
+        assert (settings.mattes_dir / f"{semantic_mask['matteId']}.png").is_file()
+        assert any(
+            item["maskId"] == semantic_mask["id"] for item in plan["recipe"]["localAdjustments"]
+        )
+
+        preview = client.post(
+            f"/api/v1/sessions/{session_id}/render",
+            json={"recipe": plan["recipe"], "quality": "draft"},
+        )
+        assert preview.status_code == 200, preview.text
+        preview_image = client.get(str(preview.json()["previewUrl"]))
+        assert preview_image.status_code == 200
+        assert preview_image.content
+
+        accepted = client.post(
+            f"/api/v1/sessions/{session_id}/revisions",
+            json={
+                "recipe": plan["recipe"],
+                "parentRevisionId": original_revision_id,
+                "source": "ai",
+            },
+        )
+        assert accepted.status_code == 201, accepted.text
+        assert accepted.json()["revision"]["source"] == "ai"
+        assert accepted.json()["revision"]["recipe"]["masks"] == plan["recipe"]["masks"]
+
+        original = client.get(f"/api/v1/images/{image_id}/original")
+        assert original.status_code == 200
+        assert original.content == payload
+
+        undone = client.post(f"/api/v1/sessions/{session_id}/undo", json={})
+        assert undone.status_code == 200, undone.text
+        assert undone.json()["activeRevisionId"] == original_revision_id
+
+        connection = connect(settings.database_path)
+        try:
+            row = connection.execute(
+                "SELECT analysis_id, style_id, style_version, conversion_mode "
+                "FROM photographer_plan WHERE id = ?",
+                (plan["planId"],),
+            ).fetchone()
+        finally:
+            connection.close()
+        assert row is not None
+        assert row["analysis_id"] == analysis_id
+        assert row["style_id"] == "environmental_portrait"
+        assert row["style_version"] == "1.0"
+        assert row["conversion_mode"] == "style"
