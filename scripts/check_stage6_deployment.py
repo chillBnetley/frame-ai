@@ -48,15 +48,45 @@ def migration_version(database: Path) -> int | None:
         connection.close()
 
 
+def _persisted_settings(settings: Settings) -> dict:
+    path = settings.data_dir / "provider-settings.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _effective_provider(settings: Settings, kind: str) -> str | None:
+    """Resolve the provider the app will actually use (saved settings win)."""
+
+    persisted = _persisted_settings(settings)
+    entry = persisted.get(kind)
+    stored = entry if isinstance(entry, dict) else {}
+    provider = stored.get("provider") or getattr(settings, f"{kind}_provider")
+    if kind == "planner" and not provider:
+        decision = persisted.get("decision")
+        stored_decision = decision if isinstance(decision, dict) else {}
+        provider = stored_decision.get("provider") or settings.decision_provider
+    return provider
+
+
 def provider_configured(settings: Settings, kind: str) -> bool:
-    provider = getattr(settings, f"{kind}_provider")
+    provider = _effective_provider(settings, kind)
     if provider in (None, "mock"):
         return True
     key_field = getattr(settings, f"{kind}_api_key")
     key = "" if key_field is None else key_field.get_secret_value()
+    if not key and kind == "planner":
+        decision_key = settings.decision_api_key
+        key = "" if decision_key is None else decision_key.get_secret_value()
     if key:
         return True
-    return (settings.data_dir / "provider-settings.json").is_file()
+    secrets = _persisted_settings(settings).get("secrets")
+    stored_secrets = secrets if isinstance(secrets, dict) else {}
+    if kind in stored_secrets:
+        return True
+    return kind == "planner" and "decision" in stored_secrets
 
 
 def run(settings: Settings) -> list[Check]:
@@ -108,7 +138,7 @@ def run(settings: Settings) -> list[Check]:
             Check(
                 f"{kind} provider",
                 "PASS" if provider_configured(settings, kind) else "FAIL",
-                f"{getattr(settings, f'{kind}_provider')} (secret not printed)",
+                f"{_effective_provider(settings, kind)} (secret not printed)",
             )
         )
 

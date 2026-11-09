@@ -157,7 +157,16 @@ def generate_recipe(
         dynamic_style,
         warnings,
     )
-    values = _apply_intent(values, intent, style_intent, prefs, style, profile, warnings)
+    values = _apply_intent(
+        values,
+        intent,
+        style_intent,
+        prefs,
+        style,
+        profile,
+        dynamic_style,
+        warnings,
+    )
     values, conflict_warnings = enforce_conflicts(analysis, base.adjustments, values)
     warnings.extend(conflict_warnings)
     adjustments = Adjustments.model_validate(
@@ -212,14 +221,18 @@ def _planned_intent(
 ) -> tuple[dict[str, float], dict[str, float]]:
     has_findings = bool(draft.diagnosis.confirmed or draft.diagnosis.possible or analysis.issues)
     model_values = draft.adjustments.model_dump(by_alias=True, exclude_none=True)
+    # Zero strength means "no style"; keep deterministic diagnostics but do not
+    # let a provider proposal re-introduce style deltas behind the slider.
+    style_off = style is not None and strength <= 0.0
     intent: dict[str, float] = {}
     if has_findings:
         rule_values = suggest_adjustments(analysis, preferences, style).model_dump(
             by_alias=True, exclude_none=True
         )
         intent.update(rule_values)
-        intent.update(model_values)
-    elif style is not None and dynamic_style:
+        if not style_off:
+            intent.update(model_values)
+    elif style is not None and dynamic_style and not style_off:
         # An explicit style archive is an opt-in to expression even when the
         # report found no defect; the model still decides those deltas.
         intent.update(model_values)
@@ -244,13 +257,18 @@ def _apply_intent(
     preferences: PhotographerPreferences,
     style: StyleDefinition | None,
     profile: ConversionProfile | None,
+    dynamic_style: bool,
     warnings: list[str],
 ) -> dict[str, float]:
     envelope = style.envelope.model_dump(by_alias=True) if style is not None else {}
     envelope_scale = profile.envelope_scale if profile is not None else 1.0
     result = dict(values)
     for field, raw in intent.items():
-        delta = cap_for_preferences(field, raw, preferences)
+        # Selecting an archive is an explicit opt-in to its look, so the
+        # conservative auto-edit caps (colour preservation / no stylization)
+        # must not neutralize a monochrome or grain-bearing style. The style
+        # envelope and the conversion-mode scale still bound every value.
+        delta = raw if dynamic_style else cap_for_preferences(field, raw, preferences)
         if field in envelope:
             limit = float(envelope[field]) * envelope_scale
             delta = clamp(delta, -limit, limit)

@@ -69,6 +69,23 @@ function installWorkspaceMock() {
           bytes: 3,
         });
       }
+      if (url.endsWith(`/api/v1/sessions/${SESSION_ID}`) && method === "GET") {
+        const restored = sessionState({
+          revisionId: NEXT_REVISION_ID,
+          revisionNo: 2,
+          source: "ai",
+          canUndo: true,
+        });
+        restored.revision.creation = {
+          planId: plan.planId,
+          styleId: MASTER_STYLE_ID,
+          styleVersion: "1.0",
+          conversionMode: "creative",
+          styleStrength: 0.7,
+          renderKey: "b".repeat(64),
+        };
+        return jsonResponse(restored);
+      }
       if (url.endsWith("/api/v1/sessions") && method === "POST") {
         return jsonResponse(sessionState(), 201);
       }
@@ -235,6 +252,24 @@ describe("MasterVisionWorkspace", () => {
     const initialItem = screen.getByText(/v1 · 初始版本/).closest("li");
     expect(initialItem).not.toBeNull();
     expect(within(initialItem as HTMLElement).getByRole("button", { name: "当前版本" })).toBeDisabled();
+  });
+
+  it("restores a persisted session, history, style, mode, and strength", async () => {
+    installWorkspaceMock();
+    render(
+      <MasterVisionWorkspace initialStyleId="" initialSessionId={SESSION_ID} />,
+    );
+
+    expect(await screen.findByAltText("当前照片")).toBeInTheDocument();
+    expect(await screen.findByText(/v2 · AI 创作/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "选择大师或流派风格" }),
+    ).toHaveValue(MASTER_STYLE_ID);
+    expect(screen.getByRole("slider", { name: "风格强度" })).toHaveValue("70");
+    expect(screen.getByRole("button", { name: "Creative" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("reports an upload failure without leaving the empty state", async () => {

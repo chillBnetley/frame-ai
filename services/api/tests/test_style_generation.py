@@ -7,14 +7,18 @@ from app.ai.contracts import ContrastLevel, SceneLabel
 from app.ai.prompts import PLANNER_PROMPT_VERSION, build_planner_messages
 from app.ai.providers.mock import MockPlannerProvider
 from app.models.conversion import ConversionMode
-from app.models.photographer import PhotographerPreferences, PlannerMode
+from app.models.photographer import (
+    AdjustmentIntent,
+    PhotographerPreferences,
+    PlannerMode,
+)
 from app.photographer.generator import generate_recipe
 from app.photographer.style_generation import (
     build_style_context,
     dynamic_style_adjustments,
 )
 from app.styles.library import BW_DOCUMENTARY, ENVIRONMENTAL_PORTRAIT, FAN_HO
-from tests.photographer_support import recipe, report
+from tests.photographer_support import issue, recipe, report
 
 _PREFS = PhotographerPreferences(naturalness=0.3, adjustment_strength=1.0)
 _MODES = (ConversionMode.NATURAL, ConversionMode.STYLE, ConversionMode.CREATIVE)
@@ -235,3 +239,97 @@ def test_mock_plan_without_context_still_uses_the_default_style_rules():
 
     assert draft.adjustments.model_dump(exclude_none=True)
     assert "模拟" in draft.limitations[0]
+
+
+def _archive_draft(analysis):
+    base = MockPlannerProvider().plan(
+        _request(analysis, ctx=_context(profile=FAN_HO, mode=ConversionMode.STYLE))
+    )
+    return base.model_copy(
+        update={
+            "adjustments": AdjustmentIntent(
+                saturation=-100.0,
+                temperature=8.0,
+                grain=12.0,
+            )
+        }
+    )
+
+
+def test_archive_style_bypasses_the_conservative_auto_edit_caps():
+    analysis = report(
+        scene=SceneLabel.STREET,
+        contrast=ContrastLevel.HIGH,
+        issues=(issue("issue_001"),),
+    )
+    draft = _archive_draft(analysis)
+    style = FAN_HO.to_style_definition()
+    defaults = PhotographerPreferences()
+
+    dynamic = generate_recipe(
+        recipe(),
+        analysis,
+        draft,
+        defaults,
+        style,
+        0.7,
+        conversion_mode=ConversionMode.STYLE,
+        dynamic_style=True,
+    )
+    legacy = generate_recipe(
+        recipe(),
+        analysis,
+        draft,
+        defaults,
+        style,
+        0.7,
+        conversion_mode=ConversionMode.STYLE,
+        dynamic_style=False,
+    )
+
+    # The default preferences preserve original colour and disallow grain, but
+    # an explicitly selected master archive must still be able to go monochrome.
+    assert dynamic.recipe.adjustments.saturation == -100.0
+    assert dynamic.recipe.adjustments.grain == 12.0
+    assert dynamic.recipe.adjustments.temperature == 8.0
+    assert legacy.recipe.adjustments.saturation >= -8.0
+    assert legacy.recipe.adjustments.grain == 0.0
+
+
+def test_monochrome_archive_survives_an_already_low_saturation_photo():
+    analysis = report(scene=SceneLabel.STREET, saturation_mean=0.12)
+
+    dynamic = dynamic_style_adjustments(
+        FAN_HO,
+        analysis,
+        mode=ConversionMode.STYLE,
+        strength=0.8,
+        preferences=_PREFS,
+    )
+
+    assert dynamic["saturation"] == -100.0
+
+
+def test_zero_strength_does_not_reintroduce_a_provider_style_proposal():
+    analysis = report(
+        scene=SceneLabel.STREET,
+        contrast=ContrastLevel.HIGH,
+        issues=(issue("issue_001"),),
+    )
+    draft = _archive_draft(analysis)
+    style = FAN_HO.to_style_definition()
+
+    result = generate_recipe(
+        recipe(),
+        analysis,
+        draft,
+        PhotographerPreferences(),
+        style,
+        0.0,
+        conversion_mode=ConversionMode.STYLE,
+        dynamic_style=True,
+    )
+
+    assert result.recipe.adjustments.saturation == 0.0
+    assert result.recipe.adjustments.grain == 0.0
+    assert any("风格强度为 0" in warning for warning in result.warnings)

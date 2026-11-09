@@ -6,14 +6,18 @@ export const instant = false;
 export default async function WorkspacePage({
   searchParams,
 }: {
-  searchParams: Promise<{ style?: string | string[] }>;
+  searchParams: Promise<{ style?: string | string[]; session?: string | string[] }>;
 }) {
   const params = await searchParams;
   const style = Array.isArray(params.style) ? params.style[0] : params.style;
+  const session = Array.isArray(params.session) ? params.session[0] : params.session;
   return (
     <div className="min-h-dvh">
       <SiteHeader />
-      <MasterVisionWorkspace initialStyleId={style ?? ""} />
+      <MasterVisionWorkspace
+        initialStyleId={style ?? ""}
+        initialSessionId={session ?? ""}
+      />
     </div>
   );
 }

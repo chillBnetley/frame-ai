@@ -8,6 +8,7 @@ import { acceptPlan, createPlan } from "@/lib/api/photographer";
 import {
   activateRevision,
   createSession,
+  getSession,
   listRevisions,
   redoSession,
   renderPreview,
@@ -71,6 +72,7 @@ export interface MasterVisionWorkspaceState {
   generate: () => Promise<void>;
 
   originalUrl: string | null;
+  baselineLabel: string;
   resultUrl: string | null;
   renderLoading: boolean;
   renderError: string | null;
@@ -112,7 +114,24 @@ function messageFor(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWorkspaceState {
+function syncWorkspaceUrl(sessionId: string | null, styleId: string): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (sessionId) {
+    url.searchParams.set("session", sessionId);
+  } else {
+    url.searchParams.delete("session");
+  }
+  if (styleId) {
+    url.searchParams.set("style", styleId);
+  }
+  window.history.replaceState(window.history.state, "", url);
+}
+
+export function useMasterVisionWorkspace(
+  initialStyleId: string,
+  initialSessionId = "",
+): MasterVisionWorkspaceState {
   const [styles, setStyles] = useState<StyleLibraryItem[]>([]);
   const [stylesLoading, setStylesLoading] = useState(true);
   const [stylesError, setStylesError] = useState<string | null>(null);
@@ -147,6 +166,7 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
   const [plannedKey, setPlannedKey] = useState<string | null>(null);
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+  const [baselineLabel, setBaselineLabel] = useState("原图");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [renderLoading, setRenderLoading] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -184,6 +204,37 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
     sessionId !== null &&
     historyLoadedKey !== historyKey &&
     historyErrorKey !== historyKey;
+
+  useEffect(() => {
+    if (!initialSessionId) return;
+    const controller = new AbortController();
+    getSession(initialSessionId, controller.signal)
+      .then((state) => {
+        if (controller.signal.aborted) return;
+        const creation = state.revision.creation;
+        setImageId(state.imageId);
+        setSessionId(state.sessionId);
+        setSession(state);
+        setBaseRecipe(state.revision.recipe);
+        setBaselineLabel(state.revision.source === "initial" ? "原图" : "恢复时的版本");
+        if (creation?.styleId) setStyleId(creation.styleId);
+        if (creation?.conversionMode) {
+          touchedRef.current = true;
+          setModeState(creation.conversionMode);
+        }
+        if (creation?.styleStrength != null) {
+          touchedRef.current = true;
+          setStrengthState(Math.round(creation.styleStrength * 100));
+        }
+        syncWorkspaceUrl(state.sessionId, creation?.styleId ?? initialStyleId);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setUploadError(messageFor(error, "无法恢复上次的编辑会话。"));
+        }
+      });
+    return () => controller.abort();
+  }, [initialSessionId, initialStyleId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -347,7 +398,8 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
     setSaveState("idle");
     setSaveError(null);
     idempotencyKeyRef.current = null;
-  }, [styleId]);
+    syncWorkspaceUrl(sessionId, nextStyleId);
+  }, [sessionId, styleId]);
 
   const setMode = useCallback((nextMode: ConversionMode) => {
     touchedRef.current = true;
@@ -365,6 +417,9 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
       setUploadError(validation.message);
       return;
     }
+    fitRequestRef.current?.abort();
+    planRequestRef.current?.abort();
+    renderRequestRef.current?.abort();
     setUploading(true);
     setUploadError(null);
     try {
@@ -374,6 +429,8 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
       setSessionId(created.sessionId);
       setSession(created);
       setBaseRecipe(created.revision.recipe);
+      setBaselineLabel("原图");
+      syncWorkspaceUrl(created.sessionId, styleId);
       setOriginalUrl(null);
       setResultUrl(null);
       setPlan(null);
@@ -391,7 +448,7 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [styleId]);
 
   const generate = useCallback(async () => {
     if (!sessionId || !session || !analysis.analysisId || !styleId) {
@@ -609,6 +666,7 @@ export function useMasterVisionWorkspace(initialStyleId: string): MasterVisionWo
     planStale,
     generate,
     originalUrl,
+    baselineLabel,
     resultUrl,
     renderLoading,
     renderError,

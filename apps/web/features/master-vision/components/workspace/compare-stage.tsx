@@ -6,6 +6,7 @@ type ViewMode = "split" | "original" | "result";
 
 export function MasterVisionCompare({
   originalUrl,
+  baselineLabel = "原图",
   resultUrl,
   loading,
   error,
@@ -14,6 +15,7 @@ export function MasterVisionCompare({
   onImageError,
 }: {
   originalUrl: string | null;
+  baselineLabel?: string;
   resultUrl: string | null;
   loading: boolean;
   error: string | null;
@@ -120,7 +122,7 @@ export function MasterVisionCompare({
               // eslint-disable-next-line @next/next/no-img-element -- previews are served by the API
               <img
                 src={originalUrl}
-                alt="原图"
+                alt={baselineLabel}
                 className="absolute inset-0 h-full w-full object-contain"
                 style={
                   activeView === "split" && hasResult
@@ -139,7 +141,7 @@ export function MasterVisionCompare({
                   style={{ left: `${split}%` }}
                 />
                 <span className="absolute left-3 top-3 rounded-full border border-[rgba(255,255,255,0.4)] bg-[rgba(0,0,0,0.35)] px-2 py-0.5 text-[10px] text-[#f7faf8]">
-                  原图
+                  {baselineLabel}
                 </span>
                 <span className="absolute right-3 top-3 rounded-full border border-[rgba(255,255,255,0.4)] bg-[rgba(0,0,0,0.35)] px-2 py-0.5 text-[10px] text-[#f7faf8]">
                   处理结果
@@ -159,7 +161,7 @@ export function MasterVisionCompare({
       </div>
 
       <div className="flex items-center gap-3">
-        <span className="font-mono text-[10px] text-[#8a9690]">原图</span>
+        <span className="font-mono text-[10px] text-[#8a9690]">{baselineLabel}</span>
         <input
           type="range"
           min={0}

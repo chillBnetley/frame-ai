@@ -42,8 +42,14 @@ function stageLabel(stage: string | null): string {
   }
 }
 
-export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: string }) {
-  const workspace = useMasterVisionWorkspace(initialStyleId);
+export function MasterVisionWorkspace({
+  initialStyleId,
+  initialSessionId = "",
+}: {
+  initialStyleId: string;
+  initialSessionId?: string;
+}) {
+  const workspace = useMasterVisionWorkspace(initialStyleId, initialSessionId);
   const {
     styles,
     stylesLoading,
@@ -74,6 +80,7 @@ export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: stri
     planStale,
     generate,
     originalUrl,
+    baselineLabel,
     resultUrl,
     renderLoading,
     renderError,
@@ -324,6 +331,7 @@ export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: stri
           <div className="rounded-2xl border border-[#dfe5e1] bg-white p-4 sm:p-5">
             <MasterVisionCompare
               originalUrl={originalUrl}
+              baselineLabel={baselineLabel}
               resultUrl={resultUrl}
               loading={renderLoading}
               error={renderError}
@@ -341,7 +349,7 @@ export function MasterVisionWorkspace({ initialStyleId }: { initialStyleId: stri
           {analysisReady && !plan && !planLoading && (
             <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#e4e8e5] bg-white px-4 py-3 text-[11px] text-[#7a8680]">
               <SparkleIcon className="size-4 shrink-0 text-[#277a68]" />
-              分析已完成。检查右侧适配度与模式，然后点击“生成风格方案”。
+              分析已完成。检查适配度与模式，然后点击“生成风格方案”。
             </div>
           )}
           {plan && plan.changes.length > 0 && (

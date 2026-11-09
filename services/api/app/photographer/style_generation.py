@@ -159,7 +159,9 @@ def _dynamic_targets(profile: StyleProfile, report: AnalysisReport) -> dict[str,
     if is_high_saturation(report):
         values["saturation"] = min(values.get("saturation", 0.0), 0.0)
         values["vibrance"] = min(values.get("vibrance", 0.0), 0.0)
-    elif is_low_saturation(report):
+    elif is_low_saturation(report) and saturation_hint != -100.0:
+        # A low-saturation source must not cancel a monochrome style: the
+        # archive's identity colour mode is the explicit reason it was chosen.
         values["saturation"] = max(values.get("saturation", 0.0), 0.0)
 
     if is_strong_color_cast(report):
