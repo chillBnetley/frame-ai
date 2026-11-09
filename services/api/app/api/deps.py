@@ -16,6 +16,7 @@ from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
 from app.services.style_library_service import StyleLibraryService
+from app.services.style_matching_service import StyleMatchingService
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -92,6 +93,13 @@ def get_style_library_service(request: Request) -> StyleLibraryService:
     service = getattr(request.app.state, "style_library_service", None)
     if not isinstance(service, StyleLibraryService):
         raise AppError(503, "style_library_unavailable", "The style library is not available.")
+    return service
+
+
+def get_style_matching_service(request: Request) -> StyleMatchingService:
+    service = getattr(request.app.state, "style_matching_service", None)
+    if not isinstance(service, StyleMatchingService):
+        raise AppError(503, "style_matching_unavailable", "Style fit analysis is not available.")
     return service
 
 

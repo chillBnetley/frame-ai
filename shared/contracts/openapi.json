@@ -3892,6 +3892,108 @@
         }
       }
     },
+    "/api/v1/styles/{style_id}/fit": {
+      "get": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "Evaluate Fit",
+        "operationId": "evaluate_fit_api_v1_styles__style_id__fit_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "description": "Style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Style identifier."
+          },
+          {
+            "name": "image_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Image with a completed stage 3 analysis.",
+              "title": "Image Id"
+            },
+            "description": "Image with a completed stage 3 analysis."
+          },
+          {
+            "name": "alternatives",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "How many better-fitting styles to suggest.",
+              "default": 3,
+              "title": "Alternatives"
+            },
+            "description": "How many better-fitting styles to suggest."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleFitResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/styles/{style_id}": {
       "get": {
         "tags": [
@@ -5445,6 +5547,15 @@
         ],
         "title": "ContrastLevel"
       },
+      "ConversionMode": {
+        "type": "string",
+        "enum": [
+          "natural",
+          "style",
+          "creative"
+        ],
+        "title": "ConversionMode"
+      },
       "CreateRevisionRequest": {
         "properties": {
           "recipe": {
@@ -6107,6 +6218,49 @@
         "additionalProperties": false,
         "type": "object",
         "title": "DiagnosisResult"
+      },
+      "DimensionFit": {
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/FitDimension"
+          },
+          "level": {
+            "$ref": "#/components/schemas/FitLevel"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score"
+          },
+          "basis": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Basis"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dimension",
+          "level",
+          "score",
+          "basis",
+          "evidenceRefs"
+        ],
+        "title": "DimensionFit"
       },
       "DirectionConstraint": {
         "type": "string",
@@ -6909,6 +7063,27 @@
         ],
         "title": "FeedbackSummary",
         "description": "Counts of what users did. Nothing here may read as a claim of quality improvement."
+      },
+      "FitDimension": {
+        "type": "string",
+        "enum": [
+          "color",
+          "light",
+          "scene",
+          "composition",
+          "subject"
+        ],
+        "title": "FitDimension"
+      },
+      "FitLevel": {
+        "type": "string",
+        "enum": [
+          "high",
+          "medium",
+          "low",
+          "unsuitable"
+        ],
+        "title": "FitLevel"
       },
       "HTTPValidationError": {
         "properties": {
@@ -8639,6 +8814,36 @@
         ],
         "title": "RecommendationReport"
       },
+      "RecommendedStrength": {
+        "properties": {
+          "minimum": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Minimum"
+          },
+          "maximum": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Maximum"
+          },
+          "default": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Default"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "minimum",
+          "maximum",
+          "default"
+        ],
+        "title": "RecommendedStrength"
+      },
       "RegionInfo": {
         "properties": {
           "id": {
@@ -9593,6 +9798,236 @@
           "favorite"
         ],
         "title": "StyleFavoriteResponse"
+      },
+      "StyleFitAlternative": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Styleid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StyleKind"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score"
+          },
+          "level": {
+            "$ref": "#/components/schemas/FitLevel"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "name",
+          "kind",
+          "score",
+          "level",
+          "reason"
+        ],
+        "title": "StyleFitAlternative"
+      },
+      "StyleFitConflict": {
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/FitDimension"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "evidenceRefs": {
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Evidencerefs"
+          },
+          "improvable": {
+            "type": "boolean",
+            "title": "Improvable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dimension",
+          "description",
+          "evidenceRefs",
+          "improvable"
+        ],
+        "title": "StyleFitConflict",
+        "description": "One concrete obstacle between the photo and the target style."
+      },
+      "StyleFitResponse": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "stage6/1",
+            "title": "Schemaversion",
+            "default": "stage6/1"
+          },
+          "engineVersion": {
+            "type": "string",
+            "const": "style-fit/1",
+            "title": "Engineversion",
+            "default": "style-fit/1"
+          },
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "styleId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Styleid"
+          },
+          "styleName": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Stylename"
+          },
+          "styleKind": {
+            "$ref": "#/components/schemas/StyleKind"
+          },
+          "styleVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Styleversion"
+          },
+          "overallScore": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Overallscore"
+          },
+          "overallLevel": {
+            "$ref": "#/components/schemas/FitLevel"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/DimensionFit"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "minItems": 5,
+            "title": "Dimensions"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/StyleFitConflict"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Conflicts",
+            "default": []
+          },
+          "achievable": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Achievable",
+            "default": []
+          },
+          "unachievable": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Unachievable",
+            "default": []
+          },
+          "recommendedMode": {
+            "$ref": "#/components/schemas/ConversionMode"
+          },
+          "recommendedStrength": {
+            "$ref": "#/components/schemas/RecommendedStrength"
+          },
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/StyleFitAlternative"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Alternatives",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Limitations",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "imageId",
+          "analysisId",
+          "isMock",
+          "styleId",
+          "styleName",
+          "styleKind",
+          "styleVersion",
+          "overallScore",
+          "overallLevel",
+          "summary",
+          "dimensions",
+          "recommendedMode",
+          "recommendedStrength"
+        ],
+        "title": "StyleFitResponse"
       },
       "StyleKind": {
         "type": "string",

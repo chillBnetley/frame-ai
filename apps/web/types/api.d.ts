@@ -676,6 +676,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/styles/{style_id}/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evaluate Fit */
+        get: operations["evaluate_fit_api_v1_styles__style_id__fit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/styles/{style_id}": {
         parameters: {
             query?: never;
@@ -1208,6 +1225,11 @@ export interface components {
          * @enum {string}
          */
         ContrastLevel: "low" | "moderate" | "high" | "unknown";
+        /**
+         * ConversionMode
+         * @enum {string}
+         */
+        ConversionMode: "natural" | "style" | "creative";
         /** CreateRevisionRequest */
         CreateRevisionRequest: {
             recipe: components["schemas"]["EditRecipe"];
@@ -1488,6 +1510,17 @@ export interface components {
              * @default 启发式置信度，不是校准概率。
              */
             confidenceNote: string;
+        };
+        /** DimensionFit */
+        DimensionFit: {
+            dimension: components["schemas"]["FitDimension"];
+            level: components["schemas"]["FitLevel"];
+            /** Score */
+            score: number;
+            /** Basis */
+            basis: string;
+            /** Evidencerefs */
+            evidenceRefs: string[];
         };
         /**
          * DirectionConstraint
@@ -1784,6 +1817,16 @@ export interface components {
              */
             disclaimers: string[];
         };
+        /**
+         * FitDimension
+         * @enum {string}
+         */
+        FitDimension: "color" | "light" | "scene" | "composition" | "subject";
+        /**
+         * FitLevel
+         * @enum {string}
+         */
+        FitLevel: "high" | "medium" | "low" | "unsuitable";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2492,6 +2535,15 @@ export interface components {
              */
             targetRegions: string[];
         };
+        /** RecommendedStrength */
+        RecommendedStrength: {
+            /** Minimum */
+            minimum: number;
+            /** Maximum */
+            maximum: number;
+            /** Default */
+            default: number;
+        };
         /** RegionInfo */
         RegionInfo: {
             /** Id */
@@ -2902,6 +2954,100 @@ export interface components {
             styleId: string;
             /** Favorite */
             favorite: boolean;
+        };
+        /** StyleFitAlternative */
+        StyleFitAlternative: {
+            /** Styleid */
+            styleId: string;
+            /** Name */
+            name: string;
+            kind: components["schemas"]["StyleKind"];
+            /** Score */
+            score: number;
+            level: components["schemas"]["FitLevel"];
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * StyleFitConflict
+         * @description One concrete obstacle between the photo and the target style.
+         */
+        StyleFitConflict: {
+            dimension: components["schemas"]["FitDimension"];
+            /** Description */
+            description: string;
+            /** Evidencerefs */
+            evidenceRefs: string[];
+            /** Improvable */
+            improvable: boolean;
+        };
+        /** StyleFitResponse */
+        StyleFitResponse: {
+            /**
+             * Schemaversion
+             * @default stage6/1
+             * @constant
+             */
+            schemaVersion: "stage6/1";
+            /**
+             * Engineversion
+             * @default style-fit/1
+             * @constant
+             */
+            engineVersion: "style-fit/1";
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            /** Ismock */
+            isMock: boolean;
+            /** Styleid */
+            styleId: string;
+            /** Stylename */
+            styleName: string;
+            styleKind: components["schemas"]["StyleKind"];
+            /** Styleversion */
+            styleVersion: string;
+            /** Overallscore */
+            overallScore: number;
+            overallLevel: components["schemas"]["FitLevel"];
+            /** Summary */
+            summary: string;
+            /** Dimensions */
+            dimensions: components["schemas"]["DimensionFit"][];
+            /**
+             * Conflicts
+             * @default []
+             */
+            conflicts: components["schemas"]["StyleFitConflict"][];
+            /**
+             * Achievable
+             * @default []
+             */
+            achievable: string[];
+            /**
+             * Unachievable
+             * @default []
+             */
+            unachievable: string[];
+            recommendedMode: components["schemas"]["ConversionMode"];
+            recommendedStrength: components["schemas"]["RecommendedStrength"];
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: components["schemas"]["StyleFitAlternative"][];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
         };
         /**
          * StyleKind
@@ -6253,6 +6399,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StyleRecommendedResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    evaluate_fit_api_v1_styles__style_id__fit_get: {
+        parameters: {
+            query: {
+                /** @description Image with a completed stage 3 analysis. */
+                image_id: string;
+                /** @description How many better-fitting styles to suggest. */
+                alternatives?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleFitResponse"];
                 };
             };
             /** @description Style profile or image not found */

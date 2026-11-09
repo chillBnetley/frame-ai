@@ -23,23 +23,14 @@ from app.repositories.style_repo import (
     SqliteStyleProfileRepository,
     StyleProfileNotFoundError,
 )
+from app.services.report_lookup import completed_report_for_image
+from app.styles.vocabulary import SCENE_NAMES
 
 if TYPE_CHECKING:
     from app.services.analysis_task_service import AnalysisTaskService
     from app.services.image_service import ImageService
 
 MAX_RECENT_SCAN = 200
-_SCENE_NAMES: dict[SceneLabel, str] = {
-    SceneLabel.PORTRAIT: "人像",
-    SceneLabel.LANDSCAPE: "风景",
-    SceneLabel.STREET: "街拍",
-    SceneLabel.ARCHITECTURE: "建筑",
-    SceneLabel.NIGHT: "夜景",
-    SceneLabel.INDOOR: "室内",
-    SceneLabel.FOOD: "美食",
-    SceneLabel.NATURE: "自然",
-    SceneLabel.OTHER: "其他",
-}
 _LIBRARY_REASON = "适合作为风格起点；上传照片并完成分析后可查看适配度。"
 
 
@@ -189,7 +180,7 @@ class StyleLibraryService:
         profiles.sort(key=_display_key)
         favorites = set(self._repository.list_favorites())
         reason = (
-            f"档案适用场景包含{_SCENE_NAMES.get(scene, scene.value)}。"
+            f"档案适用场景包含{SCENE_NAMES.get(scene, scene.value)}。"
             if basis == "scene" and scene is not None
             else _LIBRARY_REASON
         )
@@ -214,24 +205,5 @@ class StyleLibraryService:
     def _scene_for_image(self, image_id: str) -> SceneLabel:
         if self._images is None or self._analysis is None:
             raise _unavailable()
-        image, _ = self._images.get_original(image_id)
-        canonical = str(image.id).lower()
-        report = self._analysis.latest_completed(canonical)
-        if report is None:
-            raise AppError(
-                409,
-                "analysis_required",
-                "The image needs a completed analysis before style recommendations.",
-                {"imageId": canonical},
-            )
-        if (
-            str(report.image.id).lower() != canonical
-            or report.image.sha256.lower() != image.sha256.lower()
-        ):
-            raise AppError(
-                409,
-                "image_analysis_mismatch",
-                "The analysis report does not belong to the current image.",
-                {"imageId": canonical, "analysisId": str(report.analysis_id)},
-            )
+        _, report = completed_report_for_image(self._images, self._analysis, image_id)
         return report.scene.primary

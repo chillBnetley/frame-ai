@@ -5,9 +5,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Path, Query
 
 from app.ai.contracts import SceneLabel
-from app.api.deps import get_style_library_service
+from app.api.deps import get_style_library_service, get_style_matching_service
 from app.models.photographer import PhotographerStyleId
 from app.models.schemas import ErrorResponse
+from app.models.style_fit import StyleFitResponse
 from app.models.style_library import (
     StyleDetailResponse,
     StyleEnabledRequest,
@@ -20,6 +21,7 @@ from app.models.style_library import (
 )
 from app.models.style_profile import StyleKind
 from app.services.style_library_service import StyleLibraryService
+from app.services.style_matching_service import StyleMatchingService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     code: {"model": ErrorResponse, "description": description}
@@ -80,6 +82,26 @@ def list_recommended(
     limit: Annotated[int, Query(ge=1, le=20)] = 6,
 ) -> StyleRecommendedResponse:
     return service.recommended(image_id=image_id, limit=limit)
+
+
+@router.get("/{style_id}/fit", response_model=StyleFitResponse)
+def evaluate_fit(
+    style_id: _StylePath,
+    service: Annotated[StyleMatchingService, Depends(get_style_matching_service)],
+    image_id: Annotated[
+        str,
+        Query(
+            min_length=1,
+            max_length=64,
+            description="Image with a completed stage 3 analysis.",
+        ),
+    ],
+    alternatives: Annotated[
+        int,
+        Query(ge=1, le=5, description="How many better-fitting styles to suggest."),
+    ] = 3,
+) -> StyleFitResponse:
+    return service.fit(style_id, image_id, alternatives=alternatives)
 
 
 @router.get("/{style_id}", response_model=StyleDetailResponse)

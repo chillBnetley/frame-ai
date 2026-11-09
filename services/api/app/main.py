@@ -44,6 +44,7 @@ from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
 from app.services.style_library_service import StyleLibraryService
+from app.services.style_matching_service import StyleMatchingService
 from app.styles.library import seed_style_library
 
 logger = logging.getLogger("frame_ai.main")
@@ -127,6 +128,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             images=service,
             analysis=analysis_tasks,
         )
+        style_matching_service = StyleMatchingService(
+            style_profiles,
+            images=service,
+            analysis=analysis_tasks,
+        )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -147,6 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         app.state.photographer_service = photographer_service
         app.state.style_library_service = style_library_service
+        app.state.style_matching_service = style_matching_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,
