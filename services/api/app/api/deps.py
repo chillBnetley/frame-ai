@@ -18,6 +18,7 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
+from app.services.style_fusion_service import StyleFusionService
 from app.services.style_library_service import StyleLibraryService
 from app.services.style_matching_service import StyleMatchingService
 
@@ -132,6 +133,13 @@ def get_style_matching_service(request: Request) -> StyleMatchingService:
     service = getattr(request.app.state, "style_matching_service", None)
     if not isinstance(service, StyleMatchingService):
         raise AppError(503, "style_matching_unavailable", "Style fit analysis is not available.")
+    return service
+
+
+def get_style_fusion_service(request: Request) -> StyleFusionService:
+    service = getattr(request.app.state, "style_fusion_service", None)
+    if not isinstance(service, StyleFusionService):
+        raise AppError(503, "personal_style_unavailable", "The fusion service is not available.")
     return service
 
 

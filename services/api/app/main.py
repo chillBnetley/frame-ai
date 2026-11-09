@@ -48,6 +48,7 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
+from app.services.style_fusion_service import StyleFusionService
 from app.services.style_library_service import StyleLibraryService
 from app.services.style_matching_service import StyleMatchingService
 from app.styles.library import seed_style_library
@@ -151,6 +152,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             personal_styles,
             analysis=analysis_tasks,
         )
+        style_fusion_service = StyleFusionService(personal_styles)
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -174,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.style_matching_service = style_matching_service
         app.state.personal_style_service = personal_style_service
         app.state.personal_style_analysis_service = personal_style_analysis_service
+        app.state.style_fusion_service = style_fusion_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,

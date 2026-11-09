@@ -937,6 +937,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/personal-styles/{style_id}/fuse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fuse Personal Style */
+        post: operations["fuse_personal_style_api_v1_personal_styles__style_id__fuse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/personal-styles/{style_id}/references/{reference_id}/features": {
         parameters: {
             query?: never;
@@ -2560,6 +2577,118 @@ export interface components {
             /** After */
             after?: unknown;
         };
+        /** PersonalStyleFusionConflict */
+        PersonalStyleFusionConflict: {
+            /** Dimension */
+            dimension: string;
+            /** Labels */
+            labels: [
+                string,
+                string
+            ];
+            /** Support */
+            support: [
+                number,
+                number
+            ];
+            /** Message */
+            message: string;
+        };
+        /** PersonalStyleFusionRequest */
+        PersonalStyleFusionRequest: {
+            /** Referenceids */
+            referenceIds?: string[] | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** PersonalStyleFusionResponse */
+        PersonalStyleFusionResponse: {
+            style: components["schemas"]["PersonalStyleProfile"];
+            definition: components["schemas"]["PersonalStyleDefinition"];
+            /** Version */
+            version: string;
+            status: components["schemas"]["PersonalStyleStatus"];
+            /** Favorite */
+            favorite: boolean;
+            /** Summary */
+            summary: string;
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["PersonalStyleFusionSection"][];
+            /**
+             * Conflicts
+             * @default []
+             */
+            conflicts: components["schemas"]["PersonalStyleFusionConflict"][];
+            /**
+             * Scenes
+             * @default []
+             */
+            scenes: components["schemas"]["PersonalStyleFusionScene"][];
+            /**
+             * Contributions
+             * @default []
+             */
+            contributions: components["schemas"]["PersonalStyleReferenceContribution"][];
+            /**
+             * Occasional
+             * @default []
+             */
+            occasional: string[];
+            /** Stability */
+            stability?: {
+                [key: string]: number;
+            };
+            /** Confidence */
+            confidence: number;
+            /** Samplecount */
+            sampleCount: number;
+            /** Anomalycount */
+            anomalyCount: number;
+            /** Defaultstrength */
+            defaultStrength: number;
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
+        /** PersonalStyleFusionScene */
+        PersonalStyleFusionScene: {
+            scene: components["schemas"]["SceneLabel"];
+            /** Photocount */
+            photoCount: number;
+            /** Share */
+            share: number;
+            /** Confidence */
+            confidence: number;
+            /** Description */
+            description: string;
+        };
+        /** PersonalStyleFusionSection */
+        PersonalStyleFusionSection: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "color" | "tone" | "light" | "texture" | "scene" | "constraints";
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: string[];
+        };
         /**
          * PersonalStyleHints
          * @description Structured personal bias used by the existing style decision chain.
@@ -2780,6 +2909,23 @@ export interface components {
             featureAvailable: boolean;
             /** Error */
             error?: string | null;
+        };
+        /** PersonalStyleReferenceContribution */
+        PersonalStyleReferenceContribution: {
+            /**
+             * Referenceid
+             * Format: uuid
+             */
+            referenceId: string;
+            /** Imageid */
+            imageId?: string | null;
+            scene: components["schemas"]["SceneLabel"];
+            /** Confidence */
+            confidence: number;
+            /** Weight */
+            weight: number;
+            /** Anomalycount */
+            anomalyCount: number;
         };
         /** PersonalStyleReferenceListResponse */
         PersonalStyleReferenceListResponse: {
@@ -8749,6 +8895,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonalStyleAnalysisResponse"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    fuse_personal_style_api_v1_personal_styles__style_id__fuse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalStyleFusionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalStyleFusionResponse"];
                 };
             };
             /** @description Personal style, version, or reference photo not found */

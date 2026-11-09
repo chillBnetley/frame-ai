@@ -5664,6 +5664,91 @@
         }
       }
     },
+    "/api/v1/personal-styles/{style_id}/fuse": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Fuse Personal Style",
+        "operationId": "fuse_personal_style_api_v1_personal_styles__style_id__fuse_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalStyleFusionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleFusionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/personal-styles/{style_id}/references/{reference_id}/features": {
       "get": {
         "tags": [
@@ -9886,6 +9971,319 @@
         ],
         "title": "PersonalStyleFieldChange"
       },
+      "PersonalStyleFusionConflict": {
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Dimension"
+          },
+          "labels": {
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Labels"
+          },
+          "support": {
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Support"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dimension",
+          "labels",
+          "support",
+          "message"
+        ],
+        "title": "PersonalStyleFusionConflict"
+      },
+      "PersonalStyleFusionRequest": {
+        "properties": {
+          "referenceIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referenceids"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonalStyleFusionRequest"
+      },
+      "PersonalStyleFusionResponse": {
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/PersonalStyleProfile"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PersonalStyleDefinition"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PersonalStyleStatus"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleFusionSection"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Sections",
+            "default": []
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleFusionConflict"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Conflicts",
+            "default": []
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleFusionScene"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Scenes",
+            "default": []
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleReferenceContribution"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Contributions",
+            "default": []
+          },
+          "occasional": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Occasional",
+            "default": []
+          },
+          "stability": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Stability"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "sampleCount": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Samplecount"
+          },
+          "anomalyCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Anomalycount"
+          },
+          "defaultStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Defaultstrength"
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Limitations",
+            "default": []
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "style",
+          "definition",
+          "version",
+          "status",
+          "favorite",
+          "summary",
+          "confidence",
+          "sampleCount",
+          "anomalyCount",
+          "defaultStrength",
+          "createdAt"
+        ],
+        "title": "PersonalStyleFusionResponse"
+      },
+      "PersonalStyleFusionScene": {
+        "properties": {
+          "scene": {
+            "$ref": "#/components/schemas/SceneLabel"
+          },
+          "photoCount": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Photocount"
+          },
+          "share": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Share"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scene",
+          "photoCount",
+          "share",
+          "confidence",
+          "description"
+        ],
+        "title": "PersonalStyleFusionScene"
+      },
+      "PersonalStyleFusionSection": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "color",
+              "tone",
+              "light",
+              "texture",
+              "scene",
+              "constraints"
+            ],
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "evidence": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Evidence",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "description"
+        ],
+        "title": "PersonalStyleFusionSection"
+      },
       "PersonalStyleHints": {
         "properties": {
           "schemaVersion": {
@@ -10400,6 +10798,57 @@
           "status"
         ],
         "title": "PersonalStyleReferenceAnalysis"
+      },
+      "PersonalStyleReferenceContribution": {
+        "properties": {
+          "referenceId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Referenceid"
+          },
+          "imageId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageid"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/SceneLabel"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "weight": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight"
+          },
+          "anomalyCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Anomalycount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "referenceId",
+          "scene",
+          "confidence",
+          "weight",
+          "anomalyCount"
+        ],
+        "title": "PersonalStyleReferenceContribution"
       },
       "PersonalStyleReferenceListResponse": {
         "properties": {

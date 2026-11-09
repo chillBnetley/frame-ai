@@ -9,6 +9,7 @@ from app.api.deps import (
     get_owner_scope,
     get_personal_style_analysis_service,
     get_personal_style_service,
+    get_style_fusion_service,
 )
 from app.core.identity import OwnerScope
 from app.models.personal_style import (
@@ -28,6 +29,10 @@ from app.models.personal_style import (
     PersonalStyleVersionListResponse,
 )
 from app.models.schemas import ErrorResponse
+from app.models.style_fusion import (
+    PersonalStyleFusionRequest,
+    PersonalStyleFusionResponse,
+)
 from app.models.style_profile import StyleProfileVersion
 from app.models.visual_dna import (
     PersonalStyleAnalysisResponse,
@@ -36,6 +41,7 @@ from app.models.visual_dna import (
 )
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
+from app.services.style_fusion_service import StyleFusionService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     code: {"model": ErrorResponse, "description": description}
@@ -205,6 +211,16 @@ def read_personal_style_analysis(
     owner: Annotated[OwnerScope, Depends(get_owner_scope)],
 ) -> PersonalStyleAnalysisResponse:
     return service.status(style_id, owner_id=owner.owner_id)
+
+
+@router.post("/{style_id}/fuse", response_model=PersonalStyleFusionResponse)
+def fuse_personal_style(
+    style_id: _StylePath,
+    payload: PersonalStyleFusionRequest,
+    service: Annotated[StyleFusionService, Depends(get_style_fusion_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> PersonalStyleFusionResponse:
+    return service.fuse(style_id, payload, owner_id=owner.owner_id)
 
 
 @router.get(
