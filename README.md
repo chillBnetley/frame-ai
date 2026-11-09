@@ -1,6 +1,6 @@
 # FRAME AI
 
-响应式、非破坏性照片后期工具。本仓库已完成 **开发阶段 5：AI 摄影师与智能后期决策**（Task 0–9），在阶段 3 的视觉理解之上增加了可解释的调色方案、参数化风格、对话修改、摄影点评与反馈闭环；执行层沿用阶段 4 的专业调色引擎（配方 v2、全局调色、RGB 曲线、八色带 HSL、三区域颜色分级、全图/矩形/椭圆蒙版局部调整，以及导出尺寸、两层进程内缓存、导出并发准入与渲染序号统一）。阶段 2 的完整编辑闭环继续保留：上传、自动建会话、手动参数调整、前后对比、撤销/重做/重置，到从原图全分辨率导出 JPEG/PNG/TIFF（PNG/TIFF 可选 8/16-bit，带 alpha 时保留透明度）。
+响应式、非破坏性照片后期工具。本仓库已完成 **开发阶段 6：Master Vision 大师风格库与动态风格生成（V6.1）**，并在其下保留阶段 5 的 **AI 摄影师与智能后期决策**（Task 0–9），在阶段 3 的视觉理解之上增加了可解释的调色方案、参数化风格、对话修改、摄影点评与反馈闭环；执行层沿用阶段 4 的专业调色引擎（配方 v2、全局调色、RGB 曲线、八色带 HSL、三区域颜色分级、全图/矩形/椭圆蒙版局部调整，以及导出尺寸、两层进程内缓存、导出并发准入与渲染序号统一）。阶段 2 的完整编辑闭环继续保留：上传、自动建会话、手动参数调整、前后对比、撤销/重做/重置，到从原图全分辨率导出 JPEG/PNG/TIFF（PNG/TIFF 可选 8/16-bit，带 alpha 时保留透明度）。
 
 原图字节从上传到导出全程不变；编辑只记录配方（recipe）与 revision，渲染始终从原图重算。阶段 3 的异步分析任务（预处理与 OpenCV 测量、可替换的视觉/决策 Provider、主体与区域引用、摄影问题诊断、五区界面）继续作为阶段 5 的输入。阶段 5 的 AI 摄影师把“照片是什么样”转换为“建议调什么、调多少、为什么”，但**只生成提案并在预览中展示，不自动写入配方或修改原图**；只有用户显式接受后才生成普通 revision。默认使用离线 Mock Provider，风格由参数实现；人物/实验性天空语义蒙版只由用户在本机点击生成，AI 不会自动伪造分割结果。
 
@@ -14,16 +14,19 @@
 | 开发阶段 2.1：阶段 2 审查修复 | 已完成 | `22ed468`（F2-00…F2-14；F2-15 回归与交接随最终提交） | 2026-11-03 |
 | 开发阶段 3：AI 摄影理解与智能诊断 | 已完成（commit `1f8909b`） | 见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md) | 2026-11-03 |
 | 开发阶段 4：专业摄影调色引擎 | 已完成（Task 1–8，含色彩管理收尾与性能/内存治理；commit `1f8909b`） | 见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md) | 2026-11-04 |
-| 开发阶段 5：AI 摄影师与智能后期决策 | 已完成（Task 0–9；改动尚未提交） | 见 [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md) | 2026-11-06 |
+| 开发阶段 5：AI 摄影师与智能后期决策 | 已完成（Task 0–9） | 见 [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md) | 2026-11-06 |
+| 开发阶段 6：Master Vision（V6.1） | 已完成（Batch 0–11；真实照片人工评价待用户） | 见 [V6_1_RELEASE_NOTES.md](V6_1_RELEASE_NOTES.md) | 2026-11-09 |
 
-阶段 1.1 的完整命令、退出码与测试清单见 [docs/handoff/phase-1.1.md](docs/handoff/phase-1.1.md)；阶段 2 的完整交接见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md)；阶段 2.1 审查修复见 [docs/handoff/phase-2.1.md](docs/handoff/phase-2.1.md)；阶段 3 的测试、性能与遗留问题见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md)；阶段 4 的逐 Task 交付、验收对照与回滚方式见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md)；阶段 5 的逐 Task 交付、测试计数与未评估项见 [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md)。
+阶段 1.1 的完整命令、退出码与测试清单见 [docs/handoff/phase-1.1.md](docs/handoff/phase-1.1.md)；阶段 2 的完整交接见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md)；阶段 2.1 审查修复见 [docs/handoff/phase-2.1.md](docs/handoff/phase-2.1.md)；阶段 3 的测试、性能与遗留问题见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md)；阶段 4 的逐 Task 交付、验收对照与回滚方式见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md)；阶段 5 的逐 Task 交付、测试计数与未评估项见 [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md)；阶段 6 的发布、部署、性能与限制见 [V6_1_RELEASE_NOTES.md](V6_1_RELEASE_NOTES.md)、[V6_1_DEPLOYMENT.md](V6_1_DEPLOYMENT.md)、[V6_1_PERFORMANCE.md](V6_1_PERFORMANCE.md)、[V6_1_KNOWN_LIMITATIONS.md](V6_1_KNOWN_LIMITATIONS.md)。
 
 ### 根目录文档索引
 
 根目录保留多份阶段性文档，职责与重叠关系如下（未移动或删除任何文件）：
 
 - [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md) / [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md) / [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md)：对应阶段的正式交接，含逐 Task 交付、门禁与测试计数、性能实测、验收对照与回滚。
-- [STAGE_3_INITIAL_AUDIT.md](STAGE_3_INITIAL_AUDIT.md) / [STAGE_4_AUDIT_REPORT.md](STAGE_4_AUDIT_REPORT.md) / [STAGE_5_AUDIT_REPORT.md](STAGE_5_AUDIT_REPORT.md)：阶段开工前的现状审查与风险清单，属于历史快照，结论以完成报告为准。
+- [STAGE_3_INITIAL_AUDIT.md](STAGE_3_INITIAL_AUDIT.md) / [STAGE_4_AUDIT_REPORT.md](STAGE_4_AUDIT_REPORT.md) / [STAGE_5_AUDIT_REPORT.md](STAGE_5_AUDIT_REPORT.md) / [STAGE_6_AUDIT_REPORT.md](STAGE_6_AUDIT_REPORT.md)：阶段开工前的现状审查与风险清单，属于历史快照，结论以完成报告为准。
+- [V6_1_RELEASE_NOTES.md](V6_1_RELEASE_NOTES.md) / [V6_1_DEPLOYMENT.md](V6_1_DEPLOYMENT.md) / [V6_1_PERFORMANCE.md](V6_1_PERFORMANCE.md) / [V6_1_KNOWN_LIMITATIONS.md](V6_1_KNOWN_LIMITATIONS.md)：V6.1 发布说明、部署与回滚、性能成本、已知限制。
+- [STAGE_6_QUALITY_REPORT.md](STAGE_6_QUALITY_REPORT.md)：阶段 6 自动矩阵、异常矩阵与人工评价准入线。
 - [STAGE_3_4_CODE_REVIEW_2026-11-04.md](STAGE_3_4_CODE_REVIEW_2026-11-04.md)：阶段 3/4 联合代码复审；逐条整改方案见 [docs/plans/stage-3-4-review-remediation.md](docs/plans/stage-3-4-review-remediation.md)，两份文档的问题编号一一对应。
 - [阶段三.md](阶段三.md) / [阶段四任务书.md](阶段四任务书.md) / [阶段四操作建议.md](阶段四操作建议.md) / [第五阶段任务书.md](第五阶段任务书.md) / [第五阶段实施方法.md](第五阶段实施方法.md)：各阶段的任务书与操作建议，是验收口径的来源；完成报告只引用、不改写任务书。
 - [phase 2 review.md](phase%202%20review.md) / [建议与标准.md](建议与标准.md)：阶段 2 复审与通用标准素材，保留为参考，不属于当前交付链。
@@ -31,7 +34,7 @@
 
 系统化规范与决策见 [docs/](docs/) 下的 `architecture.md`、`api-contract.md`、`color-management.md`、`performance.md`、`known-issues.md` 与 `decisions/`；阶段 5 的人工评估规范、14 类测试图与 A/B/C/D 模板见 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md)。
 
-## 当前范围（阶段 3 + 阶段 4 + 阶段 5）
+## 当前范围（阶段 3 + 阶段 4 + 阶段 5 + 阶段 6）
 
 已实现：
 

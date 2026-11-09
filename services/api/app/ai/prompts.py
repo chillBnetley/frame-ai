@@ -359,11 +359,15 @@ def build_planner_messages(request: PlannerRequest) -> list[dict[str, Any]]:
     report = request.analysis.model_dump(mode="json", by_alias=True)
     recipe = request.recipe.model_dump(mode="json", by_alias=True)
     preferences = request.preferences.model_dump(mode="json", by_alias=True)
-    style = (
-        request.style.model_dump(mode="json", by_alias=True) if request.style is not None else None
-    )
     style_context = (
         request.style_context.to_prompt_payload() if request.style_context is not None else None
+    )
+    # The verified context already contains the projected style definition; do
+    # not spend tokens sending the same envelope and constraints twice.
+    style = (
+        request.style.model_dump(mode="json", by_alias=True)
+        if request.style is not None and style_context is None
+        else None
     )
     mask_ids = ["full", *(mask.id for mask in request.recipe.masks)]
     allowed_refs = sorted(known_evidence_refs(request.analysis))

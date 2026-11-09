@@ -77,13 +77,17 @@ class StyleGenerationContext:
     mode_info: ConversionModeInfo
 
     def to_prompt_payload(self) -> dict[str, Any]:
+        # Source citations are useful to a human reader but only add tokens and
+        # distraction to a planning call; the traits, strategy, and bounds stay.
+        profile = self.profile.model_dump(mode="json", by_alias=True)
+        profile.pop("sources", None)
         return {
             "imageId": self.image_id,
             "imageSha256": self.image_sha256,
             "conversionMode": self.conversion_mode.value,
             "styleStrength": self.strength,
             "conversionModeConstraints": self.mode_info.model_dump(mode="json", by_alias=True),
-            "styleProfile": self.profile.model_dump(mode="json", by_alias=True),
+            "styleProfile": profile,
             "fit": self.fit.to_prompt_payload(),
         }
 

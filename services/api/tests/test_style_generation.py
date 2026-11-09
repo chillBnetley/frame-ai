@@ -138,6 +138,7 @@ def test_style_context_carries_the_archive_fit_mode_and_image_version():
     assert payload["styleStrength"] == 0.8
     assert payload["styleProfile"]["id"] == "environmental_portrait"
     assert payload["styleProfile"]["sceneFit"]["suitable"]
+    assert "sources" not in payload["styleProfile"]
     assert payload["conversionModeConstraints"]["forbiddenOperations"]
     assert payload["conversionModeConstraints"]["preservationConstraints"]
     assert payload["conversionModeConstraints"]["envelopeScale"] > 1.0
@@ -219,6 +220,8 @@ def test_prompt_carries_the_full_style_context_and_mode_boundaries():
     assert "descriptive research" in system
     assert "Only adjustments and localAdjustments" in system
     assert "Style context (verified archive" in user
+    assert '"sources"' not in user
+    assert user.count('"id":"fan_ho"') == 1
     assert '"styleProfile"' in user
     assert '"id":"fan_ho"' in user
     assert '"conversionMode":"style"' in user
