@@ -3,13 +3,16 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.models.analysis_report import AnalysisReport
-from app.models.photographer import CritiqueResponse, ParameterChange
+from app.models.photographer import (
+    CritiqueResponse,
+    ParameterChange,
+    canonical_evidence_ref,
+)
 from app.models.recipe import (
     LOCAL_V1_UNSUPPORTED_FIELDS,
     Adjustments,
     EditRecipe,
 )
-from app.models.photographer import canonical_evidence_ref
 from app.photographer.rules import (
     available_mask_ids,
     clamp,

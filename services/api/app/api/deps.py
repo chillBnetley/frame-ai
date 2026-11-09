@@ -15,6 +15,7 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
+from app.services.style_library_service import StyleLibraryService
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -85,6 +86,13 @@ def get_export_job_manager(request: Request) -> ExportJobManager:
     if not isinstance(manager, ExportJobManager):
         raise AppError(503, "service_unavailable", "The service is not ready.")
     return manager
+
+
+def get_style_library_service(request: Request) -> StyleLibraryService:
+    service = getattr(request.app.state, "style_library_service", None)
+    if not isinstance(service, StyleLibraryService):
+        raise AppError(503, "style_library_unavailable", "The style library is not available.")
+    return service
 
 
 def get_photographer_service(request: Request) -> PhotographerService:

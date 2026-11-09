@@ -1088,15 +1088,12 @@ class SeedResult:
 
 
 def seed_style_library(repository: SqliteStyleProfileRepository) -> SeedResult:
-    created: list[str] = []
-    skipped: list[str] = []
-    for profile in SEED_PROFILES:
-        if repository.get(profile.id) is None:
-            repository.create(profile)
-            created.append(profile.id)
-        else:
-            skipped.append(profile.id)
-    return SeedResult(created=tuple(created), skipped=tuple(skipped))
+    existing = {profile.id for profile in repository.list_profiles()}
+    missing = [profile for profile in SEED_PROFILES if profile.id not in existing]
+    created_ids = repository.create_many(missing) if missing else set()
+    created = tuple(profile.id for profile in SEED_PROFILES if profile.id in created_ids)
+    skipped = tuple(profile.id for profile in SEED_PROFILES if profile.id not in created_ids)
+    return SeedResult(created=created, skipped=skipped)
 
 
 __all__ = ["SEED_PROFILES", "SeedResult", "seed_style_library"]

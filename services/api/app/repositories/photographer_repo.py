@@ -62,6 +62,12 @@ def _normalize_id(value: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class StyleUsageRecord:
+    style_id: str
+    last_used_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class PhotographerFeedbackRecord:
     id: str
     image_id: str
@@ -152,6 +158,25 @@ class SqlitePhotographerPlanRepository:
         finally:
             connection.close()
         return [_to_record(row) for row in rows]
+
+    def list_recent_style_usage(self, *, limit: int = 20) -> list[StyleUsageRecord]:
+        connection = connect(self._path)
+        try:
+            rows = connection.execute(
+                "SELECT style_id, MAX(created_at) AS last_used_at FROM photographer_plan "
+                "WHERE style_id IS NOT NULL GROUP BY style_id "
+                "ORDER BY last_used_at DESC, style_id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        finally:
+            connection.close()
+        return [
+            StyleUsageRecord(
+                style_id=str(row["style_id"]),
+                last_used_at=_parse_time(str(row["last_used_at"])),
+            )
+            for row in rows
+        ]
 
     def _latest(self, column: str, value: str) -> PhotographerPlanRecord | None:
         if column not in {"session_id", "image_id"}:
@@ -278,4 +303,5 @@ __all__ = [
     "PhotographerPlanRecord",
     "SqlitePhotographerFeedbackRepository",
     "SqlitePhotographerPlanRepository",
+    "StyleUsageRecord",
 ]

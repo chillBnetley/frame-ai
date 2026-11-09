@@ -608,6 +608,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/styles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Styles */
+        get: operations["list_styles_api_v1_styles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/styles/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Favorites */
+        get: operations["list_favorites_api_v1_styles_favorites_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/styles/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Recent */
+        get: operations["list_recent_api_v1_styles_recent_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/styles/recommended": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Recommended */
+        get: operations["list_recommended_api_v1_styles_recommended_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/styles/{style_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Style */
+        get: operations["read_style_api_v1_styles__style_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/styles/{style_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_versions_api_v1_styles__style_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/styles/{style_id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Favorite */
+        post: operations["add_favorite_api_v1_styles__style_id__favorite_post"];
+        /** Remove Favorite */
+        delete: operations["remove_favorite_api_v1_styles__style_id__favorite_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/styles/{style_id}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Enabled */
+        post: operations["set_enabled_api_v1_styles__style_id__enabled_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2603,6 +2740,26 @@ export interface components {
          * @enum {string}
          */
         StyleCategory: "scene" | "creative";
+        /** StyleColorTraits */
+        StyleColorTraits: {
+            /** Tendency */
+            tendency: string;
+            /** Relationships */
+            relationships: string;
+            /** Saturation */
+            saturation: string;
+        };
+        /** StyleCompositionTraits */
+        StyleCompositionTraits: {
+            /** Space */
+            space: string;
+            /** Geometry */
+            geometry: string;
+            /** Negativespace */
+            negativeSpace: string;
+            /** Subjectrelation */
+            subjectRelation: string;
+        };
         /**
          * StyleDefinition
          * @description A parameterized style. The catalog is independent of the render engine.
@@ -2643,6 +2800,24 @@ export interface components {
              * Enabled
              * @default true
              */
+            enabled: boolean;
+        };
+        /** StyleDetailResponse */
+        StyleDetailResponse: {
+            style: components["schemas"]["StyleProfile"];
+            /** Favorite */
+            favorite: boolean;
+        };
+        /** StyleEnabledRequest */
+        StyleEnabledRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** StyleEnabledResponse */
+        StyleEnabledResponse: {
+            /** Styleid */
+            styleId: string;
+            /** Enabled */
             enabled: boolean;
         };
         /**
@@ -2721,6 +2896,68 @@ export interface components {
              */
             grain: number;
         };
+        /** StyleFavoriteResponse */
+        StyleFavoriteResponse: {
+            /** Styleid */
+            styleId: string;
+            /** Favorite */
+            favorite: boolean;
+        };
+        /**
+         * StyleKind
+         * @enum {string}
+         */
+        StyleKind: "master" | "genre";
+        /**
+         * StyleLibraryItem
+         * @description Card-sized projection of one archive; the full archive lives in the detail view.
+         */
+        StyleLibraryItem: {
+            /** Id */
+            id: string;
+            kind: components["schemas"]["StyleKind"];
+            /** Version */
+            version: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            category: components["schemas"]["StyleCategory"];
+            /** Signature */
+            signature: string[];
+            /** Suitablescenes */
+            suitableScenes: components["schemas"]["SceneLabel"][];
+            /**
+             * Enginestyle
+             * @enum {string}
+             */
+            engineStyle: "natural" | "portrait" | "landscape" | "street" | "documentary" | "film" | "cinematic";
+            /** Defaultstrength */
+            defaultStrength: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Favorite */
+            favorite: boolean;
+        };
+        /** StyleLibraryListResponse */
+        StyleLibraryListResponse: {
+            /**
+             * Styles
+             * @default []
+             */
+            styles: components["schemas"]["StyleLibraryItem"][];
+        };
+        /** StyleLightTraits */
+        StyleLightTraits: {
+            /** Contrast */
+            contrast: string;
+            /** Shadows */
+            shadows: string;
+            /** Highlights */
+            highlights: string;
+            /** Expression */
+            expression: string;
+        };
         /** StyleListResponse */
         StyleListResponse: {
             /**
@@ -2728,6 +2965,139 @@ export interface components {
              * @default []
              */
             styles: components["schemas"]["StyleDefinition"][];
+        };
+        /**
+         * StyleProfile
+         * @description A master or genre style archive.
+         *
+         *     The archive is understanding material for AI decisions, not a fixed
+         *     parameter table: ``envelope``/``engineStyle`` only bound what the stage 4
+         *     engine may realise, while the trait sections describe the visual language.
+         */
+        StyleProfile: {
+            /** Id */
+            id: string;
+            kind: components["schemas"]["StyleKind"];
+            /**
+             * Version
+             * @default 1.0
+             */
+            version: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Philosophy */
+            philosophy: string;
+            color: components["schemas"]["StyleColorTraits"];
+            light: components["schemas"]["StyleLightTraits"];
+            composition: components["schemas"]["StyleCompositionTraits"];
+            texture: components["schemas"]["StyleTextureTraits"];
+            sceneFit: components["schemas"]["StyleSceneFit"];
+            /** Poststrategy */
+            postStrategy: string;
+            /** Capturetechniques */
+            captureTechniques: string;
+            /**
+             * Constraints
+             * @default []
+             */
+            constraints: components["schemas"]["DirectionConstraint"][];
+            /** Preservenotes */
+            preserveNotes: string;
+            /** Sources */
+            sources: components["schemas"]["StyleSource"][];
+            /**
+             * Enginestyle
+             * @default natural
+             * @enum {string}
+             */
+            engineStyle: "natural" | "portrait" | "landscape" | "street" | "documentary" | "film" | "cinematic";
+            envelope?: components["schemas"]["StyleEnvelope"];
+            /**
+             * Defaultstrength
+             * @default 0.5
+             */
+            defaultStrength: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /** StyleRecentItem */
+        StyleRecentItem: {
+            style: components["schemas"]["StyleLibraryItem"];
+            /**
+             * Lastusedat
+             * Format: date-time
+             */
+            lastUsedAt: string;
+        };
+        /** StyleRecentResponse */
+        StyleRecentResponse: {
+            /**
+             * Styles
+             * @default []
+             */
+            styles: components["schemas"]["StyleRecentItem"][];
+        };
+        /** StyleRecommendation */
+        StyleRecommendation: {
+            style: components["schemas"]["StyleLibraryItem"];
+            /** Reason */
+            reason: string;
+        };
+        /** StyleRecommendedResponse */
+        StyleRecommendedResponse: {
+            /**
+             * Basis
+             * @enum {string}
+             */
+            basis: "scene" | "library";
+            scene?: components["schemas"]["SceneLabel"] | null;
+            /**
+             * Styles
+             * @default []
+             */
+            styles: components["schemas"]["StyleRecommendation"][];
+        };
+        /** StyleSceneFit */
+        StyleSceneFit: {
+            /** Suitable */
+            suitable: components["schemas"]["SceneLabel"][];
+            /** Suitablenotes */
+            suitableNotes: string;
+            /** Unsuitablenotes */
+            unsuitableNotes: string;
+        };
+        /** StyleSource */
+        StyleSource: {
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+            /** License */
+            license: string;
+        };
+        /** StyleTextureTraits */
+        StyleTextureTraits: {
+            /** Grain */
+            grain: string;
+            /** Sharpness */
+            sharpness: string;
+            /** Detail */
+            detail: string;
+        };
+        /** StyleVersionListResponse */
+        StyleVersionListResponse: {
+            /** Styleid */
+            styleId: string;
+            /**
+             * Versions
+             * @default []
+             */
+            versions: string[];
         };
         /** SubjectInfo */
         SubjectInfo: {
@@ -5675,6 +6045,549 @@ export interface operations {
             };
             /** @description Planner timed out */
             504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_styles_api_v1_styles_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by master or genre. */
+                kind?: components["schemas"]["StyleKind"] | null;
+                /** @description Filter by suitable scene. */
+                scene?: components["schemas"]["SceneLabel"] | null;
+                /** @description Match the style name or identifier. */
+                search?: string | null;
+                /** @description Include disabled styles. */
+                include_disabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleLibraryListResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_favorites_api_v1_styles_favorites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleLibraryListResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_recent_api_v1_styles_recent_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleRecentResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_recommended_api_v1_styles_recommended_get: {
+        parameters: {
+            query?: {
+                /** @description Rank by the completed analysis of this image. */
+                image_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleRecommendedResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_style_api_v1_styles__style_id__get: {
+        parameters: {
+            query?: {
+                /** @description Read a specific archived version instead of the current one. */
+                version?: string | null;
+                /** @description Allow reading a disabled style. */
+                include_disabled?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleDetailResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_versions_api_v1_styles__style_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleVersionListResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_favorite_api_v1_styles__style_id__favorite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleFavoriteResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_favorite_api_v1_styles__style_id__favorite_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleFavoriteResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_enabled_api_v1_styles__style_id__enabled_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StyleEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleEnabledResponse"];
+                };
+            };
+            /** @description Style profile or image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Completed analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style library or analysis service not ready */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

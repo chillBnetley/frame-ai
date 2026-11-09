@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
 
 from app.models.style_profile import StyleKind, StyleProfile
@@ -77,6 +78,44 @@ class SqliteStyleProfileRepository:
             raise
         finally:
             connection.close()
+
+    def create_many(self, profiles: Sequence[StyleProfile]) -> set[str]:
+        """Insert the profiles that are still missing in one transaction."""
+        now = utc_now()
+        created: set[str] = set()
+        connection = connect(self._path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            for profile in profiles:
+                cursor = connection.execute(
+                    "INSERT OR IGNORE INTO style_profile "
+                    "(id, kind, name, current_version, enabled, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        profile.id,
+                        profile.kind.value,
+                        profile.name,
+                        profile.version,
+                        int(profile.enabled),
+                        now,
+                        now,
+                    ),
+                )
+                if cursor.rowcount == 0:
+                    continue
+                connection.execute(
+                    "INSERT INTO style_profile_version "
+                    "(style_id, version, profile_json, created_at) VALUES (?, ?, ?, ?)",
+                    (profile.id, profile.version, profile.model_dump_json(by_alias=True), now),
+                )
+                created.add(profile.id)
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        return created
 
     def get(self, style_id: str, *, version: str | None = None) -> StyleProfile | None:
         connection = connect(self._path)

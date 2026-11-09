@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
@@ -12,6 +13,7 @@ from app.api.errors import register_exception_handlers
 from app.api.routes import analysis, config, exports, health, images, previews, sessions
 from app.api.routes import photographer as photographer_routes
 from app.api.routes import settings as settings_routes
+from app.api.routes import styles as style_routes
 from app.core.auth import ApiTokenService
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -30,6 +32,7 @@ from app.repositories.photographer_repo import (
     SqlitePhotographerFeedbackRepository,
     SqlitePhotographerPlanRepository,
 )
+from app.repositories.style_repo import SqliteStyleProfileRepository
 from app.services.analysis_task_service import AnalysisTaskService
 from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
@@ -40,7 +43,10 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
+from app.services.style_library_service import StyleLibraryService
+from app.styles.library import seed_style_library
 
+logger = logging.getLogger("frame_ai.main")
 API_PREFIX = "/api/v1"
 ALLOWED_CORS_METHODS = ["GET", "POST", "DELETE", "OPTIONS"]
 
@@ -65,6 +71,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service = ImageService(resolved_settings)
         service.ensure_ready()
         service.scan_consistency()
+        style_profiles = SqliteStyleProfileRepository(resolved_settings.database_path)
+        seeded = seed_style_library(style_profiles)
+        if seeded.created:
+            logger.info("style_library_seeded created=%s", len(seeded.created))
         configure_semantic_mattes(resolved_settings.mattes_dir)
         app.state.semantic_mask_service = SemanticMaskService(
             resolved_settings,
@@ -101,14 +111,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             providers.bundle,
             SqliteAnalysisRepository(resolved_settings.database_path),
         )
+        plan_repository = SqlitePhotographerPlanRepository(resolved_settings.database_path)
         photographer_service = PhotographerService(
             providers.bundle.planner,
             max_concurrency=resolved_settings.photographer_max_concurrency,
             analysis=analysis_tasks,
             sessions=session_service,
             images=service,
-            plans=SqlitePhotographerPlanRepository(resolved_settings.database_path),
+            plans=plan_repository,
             feedback=SqlitePhotographerFeedbackRepository(resolved_settings.database_path),
+        )
+        style_library_service = StyleLibraryService(
+            style_profiles,
+            plans=plan_repository,
+            images=service,
+            analysis=analysis_tasks,
         )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
@@ -129,6 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             export_jobs=export_jobs,
         )
         app.state.photographer_service = photographer_service
+        app.state.style_library_service = style_library_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,
@@ -210,6 +228,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(exports.router, prefix=API_PREFIX)
     app.include_router(previews.router, prefix=API_PREFIX)
     app.include_router(photographer_routes.router, prefix=API_PREFIX)
+    app.include_router(style_routes.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict[str, str]:

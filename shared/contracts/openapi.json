@@ -3532,6 +3532,778 @@
           }
         }
       }
+    },
+    "/api/v1/styles": {
+      "get": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "List Styles",
+        "operationId": "list_styles_api_v1_styles_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StyleKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by master or genre.",
+              "title": "Kind"
+            },
+            "description": "Filter by master or genre."
+          },
+          {
+            "name": "scene",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SceneLabel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by suitable scene.",
+              "title": "Scene"
+            },
+            "description": "Filter by suitable scene."
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Match the style name or identifier.",
+              "title": "Search"
+            },
+            "description": "Match the style name or identifier."
+          },
+          {
+            "name": "include_disabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include disabled styles.",
+              "default": false,
+              "title": "Include Disabled"
+            },
+            "description": "Include disabled styles."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleLibraryListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/styles/favorites": {
+      "get": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "List Favorites",
+        "operationId": "list_favorites_api_v1_styles_favorites_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleLibraryListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/styles/recent": {
+      "get": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "List Recent",
+        "operationId": "list_recent_api_v1_styles_recent_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 8,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleRecentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/styles/recommended": {
+      "get": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "List Recommended",
+        "operationId": "list_recommended_api_v1_styles_recommended_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Rank by the completed analysis of this image.",
+              "title": "Image Id"
+            },
+            "description": "Rank by the completed analysis of this image."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 6,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleRecommendedResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/styles/{style_id}": {
+      "get": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "Read Style",
+        "operationId": "read_style_api_v1_styles__style_id__get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "description": "Style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Style identifier."
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read a specific archived version instead of the current one.",
+              "title": "Version"
+            },
+            "description": "Read a specific archived version instead of the current one."
+          },
+          {
+            "name": "include_disabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Allow reading a disabled style.",
+              "default": false,
+              "title": "Include Disabled"
+            },
+            "description": "Allow reading a disabled style."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/styles/{style_id}/versions": {
+      "get": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "List Versions",
+        "operationId": "list_versions_api_v1_styles__style_id__versions_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "description": "Style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleVersionListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/styles/{style_id}/favorite": {
+      "post": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "Add Favorite",
+        "operationId": "add_favorite_api_v1_styles__style_id__favorite_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "description": "Style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleFavoriteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "Remove Favorite",
+        "operationId": "remove_favorite_api_v1_styles__style_id__favorite_delete",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "description": "Style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleFavoriteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/styles/{style_id}/enabled": {
+      "post": {
+        "tags": [
+          "styles"
+        ],
+        "summary": "Set Enabled",
+        "operationId": "set_enabled_api_v1_styles__style_id__enabled_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "description": "Style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleEnabledRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleEnabledResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Style profile or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Completed analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style library or analysis service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8489,6 +9261,73 @@
         ],
         "title": "StyleCategory"
       },
+      "StyleColorTraits": {
+        "properties": {
+          "tendency": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Tendency"
+          },
+          "relationships": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Relationships"
+          },
+          "saturation": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Saturation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tendency",
+          "relationships",
+          "saturation"
+        ],
+        "title": "StyleColorTraits"
+      },
+      "StyleCompositionTraits": {
+        "properties": {
+          "space": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Space"
+          },
+          "geometry": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Geometry"
+          },
+          "negativeSpace": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Negativespace"
+          },
+          "subjectRelation": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Subjectrelation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "space",
+          "geometry",
+          "negativeSpace",
+          "subjectRelation"
+        ],
+        "title": "StyleCompositionTraits"
+      },
       "StyleDefinition": {
         "properties": {
           "id": {
@@ -8576,6 +9415,58 @@
         ],
         "title": "StyleDefinition",
         "description": "A parameterized style. The catalog is independent of the render engine."
+      },
+      "StyleDetailResponse": {
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/StyleProfile"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "style",
+          "favorite"
+        ],
+        "title": "StyleDetailResponse"
+      },
+      "StyleEnabledRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "StyleEnabledRequest"
+      },
+      "StyleEnabledResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Styleid"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "enabled"
+        ],
+        "title": "StyleEnabledResponse"
       },
       "StyleEnvelope": {
         "properties": {
@@ -8683,6 +9574,184 @@
         "title": "StyleEnvelope",
         "description": "Per-parameter magnitude limits used when a style is realized as parameters."
       },
+      "StyleFavoriteResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Styleid"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "favorite"
+        ],
+        "title": "StyleFavoriteResponse"
+      },
+      "StyleKind": {
+        "type": "string",
+        "enum": [
+          "master",
+          "genre"
+        ],
+        "title": "StyleKind"
+      },
+      "StyleLibraryItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StyleKind"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "category": {
+            "$ref": "#/components/schemas/StyleCategory"
+          },
+          "signature": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Signature"
+          },
+          "suitableScenes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "minItems": 1,
+            "title": "Suitablescenes"
+          },
+          "engineStyle": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "portrait",
+              "landscape",
+              "street",
+              "documentary",
+              "film",
+              "cinematic"
+            ],
+            "title": "Enginestyle"
+          },
+          "defaultStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Defaultstrength"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "version",
+          "name",
+          "description",
+          "category",
+          "signature",
+          "suitableScenes",
+          "engineStyle",
+          "defaultStrength",
+          "enabled",
+          "favorite"
+        ],
+        "title": "StyleLibraryItem",
+        "description": "Card-sized projection of one archive; the full archive lives in the detail view."
+      },
+      "StyleLibraryListResponse": {
+        "properties": {
+          "styles": {
+            "items": {
+              "$ref": "#/components/schemas/StyleLibraryItem"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Styles",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StyleLibraryListResponse"
+      },
+      "StyleLightTraits": {
+        "properties": {
+          "contrast": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Contrast"
+          },
+          "shadows": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Shadows"
+          },
+          "highlights": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Highlights"
+          },
+          "expression": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Expression"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "contrast",
+          "shadows",
+          "highlights",
+          "expression"
+        ],
+        "title": "StyleLightTraits"
+      },
       "StyleListResponse": {
         "properties": {
           "styles": {
@@ -8698,6 +9767,358 @@
         "additionalProperties": false,
         "type": "object",
         "title": "StyleListResponse"
+      },
+      "StyleProfile": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StyleKind"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Version",
+            "default": "1.0"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "philosophy": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Philosophy"
+          },
+          "color": {
+            "$ref": "#/components/schemas/StyleColorTraits"
+          },
+          "light": {
+            "$ref": "#/components/schemas/StyleLightTraits"
+          },
+          "composition": {
+            "$ref": "#/components/schemas/StyleCompositionTraits"
+          },
+          "texture": {
+            "$ref": "#/components/schemas/StyleTextureTraits"
+          },
+          "sceneFit": {
+            "$ref": "#/components/schemas/StyleSceneFit"
+          },
+          "postStrategy": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Poststrategy"
+          },
+          "captureTechniques": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Capturetechniques"
+          },
+          "constraints": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionConstraint"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Constraints",
+            "default": []
+          },
+          "preserveNotes": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Preservenotes"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/StyleSource"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Sources"
+          },
+          "engineStyle": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "portrait",
+              "landscape",
+              "street",
+              "documentary",
+              "film",
+              "cinematic"
+            ],
+            "title": "Enginestyle",
+            "default": "natural"
+          },
+          "envelope": {
+            "$ref": "#/components/schemas/StyleEnvelope"
+          },
+          "defaultStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Defaultstrength",
+            "default": 0.5
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "description",
+          "philosophy",
+          "color",
+          "light",
+          "composition",
+          "texture",
+          "sceneFit",
+          "postStrategy",
+          "captureTechniques",
+          "preserveNotes",
+          "sources"
+        ],
+        "title": "StyleProfile",
+        "description": "A master or genre style archive.\n\nThe archive is understanding material for AI decisions, not a fixed\nparameter table: ``envelope``/``engineStyle`` only bound what the stage 4\nengine may realise, while the trait sections describe the visual language."
+      },
+      "StyleRecentItem": {
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/StyleLibraryItem"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Lastusedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "style",
+          "lastUsedAt"
+        ],
+        "title": "StyleRecentItem"
+      },
+      "StyleRecentResponse": {
+        "properties": {
+          "styles": {
+            "items": {
+              "$ref": "#/components/schemas/StyleRecentItem"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Styles",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StyleRecentResponse"
+      },
+      "StyleRecommendation": {
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/StyleLibraryItem"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "style",
+          "reason"
+        ],
+        "title": "StyleRecommendation"
+      },
+      "StyleRecommendedResponse": {
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "scene",
+              "library"
+            ],
+            "title": "Basis"
+          },
+          "scene": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneLabel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "styles": {
+            "items": {
+              "$ref": "#/components/schemas/StyleRecommendation"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Styles",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "basis"
+        ],
+        "title": "StyleRecommendedResponse"
+      },
+      "StyleSceneFit": {
+        "properties": {
+          "suitable": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "minItems": 1,
+            "title": "Suitable"
+          },
+          "suitableNotes": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Suitablenotes"
+          },
+          "unsuitableNotes": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Unsuitablenotes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "suitable",
+          "suitableNotes",
+          "unsuitableNotes"
+        ],
+        "title": "StyleSceneFit"
+      },
+      "StyleSource": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "pattern": "^https?://[^\\s]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "license": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "License"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "license"
+        ],
+        "title": "StyleSource"
+      },
+      "StyleTextureTraits": {
+        "properties": {
+          "grain": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Grain"
+          },
+          "sharpness": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Sharpness"
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "grain",
+          "sharpness",
+          "detail"
+        ],
+        "title": "StyleTextureTraits"
+      },
+      "StyleVersionListResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Styleid"
+          },
+          "versions": {
+            "items": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+$"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Versions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId"
+        ],
+        "title": "StyleVersionListResponse"
       },
       "SubjectInfo": {
         "properties": {
