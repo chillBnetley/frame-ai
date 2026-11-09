@@ -86,6 +86,10 @@ def test_create_list_detail_and_versions(personal_client) -> None:
             "name": "克制的城市 II",
             "targets": {"saturation": -12.0, "contrast": 6.0},
             "avoid": ["oversaturated"],
+            "traits": {
+                "lightExpression": "自然柔和的侧光。",
+                "textureGrain": "颗粒克制。",
+            },
             "note": "降低饱和度。",
         },
     )
@@ -95,10 +99,14 @@ def test_create_list_detail_and_versions(personal_client) -> None:
     assert body["style"]["name"] == "克制的城市 II"
     assert body["style"]["personal"]["targets"] == {"saturation": -12.0, "contrast": 6.0}
     assert body["style"]["personal"]["avoid"] == ["oversaturated"]
+    assert body["style"]["light"]["expression"] == "自然柔和的侧光。"
+    assert body["style"]["texture"]["grain"] == "颗粒克制。"
     assert body["definition"]["userOverrides"]["personal.targets"] == {
         "saturation": -12.0,
         "contrast": 6.0,
     }
+    assert body["definition"]["userOverrides"]["traits.light_expression"] == "自然柔和的侧光。"
+    assert "traits.light_expression" in body["style"]["personal"]["userOverrides"]
 
     old = client.get(f"{PREFIX}/{style_id}?version=1.0")
     assert old.status_code == 200

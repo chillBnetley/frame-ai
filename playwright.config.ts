@@ -50,6 +50,7 @@ if (!process.env.E2E_BASE_URL) {
       API_INTERNAL_URL: API_URL,
       NEXT_TELEMETRY_DISABLED: "1",
       FRAME_DATA_DIR: DATA_DIR,
+      NEXT_DIST_DIR: process.env.E2E_NEXT_DIST_DIR ?? ".next-e2e",
     },
     url: BASE_URL,
     reuseExistingServer: false,

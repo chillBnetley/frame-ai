@@ -202,7 +202,11 @@ def test_fuse_preserves_user_confirmed_fields(fusion_client) -> None:
     style_id = _create_style(client)
     updated = client.patch(
         f"{PREFIX}/{style_id}",
-        json={"description": "我的个人描述。", "targets": {"saturation": -5.0}},
+        json={
+            "description": "我的个人描述。",
+            "targets": {"saturation": -5.0},
+            "traits": {"lightExpression": "我确认的自然侧光。"},
+        },
     )
     assert updated.status_code == 200, updated.text
     image_id = _upload_images(client, [(120, 80, 40)])[0]
@@ -214,8 +218,13 @@ def test_fuse_preserves_user_confirmed_fields(fusion_client) -> None:
     body = response.json()
     assert body["style"]["description"] == "我的个人描述。"
     assert body["style"]["personal"]["targets"] == {"saturation": -5.0}
+    assert body["style"]["light"]["expression"] == "我确认的自然侧光。"
     assert body["definition"]["userOverrides"]["description"] == "我的个人描述。"
     assert body["definition"]["userOverrides"]["personal.targets"] == {"saturation": -5.0}
+    assert (
+        body["definition"]["userOverrides"]["traits.light_expression"]
+        == "我确认的自然侧光。"
+    )
 
 
 def test_fuse_reports_references_without_features(fusion_client) -> None:

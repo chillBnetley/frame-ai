@@ -39,6 +39,12 @@ export function SiteHeader() {
             照片工作台
           </Link>
           <Link
+            href="/visual-dna"
+            className="inline-flex min-h-9 items-center rounded-full px-3 text-xs font-medium text-[#69716c] transition-colors hover:bg-[#f1f4f2] hover:text-[#2c3a34] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Visual DNA
+          </Link>
+          <Link
             href="/master-vision"
             className="inline-flex min-h-9 items-center rounded-full bg-[#eaf3ef] px-3 text-xs font-medium text-[#1f6a5a] transition-colors hover:bg-[#dfeee8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -46,6 +52,12 @@ export function SiteHeader() {
           </Link>
         </nav>
         <div className="flex items-center gap-2">
+          <Link
+            href="/visual-dna"
+            className="inline-flex min-h-11 items-center rounded-xl border border-[#d7dfda] bg-white px-3 text-xs font-medium text-[#277a68] md:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Visual DNA
+          </Link>
           <Link
             href="/master-vision"
             className="inline-flex min-h-11 items-center rounded-xl border border-[#d7dfda] bg-white px-3 text-xs font-medium text-[#277a68] md:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"

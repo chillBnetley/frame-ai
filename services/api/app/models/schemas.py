@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -68,6 +69,21 @@ class UploadImageResponse(CamelModel):
     exif_orientation: int
     mime_type: str
     bytes: int
+
+
+class ImageListItem(CamelModel):
+    id: UUID
+    original_name: str
+    width: int
+    height: int
+    mime_type: str
+    bytes: int
+    created_at: datetime
+
+
+class ImageListResponse(CamelModel):
+    images: list[ImageListItem]
+    next_offset: int | None = None
 
 
 class SemanticMaskRequest(CamelModel):

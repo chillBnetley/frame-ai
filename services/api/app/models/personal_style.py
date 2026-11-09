@@ -244,12 +244,32 @@ class PersonalStyleCreateRequest(_PersonalModel):
         return self
 
 
+class PersonalStyleTraitUpdate(_PersonalModel):
+    color_tendency: Text | None = None
+    color_relationships: Text | None = None
+    color_saturation: Text | None = None
+    light_contrast: Text | None = None
+    light_shadows: Text | None = None
+    light_highlights: Text | None = None
+    light_expression: Text | None = None
+    texture_grain: Text | None = None
+    texture_sharpness: Text | None = None
+    texture_detail: Text | None = None
+
+    @model_validator(mode="after")
+    def _traits_change_something(self) -> Self:
+        if all(value is None for value in self.model_dump().values()):
+            raise ValueError("at least one trait must be provided.")
+        return self
+
+
 class PersonalStyleUpdateRequest(_PersonalModel):
     name: ShortName | None = None
     description: Text | None = None
     suitable_scenes: tuple[SceneLabel, ...] | None = Field(default=None, max_length=9)
     targets: dict[str, BoundedTarget] | None = None
     avoid: tuple[PersonalAvoidEffect, ...] | None = Field(default=None, max_length=8)
+    traits: PersonalStyleTraitUpdate | None = None
     note: Text | None = None
 
     @model_validator(mode="after")
@@ -262,6 +282,7 @@ class PersonalStyleUpdateRequest(_PersonalModel):
                 self.suitable_scenes,
                 self.targets,
                 self.avoid,
+                self.traits,
                 self.note,
             )
         ):
@@ -434,6 +455,7 @@ __all__ = [
     "PersonalStyleStatus",
     "PersonalStyleStatusRequest",
     "PersonalStyleStatusResponse",
+    "PersonalStyleTraitUpdate",
     "PersonalStyleUpdateRequest",
     "PersonalStyleVersionDetailResponse",
     "PersonalStyleVersionListResponse",

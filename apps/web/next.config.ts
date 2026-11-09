@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const apiInternalUrl = (process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
+  // An isolated E2E dev server must not reuse the interactive server's cache
+  // or its single-instance lock.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   cacheComponents: true,
   partialPrefetching: true,
   allowedDevOrigins: ["127.0.0.1", "localhost"],

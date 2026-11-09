@@ -228,6 +228,44 @@ class PersonalStyleService:
             )
             profile = profile.model_copy(update={"personal": personal})
             overrides["personal.avoid"] = [effect.value for effect in request.avoid]
+        if request.traits is not None:
+            changes = request.traits.model_dump(exclude_none=True)
+            color_updates: dict[str, Any] = {}
+            light_updates: dict[str, Any] = {}
+            texture_updates: dict[str, Any] = {}
+            for key, value in changes.items():
+                if key.startswith("color_"):
+                    color_updates[key.removeprefix("color_")] = value
+                elif key.startswith("light_"):
+                    light_updates[key.removeprefix("light_")] = value
+                elif key.startswith("texture_"):
+                    texture_updates[key.removeprefix("texture_")] = value
+                overrides[f"traits.{key}"] = value
+            if color_updates:
+                profile = profile.model_copy(
+                    update={"color": profile.color.model_copy(update=color_updates)}
+                )
+            if light_updates:
+                profile = profile.model_copy(
+                    update={"light": profile.light.model_copy(update=light_updates)}
+                )
+            if texture_updates:
+                profile = profile.model_copy(
+                    update={"texture": profile.texture.model_copy(update=texture_updates)}
+                )
+            personal = profile.personal.model_copy(
+                update={
+                    "user_overrides": tuple(
+                        dict.fromkeys(
+                            (
+                                *profile.personal.user_overrides,
+                                *(f"traits.{key}" for key in changes),
+                            )
+                        )
+                    )
+                }
+            )
+            profile = profile.model_copy(update={"personal": personal})
 
         updated = profile.model_copy(update={"version": _next_version(record.head.current_version)})
         note = request.note or definition.note

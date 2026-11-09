@@ -200,6 +200,17 @@ class ImageService:
         )
         return record
 
+    def list_images(
+        self,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[ImageAssetRecord], int | None]:
+        records = self.registry.list_records(limit=limit + 1, offset=offset)
+        has_more = len(records) > limit
+        page = records[:limit]
+        return page, (offset + limit if has_more else None)
+
     def get_original(self, image_id: str) -> tuple[ImageAssetRecord, Path]:
         try:
             normalized_id = str(UUID(image_id))

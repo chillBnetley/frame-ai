@@ -114,7 +114,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Images */
+        get: operations["list_images_api_v1_images_get"];
         put?: never;
         /** Upload Image */
         post: operations["upload_image_api_v1_images_post"];
@@ -2211,6 +2212,36 @@ export interface components {
              */
             luminance: number;
         };
+        /** ImageListItem */
+        ImageListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Originalname */
+            originalName: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Mimetype */
+            mimeType: string;
+            /** Bytes */
+            bytes: number;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
+        /** ImageListResponse */
+        ImageListResponse: {
+            /** Images */
+            images: components["schemas"]["ImageListItem"][];
+            /** Nextoffset */
+            nextOffset?: number | null;
+        };
         /** IssueReport */
         IssueReport: {
             /** Id */
@@ -2962,6 +2993,29 @@ export interface components {
             styleId: string;
             status: components["schemas"]["PersonalStyleStatus"];
         };
+        /** PersonalStyleTraitUpdate */
+        PersonalStyleTraitUpdate: {
+            /** Colortendency */
+            colorTendency?: string | null;
+            /** Colorrelationships */
+            colorRelationships?: string | null;
+            /** Colorsaturation */
+            colorSaturation?: string | null;
+            /** Lightcontrast */
+            lightContrast?: string | null;
+            /** Lightshadows */
+            lightShadows?: string | null;
+            /** Lighthighlights */
+            lightHighlights?: string | null;
+            /** Lightexpression */
+            lightExpression?: string | null;
+            /** Texturegrain */
+            textureGrain?: string | null;
+            /** Texturesharpness */
+            textureSharpness?: string | null;
+            /** Texturedetail */
+            textureDetail?: string | null;
+        };
         /** PersonalStyleUpdateRequest */
         PersonalStyleUpdateRequest: {
             /** Name */
@@ -2976,6 +3030,7 @@ export interface components {
             } | null;
             /** Avoid */
             avoid?: components["schemas"]["PersonalAvoidEffect"][] | null;
+            traits?: components["schemas"]["PersonalStyleTraitUpdate"] | null;
             /** Note */
             note?: string | null;
         };
@@ -4831,6 +4886,110 @@ export interface operations {
             };
             /** @description Provider settings or usage service is not ready */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_images_api_v1_images_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageListResponse"];
+                };
+            };
+            /** @description Invalid or empty upload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image is being analyzed or exported */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Upload or pixel limit exceeded */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unsupported or invalid image */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Storage failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask model is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask inference timed out */
+            504: {
                 headers: {
                     [name: string]: unknown;
                 };

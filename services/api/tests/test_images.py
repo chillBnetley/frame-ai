@@ -354,6 +354,50 @@ def test_rejects_image_over_pixel_limit(tmp_path: Path):
     assert response.json()["error"]["details"]["maxPixels"] == 1000
 
 
+def test_library_lists_image_metadata_with_pagination(client: TestClient):
+    uploaded = [
+        upload(client, make_image("PNG", (64, 48), color), f"photo-{index}.png")
+        for index, color in enumerate([(120, 80, 40), (40, 80, 120), (80, 120, 60)])
+    ]
+    assert all(response.status_code == 201 for response in uploaded)
+
+    first = client.get("/api/v1/images?limit=2")
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert len(first_body["images"]) == 2
+    assert first_body["nextOffset"] == 2
+    item = first_body["images"][0]
+    assert set(item) == {
+        "id",
+        "originalName",
+        "width",
+        "height",
+        "mimeType",
+        "bytes",
+        "createdAt",
+    }
+    assert "storageKey" not in item
+    assert "sha256" not in item
+    created = [entry["createdAt"] for entry in first_body["images"]]
+    assert created == sorted(created, reverse=True)
+
+    second = client.get(f"/api/v1/images?limit=2&offset={first_body['nextOffset']}")
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert len(second_body["images"]) == 1
+    assert second_body["nextOffset"] is None
+    ids = {entry["id"] for entry in first_body["images"]} | {
+        entry["id"] for entry in second_body["images"]
+    }
+    assert ids == {str(response.json()["imageId"]) for response in uploaded}
+
+
+def test_library_rejects_invalid_pagination(client: TestClient):
+    assert client.get("/api/v1/images?limit=0").status_code == 422
+    assert client.get("/api/v1/images?limit=201").status_code == 422
+    assert client.get("/api/v1/images?offset=-1").status_code == 422
+
+
 def test_unknown_image_returns_404(client: TestClient):
     response = client.get("/api/v1/images/00000000-0000-4000-8000-000000000000/original")
 

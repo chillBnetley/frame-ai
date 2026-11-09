@@ -17,6 +17,8 @@ from app.api.deps import (
 from app.core.errors import AppError
 from app.models.schemas import (
     ErrorResponse,
+    ImageListItem,
+    ImageListResponse,
     SemanticMaskRequest,
     SemanticMaskResponse,
     UploadImageResponse,
@@ -50,6 +52,30 @@ def _content_disposition(disposition: str, filename: str) -> str:
     )[:150]
     ascii_name = ascii_name or "image"
     return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"
+
+
+@router.get("", response_model=ImageListResponse)
+def list_images(
+    service: Annotated[ImageService, Depends(get_image_service)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 60,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ImageListResponse:
+    records, next_offset = service.list_images(limit=limit, offset=offset)
+    return ImageListResponse(
+        images=[
+            ImageListItem(
+                id=UUID(record.id),
+                original_name=record.original_name,
+                width=record.width,
+                height=record.height,
+                mime_type=record.mime_type,
+                bytes=record.bytes,
+                created_at=record.created_at,
+            )
+            for record in records
+        ],
+        next_offset=next_offset,
+    )
 
 
 @router.post("", response_model=UploadImageResponse, status_code=201)

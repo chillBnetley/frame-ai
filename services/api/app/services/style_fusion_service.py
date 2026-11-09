@@ -162,6 +162,27 @@ class StyleFusionService:
         constraints = tuple(
             dict.fromkeys((*current.constraints, *outcome.constraints))
         )[:11]
+        color = outcome.color.model_copy(
+            update={
+                field: getattr(current.color, field)
+                for field in ("tendency", "relationships", "saturation")
+                if f"traits.color_{field}" in overrides
+            }
+        )
+        light = outcome.light.model_copy(
+            update={
+                field: getattr(current.light, field)
+                for field in ("contrast", "shadows", "highlights", "expression")
+                if f"traits.light_{field}" in overrides
+            }
+        )
+        texture = outcome.texture.model_copy(
+            update={
+                field: getattr(current.texture, field)
+                for field in ("grain", "sharpness", "detail")
+                if f"traits.texture_{field}" in overrides
+            }
+        )
         personal = current.personal.model_copy(
             update={
                 "confidence": outcome.confidence,
@@ -190,10 +211,10 @@ class StyleFusionService:
                     if "description" in overrides
                     else outcome.summary
                 ),
-                "color": outcome.color,
-                "light": outcome.light,
+                "color": color,
+                "light": light,
                 "composition": outcome.composition,
-                "texture": outcome.texture,
+                "texture": texture,
                 "scene_fit": scene_fit,
                 "constraints": constraints,
                 "envelope": outcome.envelope,

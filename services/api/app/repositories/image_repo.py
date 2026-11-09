@@ -67,3 +67,15 @@ class SqliteImageRepository:
         finally:
             connection.close()
         return [str(row["id"]) for row in rows]
+
+    def list_records(self, *, limit: int, offset: int) -> list[ImageAssetRecord]:
+        connection = connect(self._path)
+        try:
+            rows = connection.execute(
+                f"SELECT {_RECORD_COLUMNS} FROM image_asset "
+                "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
+        finally:
+            connection.close()
+        return [_to_record(row) for row in rows]
