@@ -224,6 +224,33 @@ def test_plan_request_requires_a_style_only_in_style_mode():
     assert request.mode is PlannerMode.STYLE
 
 
+def test_plan_request_limits_conversion_mode_to_style_plans():
+    base = {
+        "analysis_id": uuid4(),
+        "session_id": uuid4(),
+    }
+
+    with pytest.raises(ValidationError, match="conversionMode is only accepted"):
+        PhotographerPlanRequest(mode="auto", conversion_mode="creative", **base)
+
+    with pytest.raises(ValidationError):
+        PhotographerPlanRequest(
+            mode="style",
+            style_id="film",
+            conversion_mode="bold",
+            **base,
+        )
+
+    request = PhotographerPlanRequest(
+        mode="style",
+        style_id="film",
+        conversion_mode="creative",
+        **base,
+    )
+    assert request.conversion_mode.value == "creative"
+    assert request.model_dump(by_alias=True)["conversionMode"] == "creative"
+
+
 def test_patch_request_keeps_instruction_within_bounds():
     with pytest.raises(ValidationError):
         PhotographerPatchRequest(plan_id=uuid4(), instruction="")

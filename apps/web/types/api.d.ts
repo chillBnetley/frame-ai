@@ -505,6 +505,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/photographer/conversion-modes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conversion Modes */
+        get: operations["list_conversion_modes_api_v1_ai_photographer_conversion_modes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/photographer/plan": {
         parameters: {
             query?: never;
@@ -1227,9 +1244,43 @@ export interface components {
         ContrastLevel: "low" | "moderate" | "high" | "unknown";
         /**
          * ConversionMode
+         * @description How strongly a selected style may reshape the photograph.
          * @enum {string}
          */
         ConversionMode: "natural" | "style" | "creative";
+        /**
+         * ConversionModeInfo
+         * @description Public description of what one conversion mode permits and protects.
+         */
+        ConversionModeInfo: {
+            mode: components["schemas"]["ConversionMode"];
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Allowedadjustments */
+            allowedAdjustments: string[];
+            /** Forbiddenoperations */
+            forbiddenOperations: string[];
+            /**
+             * Preservationconstraints
+             * @default []
+             */
+            preservationConstraints: components["schemas"]["DirectionConstraint"][];
+            /** Recommendedstrengthmin */
+            recommendedStrengthMin: number;
+            /** Recommendedstrengthmax */
+            recommendedStrengthMax: number;
+            /** Recommendedstrengthdefault */
+            recommendedStrengthDefault: number;
+            /** Envelopescale */
+            envelopeScale: number;
+        };
+        /** ConversionModeListResponse */
+        ConversionModeListResponse: {
+            /** Modes */
+            modes: components["schemas"]["ConversionModeInfo"][];
+        };
         /** CreateRevisionRequest */
         CreateRevisionRequest: {
             recipe: components["schemas"]["EditRecipe"];
@@ -2252,6 +2303,7 @@ export interface components {
             styleId?: string | null;
             /** Stylestrength */
             styleStrength?: number | null;
+            conversionMode?: components["schemas"]["ConversionMode"] | null;
             preferences?: components["schemas"]["PhotographerPreferences"];
         };
         /** PhotographerPlanResponse */
@@ -2299,6 +2351,7 @@ export interface components {
             styleVersion?: string | null;
             /** Stylestrength */
             styleStrength?: number | null;
+            conversionMode?: components["schemas"]["ConversionMode"] | null;
             recipe: components["schemas"]["EditRecipe"];
             /**
              * Changes
@@ -5523,6 +5576,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StyleDefinition"];
+                };
+            };
+            /** @description Session, analysis, plan, style, or feedback record not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Analysis required or report does not match the image */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request payload or generated recipe invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan or patch could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner not configured, unavailable, or busy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Planner timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_conversion_modes_api_v1_ai_photographer_conversion_modes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversionModeListResponse"];
                 };
             };
             /** @description Session, analysis, plan, style, or feedback record not found */

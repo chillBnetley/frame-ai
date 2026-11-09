@@ -352,3 +352,102 @@ def test_plan_rejects_a_style_that_is_not_available(plan_client: TestClient):
 
     assert response.status_code == 404, response.text
     assert response.json()["error"]["code"] == "style_not_found"
+
+
+def test_conversion_modes_endpoint_exposes_the_three_constraint_sets(plan_client: TestClient):
+    response = plan_client.get("/api/v1/ai/photographer/conversion-modes")
+
+    assert response.status_code == 200, response.text
+    modes = response.json()["modes"]
+    assert [item["mode"] for item in modes] == ["natural", "style", "creative"]
+    for item in modes:
+        assert item["allowedAdjustments"]
+        assert any("生成式" in text for text in item["forbiddenOperations"])
+        assert item["preservationConstraints"]
+        assert (
+            item["recommendedStrengthMin"]
+            <= item["recommendedStrengthDefault"]
+            <= item["recommendedStrengthMax"]
+        )
+    assert modes[0]["envelopeScale"] < modes[1]["envelopeScale"] < modes[2]["envelopeScale"]
+
+
+def test_plan_applies_and_persists_the_conversion_mode(
+    plan_client: TestClient,
+    plan_settings: Settings,
+):
+    image_id, session_id = _prepare(plan_client)
+    analysis_id = _analyze(plan_client, image_id)
+    plans: dict[str, dict[str, Any]] = {}
+
+    for mode in ("natural", "style", "creative"):
+        response = plan_client.post(
+            "/api/v1/ai/photographer/plan",
+            json={
+                "sessionId": session_id,
+                "analysisId": analysis_id,
+                "mode": "style",
+                "styleId": "film",
+                "styleStrength": 0.8,
+                "conversionMode": mode,
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["conversionMode"] == mode
+        assert body["styleId"] == "film"
+        assert body["styleStrength"] == 0.8
+        plans[mode] = body
+
+    natural_grain = plans["natural"]["recipe"]["adjustments"]["grain"]
+    style_grain = plans["style"]["recipe"]["adjustments"]["grain"]
+    creative_grain = plans["creative"]["recipe"]["adjustments"]["grain"]
+    assert 0.0 <= natural_grain < style_grain < creative_grain
+    assert plans["natural"]["recipe"] != plans["style"]["recipe"]
+    assert plans["style"]["recipe"] != plans["creative"]["recipe"]
+
+    connection = connect(plan_settings.database_path)
+    try:
+        row = connection.execute(
+            "SELECT conversion_mode FROM photographer_plan WHERE id = ?",
+            (plans["creative"]["planId"],),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert row is not None
+    assert row["conversion_mode"] == "creative"
+
+
+def test_plan_defaults_style_plans_to_the_neutral_conversion_mode(plan_client: TestClient):
+    image_id, session_id = _prepare(plan_client)
+    analysis_id = _analyze(plan_client, image_id)
+
+    response = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "film",
+            "styleStrength": 0.8,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["conversionMode"] == "style"
+
+
+def test_plan_rejects_a_conversion_mode_without_a_style(plan_client: TestClient):
+    image_id, session_id = _prepare(plan_client)
+    analysis_id = _analyze(plan_client, image_id)
+
+    response = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "conversionMode": "creative",
+        },
+    )
+
+    assert response.status_code == 422, response.text

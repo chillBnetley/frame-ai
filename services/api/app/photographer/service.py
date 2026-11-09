@@ -24,6 +24,7 @@ from app.models.analysis_report import AnalysisReport
 from app.models.analysis_task import TaskStatus
 from app.models.photographer import (
     MAX_NOTES,
+    ConversionModeListResponse,
     CreativeDirection,
     CritiqueApplyRequest,
     CritiqueApplyResponse,
@@ -60,6 +61,10 @@ from app.photographer.feedback import (
     summarize,
 )
 from app.photographer.generator import generate_recipe
+from app.photographer.modes import (
+    conversion_mode_infos,
+    resolve_conversion_mode,
+)
 from app.photographer.patch import apply_patch
 from app.photographer.styles import STYLE_CATALOG, get_style
 from app.photographer.validator import RecipeValidationError, validate_critique
@@ -155,6 +160,9 @@ class PhotographerService:
             raise AppError(404, "style_not_found", "The requested style is not available.")
         return style
 
+    def list_conversion_modes(self) -> ConversionModeListResponse:
+        return ConversionModeListResponse(modes=conversion_mode_infos())
+
     def analyze(
         self,
         analysis: AnalysisReport,
@@ -185,6 +193,7 @@ class PhotographerService:
 
         style = self.resolve_style(request.mode, request.style_id)
         strength = _style_strength(request, style)
+        conversion_mode = resolve_conversion_mode(request.mode, request.conversion_mode)
         current_recipe = session.revision.recipe
         planner_request = PlannerRequest(
             analysis=report,
@@ -214,6 +223,7 @@ class PhotographerService:
                 request.preferences,
                 style,
                 strength,
+                conversion_mode=conversion_mode,
             )
         except (RecipeValidationError, ValidationError) as exc:
             if degraded:
@@ -227,6 +237,7 @@ class PhotographerService:
                     request.preferences,
                     style,
                     strength,
+                    conversion_mode=conversion_mode,
                 )
             except (RecipeValidationError, ValidationError) as fallback_exc:
                 raise _invalid_recipe(fallback_exc) from fallback_exc
@@ -254,6 +265,7 @@ class PhotographerService:
             style_id=None if style is None else style.id,
             style_version=None if style is None else style.version,
             style_strength=strength,
+            conversion_mode=conversion_mode,
             recipe=generated.recipe,
             changes=generated.changes,
             warnings=warnings,
@@ -264,11 +276,12 @@ class PhotographerService:
         self._persist(plans, response, style, strength)
         logger.info(
             "photographer_plan plan_id=%s session_id=%s analysis_id=%s mode=%s "
-            "provider=%s model=%s is_mock=%s degraded=%s changes=%s",
+            "conversion_mode=%s provider=%s model=%s is_mock=%s degraded=%s changes=%s",
             response.plan_id,
             response.session_id,
             response.analysis_id,
             response.mode.value,
+            None if conversion_mode is None else conversion_mode.value,
             planner.name,
             planner.model,
             response.is_mock,
@@ -632,6 +645,9 @@ class PhotographerService:
             style_id=None if style is None else style.id,
             style_version=None if style is None else style.version,
             style_strength=strength,
+            conversion_mode=(
+                None if response.conversion_mode is None else response.conversion_mode.value
+            ),
             provider=response.provider.name,
             model=response.provider.model,
             prompt_version=response.provider.prompt_version,

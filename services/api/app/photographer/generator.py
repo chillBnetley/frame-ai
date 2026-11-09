@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from app.ai.contracts import IssueType
 from app.models.analysis_report import AnalysisReport
+from app.models.conversion import ConversionMode
 from app.models.photographer import (
     MAX_CHANGES,
     ParameterChange,
@@ -21,18 +22,20 @@ from app.models.recipe import (
     LocalAdjustment,
     LocalAdjustments,
 )
+from app.photographer.modes import (
+    ConversionProfile,
+    conversion_profile,
+    mode_curve_points,
+    mode_grading,
+    mode_local_intent,
+    mode_style_intent,
+)
 from app.photographer.rules import (
     available_mask_ids,
     cap_for_preferences,
     clamp,
     round2,
     suggest_adjustments,
-)
-from app.photographer.styles import (
-    style_adjustment_intent,
-    style_curve_points,
-    style_grading,
-    style_local_intent,
 )
 from app.photographer.validator import (
     RecipeValidationError,
@@ -124,6 +127,8 @@ def generate_recipe(
     preferences: PhotographerPreferences | None = None,
     style: StyleDefinition | None = None,
     style_strength: float | None = None,
+    *,
+    conversion_mode: ConversionMode | None = None,
 ) -> GeneratedRecipe:
     """Turn an untrusted planner draft into a validated recipe based on the current recipe."""
     prefs = preferences or PhotographerPreferences()
@@ -134,13 +139,15 @@ def generate_recipe(
         strength = style.default_strength
     else:
         strength = clamp(style_strength, 0.0, 1.0)
+    mode = None if style is None else (conversion_mode or ConversionMode.STYLE)
+    profile = None if mode is None else conversion_profile(mode)
 
     warnings: list[str] = []
     values = base.adjustments.model_dump(by_alias=True)
     values.pop("crop", None)
     values.pop("rotationDeg", None)
-    intent, style_intent = _planned_intent(analysis, draft, prefs, style, strength, warnings)
-    values = _apply_intent(values, intent, style_intent, prefs, style, warnings)
+    intent, style_intent = _planned_intent(analysis, draft, prefs, style, strength, mode, warnings)
+    values = _apply_intent(values, intent, style_intent, prefs, style, profile, warnings)
     values, conflict_warnings = enforce_conflicts(analysis, base.adjustments, values)
     warnings.extend(conflict_warnings)
     adjustments = Adjustments.model_validate(
@@ -148,9 +155,9 @@ def generate_recipe(
         | {"rotationDeg": base.adjustments.rotation_deg, "crop": base.adjustments.crop}
     )
 
-    curve = _style_curve(base.curve, style, strength, warnings)
-    color_grading = _style_colour_grading(base.color_grading, style, strength, warnings)
-    local_adjustments = _merge_local_adjustments(base, draft, style, strength, warnings)
+    curve = _style_curve(base.curve, style, strength, mode, warnings)
+    color_grading = _style_colour_grading(base.color_grading, style, strength, mode, warnings)
+    local_adjustments = _merge_local_adjustments(base, draft, style, strength, mode, warnings)
 
     recipe = EditRecipe(
         schema_version=base.schema_version,
@@ -189,6 +196,7 @@ def _planned_intent(
     preferences: PhotographerPreferences,
     style: StyleDefinition | None,
     strength: float,
+    mode: ConversionMode | None,
     warnings: list[str],
 ) -> tuple[dict[str, float], dict[str, float]]:
     has_findings = bool(draft.diagnosis.confirmed or draft.diagnosis.possible or analysis.issues)
@@ -204,7 +212,9 @@ def _planned_intent(
         warnings.append("诊断没有明确问题，已忽略模型提出的额外参数调整。")
 
     style_intent = (
-        style_adjustment_intent(style, strength, preferences) if style is not None else {}
+        mode_style_intent(style, strength, preferences, mode)
+        if style is not None and mode is not None
+        else {}
     )
     return (
         {field: value for field, value in intent.items() if field in _ADJUSTMENT_FIELDS},
@@ -218,14 +228,16 @@ def _apply_intent(
     style_intent: dict[str, float],
     preferences: PhotographerPreferences,
     style: StyleDefinition | None,
+    profile: ConversionProfile | None,
     warnings: list[str],
 ) -> dict[str, float]:
     envelope = style.envelope.model_dump(by_alias=True) if style is not None else {}
+    envelope_scale = profile.envelope_scale if profile is not None else 1.0
     result = dict(values)
     for field, raw in intent.items():
         delta = cap_for_preferences(field, raw, preferences)
         if field in envelope:
-            limit = float(envelope[field])
+            limit = float(envelope[field]) * envelope_scale
             delta = clamp(delta, -limit, limit)
         result[field] = result[field] + delta
     for field, delta in style_intent.items():
@@ -233,7 +245,7 @@ def _apply_intent(
     if style is not None and envelope:
         for field in _ADJUSTMENT_FIELDS:
             if field in envelope:
-                limit = float(envelope[field])
+                limit = float(envelope[field]) * envelope_scale
                 delta = result[field] - values[field]
                 if abs(delta) > limit + 1e-9:
                     warnings.append(f"风格参数 {field} 超出包络，已限制。")
@@ -245,11 +257,12 @@ def _style_curve(
     current: CurveSet,
     style: StyleDefinition | None,
     strength: float,
+    mode: ConversionMode | None,
     warnings: list[str],
 ) -> CurveSet:
-    if style is None:
+    if style is None or mode is None:
         return current
-    points = style_curve_points(style.id, strength)
+    points = mode_curve_points(style.id, strength, mode)
     if not points:
         return current
     if current.master:
@@ -262,11 +275,12 @@ def _style_colour_grading(
     current: ColorGrading,
     style: StyleDefinition | None,
     strength: float,
+    mode: ConversionMode | None,
     warnings: list[str],
 ) -> ColorGrading:
-    if style is None:
+    if style is None or mode is None:
         return current
-    proposal = style_grading(style.id, strength)
+    proposal = mode_grading(style.id, strength, mode)
     if proposal is None:
         return current
     if not _is_neutral_grading(current):
@@ -293,6 +307,7 @@ def _merge_local_adjustments(
     draft: PlannerDraft,
     style: StyleDefinition | None,
     strength: float,
+    mode: ConversionMode | None,
     warnings: list[str],
 ) -> tuple[LocalAdjustment, ...]:
     available = available_mask_ids(base)
@@ -317,8 +332,8 @@ def _merge_local_adjustments(
             intents.append((intent.mask_id, delta))
 
     result = list(base.local_adjustments)
-    if style is not None:
-        style_delta = style_local_intent(style.id, strength)
+    if style is not None and mode is not None:
+        style_delta = mode_local_intent(style.id, strength, mode)
         if style_delta:
             # Styles reshape the masks the user already drew; the planner never adds one.
             if base.masks:

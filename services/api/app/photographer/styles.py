@@ -595,6 +595,17 @@ def blend_factor(field: str, strength: float) -> float:
     return _blend_factor(field, strength)
 
 
+def strength_factor(field: str, strength: float, *, identity: bool = False) -> float:
+    """Deterministic strength weight, reused when rescaling a stored intent."""
+    factor = _identity_factor(strength) if identity else _blend_factor(field, strength)
+    return factor
+
+
+def style_identity_fields(style_id: PhotographerStyleId) -> frozenset[str]:
+    """Fields that define a colour mode and therefore ramp at double speed."""
+    return frozenset(_STYLE_COLOR_MODE.get(style_id, {}))
+
+
 def _blend_factor(field: str, strength: float) -> float:
     strength = clamp(strength, 0.0, 1.0)
     if field == "exposureEv":
@@ -644,23 +655,35 @@ def style_adjustment_intent(
     return values
 
 
-def style_local_intent(style_id: PhotographerStyleId, strength: float) -> dict[str, float]:
+def style_local_intent(
+    style_id: PhotographerStyleId,
+    strength: float,
+    *,
+    scale: float = 1.0,
+) -> dict[str, float]:
     """Local deltas for masks the user already created; empty when the style has none."""
     if strength <= 0.0:
         return {}
     values: dict[str, float] = {}
     for field, raw in _LOCAL_STRATEGIES.get(style_id, {}).items():
-        rounded = round2(raw * _blend_factor(field, strength))
+        rounded = round2(raw * _blend_factor(field, strength) * scale)
         if abs(rounded) >= 0.005:
             values[field] = rounded
     return values
 
 
-def style_curve_points(style_id: PhotographerStyleId, strength: float) -> tuple[CurvePoint, ...]:
+def style_curve_points(
+    style_id: PhotographerStyleId,
+    strength: float,
+    *,
+    scale: float = 1.0,
+) -> tuple[CurvePoint, ...]:
     preset = _STYLE_CURVES.get(style_id)
     if preset is None or strength <= 0.0:
         return ()
-    amount = clamp(strength, 0.0, 1.0)
+    amount = clamp(strength * scale, 0.0, 1.0)
+    if amount <= 0.0:
+        return ()
     points: list[CurvePoint] = []
     for x, y in _CURVE_PRESETS[preset]:
         blended = x + (y - x) * amount
@@ -668,13 +691,19 @@ def style_curve_points(style_id: PhotographerStyleId, strength: float) -> tuple[
     return tuple(points)
 
 
-def style_grading(style_id: PhotographerStyleId, strength: float) -> ColorGrading | None:
-    if strength < _GRADING_THRESHOLD:
+def style_grading(
+    style_id: PhotographerStyleId,
+    strength: float,
+    *,
+    scale: float = 1.0,
+) -> ColorGrading | None:
+    adjusted = clamp(strength * scale, 0.0, 1.0)
+    if adjusted < _GRADING_THRESHOLD:
         return None
     spec = _STYLE_GRADING.get(style_id)
     if spec is None:
         return None
-    amount = (clamp(strength, 0.0, 1.0) - _GRADING_THRESHOLD) / (1.0 - _GRADING_THRESHOLD)
+    amount = (adjusted - _GRADING_THRESHOLD) / (1.0 - _GRADING_THRESHOLD)
     zones = {
         name: ColorGradeZone(hue=round2(hue), saturation=round2(saturation * amount))
         for name, (hue, saturation) in spec.items()
@@ -723,8 +752,10 @@ __all__ = [
     "blend_factor",
     "direction_for_scene",
     "get_style",
+    "strength_factor",
     "style_adjustment_intent",
     "style_curve_points",
     "style_grading",
+    "style_identity_fields",
     "style_local_intent",
 ]

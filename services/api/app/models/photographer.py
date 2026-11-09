@@ -23,6 +23,7 @@ from app.ai.contracts import (
     Text,
     UsageInfo,
 )
+from app.models.conversion import ConversionMode
 from app.models.recipe import (
     MASK_ID_PATTERN,
     EditRecipe,
@@ -167,6 +168,41 @@ class StyleDefinition(_PhotographerModel):
 
 class StyleListResponse(_PhotographerModel):
     styles: tuple[StyleDefinition, ...] = Field(default=(), max_length=32)
+
+
+class ConversionModeInfo(_PhotographerModel):
+    """Public description of what one conversion mode permits and protects."""
+
+    mode: ConversionMode
+    name: ShortName
+    description: Text
+    allowed_adjustments: tuple[str, ...] = Field(min_length=1, max_length=16)
+    forbidden_operations: tuple[Text, ...] = Field(min_length=1, max_length=8)
+    preservation_constraints: tuple[DirectionConstraint, ...] = Field(default=(), max_length=11)
+    recommended_strength_min: float = Field(ge=0.0, le=1.0)
+    recommended_strength_max: float = Field(ge=0.0, le=1.0)
+    recommended_strength_default: float = Field(ge=0.0, le=1.0)
+    envelope_scale: float = Field(gt=0.0, le=2.0)
+
+    @model_validator(mode="after")
+    def _ranges_and_values_are_consistent(self) -> Self:
+        if not (
+            self.recommended_strength_min
+            <= self.recommended_strength_default
+            <= self.recommended_strength_max
+        ):
+            raise ValueError("recommended strength must satisfy min <= default <= max.")
+        if len(set(self.allowed_adjustments)) != len(self.allowed_adjustments):
+            raise ValueError("allowedAdjustments must be unique.")
+        if len(set(self.forbidden_operations)) != len(self.forbidden_operations):
+            raise ValueError("forbiddenOperations must be unique.")
+        if len(set(self.preservation_constraints)) != len(self.preservation_constraints):
+            raise ValueError("preservationConstraints must be unique.")
+        return self
+
+
+class ConversionModeListResponse(_PhotographerModel):
+    modes: tuple[ConversionModeInfo, ...] = Field(min_length=1, max_length=3)
 
 
 class DiagnosisItem(_PhotographerModel):
@@ -328,6 +364,7 @@ class PhotographerPlanResponse(_PhotographerModel):
     style_id: PhotographerStyleId | None = None
     style_version: str | None = Field(default=None, min_length=1, max_length=16)
     style_strength: float | None = Field(default=None, ge=0.0, le=1.0)
+    conversion_mode: ConversionMode | None = None
     recipe: EditRecipe
     changes: tuple[ParameterChange, ...] = Field(default=(), max_length=MAX_CHANGES)
     warnings: tuple[Text, ...] = Field(default=(), max_length=MAX_NOTES)
@@ -560,6 +597,7 @@ class PhotographerPlanRequest(_PhotographerModel):
     mode: PlannerMode = PlannerMode.AUTO
     style_id: PhotographerStyleId | None = None
     style_strength: float | None = Field(default=None, ge=0.0, le=1.0)
+    conversion_mode: ConversionMode | None = None
     preferences: PhotographerPreferences = Field(default_factory=PhotographerPreferences)
 
     @model_validator(mode="after")
@@ -570,6 +608,8 @@ class PhotographerPlanRequest(_PhotographerModel):
             raise ValueError("styleId is only accepted when mode is 'style'.")
         if self.mode is PlannerMode.AUTO and self.style_strength is not None:
             raise ValueError("styleStrength is only accepted when mode is 'style'.")
+        if self.mode is PlannerMode.AUTO and self.conversion_mode is not None:
+            raise ValueError("conversionMode is only accepted when mode is 'style'.")
         return self
 
 
@@ -615,6 +655,9 @@ def canonical_evidence_refs(refs: object) -> object:
 __all__ = [
     "AdjustmentIntent",
     "ChangePath",
+    "ConversionMode",
+    "ConversionModeInfo",
+    "ConversionModeListResponse",
     "CreativeChoice",
     "CreativeChoiceType",
     "CreativeDirection",

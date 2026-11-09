@@ -9,6 +9,7 @@ from app.ai.contracts import SceneLabel
 from app.api.deps import get_photographer_service
 from app.models.photographer import (
     MAX_FEEDBACK_ROWS,
+    ConversionModeListResponse,
     CritiqueApplyRequest,
     CritiqueApplyResponse,
     CritiqueResponse,
@@ -68,6 +69,13 @@ def read_style(
     service: Annotated[PhotographerService, Depends(get_photographer_service)],
 ) -> StyleDefinition:
     return service.style_detail(style_id)
+
+
+@router.get("/conversion-modes", response_model=ConversionModeListResponse)
+def list_conversion_modes(
+    service: Annotated[PhotographerService, Depends(get_photographer_service)],
+) -> ConversionModeListResponse:
+    return service.list_conversion_modes()
 
 
 @router.post("/plan", response_model=PhotographerPlanResponse)

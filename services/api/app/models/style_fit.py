@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.ai.contracts import Text
+from app.models.conversion import ConversionMode
 from app.models.photographer import EvidenceReference, PhotographerStyleId, ShortName
 from app.models.style_profile import StyleKind, StyleProfileVersion
 
@@ -37,12 +38,6 @@ class FitLevel(StrEnum):
     MEDIUM = "medium"
     LOW = "low"
     UNSUITABLE = "unsuitable"
-
-
-class ConversionMode(StrEnum):
-    NATURAL = "natural"
-    STYLE = "style"
-    CREATIVE = "creative"
 
 
 class DimensionFit(_StyleFitModel):

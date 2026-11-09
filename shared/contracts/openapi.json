@@ -2770,6 +2770,97 @@
         }
       }
     },
+    "/api/v1/ai/photographer/conversion-modes": {
+      "get": {
+        "tags": [
+          "photographer"
+        ],
+        "summary": "List Conversion Modes",
+        "operationId": "list_conversion_modes_api_v1_ai_photographer_conversion_modes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversionModeListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session, analysis, plan, style, or feedback record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis required or report does not match the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload or generated recipe invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Plan or patch could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Planner returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Planner not configured, unavailable, or busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Planner timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/photographer/plan": {
       "post": {
         "tags": [
@@ -5554,7 +5645,114 @@
           "style",
           "creative"
         ],
-        "title": "ConversionMode"
+        "title": "ConversionMode",
+        "description": "How strongly a selected style may reshape the photograph."
+      },
+      "ConversionModeInfo": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/ConversionMode"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "allowedAdjustments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Allowedadjustments"
+          },
+          "forbiddenOperations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Forbiddenoperations"
+          },
+          "preservationConstraints": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionConstraint"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Preservationconstraints",
+            "default": []
+          },
+          "recommendedStrengthMin": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Recommendedstrengthmin"
+          },
+          "recommendedStrengthMax": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Recommendedstrengthmax"
+          },
+          "recommendedStrengthDefault": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Recommendedstrengthdefault"
+          },
+          "envelopeScale": {
+            "type": "number",
+            "maximum": 2.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Envelopescale"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "name",
+          "description",
+          "allowedAdjustments",
+          "forbiddenOperations",
+          "recommendedStrengthMin",
+          "recommendedStrengthMax",
+          "recommendedStrengthDefault",
+          "envelopeScale"
+        ],
+        "title": "ConversionModeInfo",
+        "description": "Public description of what one conversion mode permits and protects."
+      },
+      "ConversionModeListResponse": {
+        "properties": {
+          "modes": {
+            "items": {
+              "$ref": "#/components/schemas/ConversionModeInfo"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Modes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "modes"
+        ],
+        "title": "ConversionModeListResponse"
       },
       "CreateRevisionRequest": {
         "properties": {
@@ -8077,6 +8275,16 @@
             ],
             "title": "Stylestrength"
           },
+          "conversionMode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "preferences": {
             "$ref": "#/components/schemas/PhotographerPreferences"
           }
@@ -8174,6 +8382,16 @@
               }
             ],
             "title": "Stylestrength"
+          },
+          "conversionMode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "recipe": {
             "$ref": "#/components/schemas/EditRecipe"
