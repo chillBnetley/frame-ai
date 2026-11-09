@@ -5504,6 +5504,253 @@
         }
       }
     },
+    "/api/v1/personal-styles/{style_id}/analyze": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Analyze Personal Style References",
+        "operationId": "analyze_personal_style_references_api_v1_personal_styles__style_id__analyze_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalStyleAnalyzeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleAnalysisResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/analysis": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Read Personal Style Analysis",
+        "operationId": "read_personal_style_analysis_api_v1_personal_styles__style_id__analysis_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleAnalysisResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/references/{reference_id}/features": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Read Personal Style Reference Features",
+        "operationId": "read_personal_style_reference_features_api_v1_personal_styles__style_id__references__reference_id__features_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "reference_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Reference photo identifier.",
+              "title": "Reference Id"
+            },
+            "description": "Reference photo identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoVisualFeatures"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/personal-styles/{style_id}/versions": {
       "get": {
         "tags": [
@@ -8305,6 +8552,36 @@
         ],
         "title": "ExposureQuality"
       },
+      "FeatureCategory": {
+        "type": "string",
+        "enum": [
+          "color",
+          "tone",
+          "light",
+          "texture",
+          "scene",
+          "composition"
+        ],
+        "title": "FeatureCategory"
+      },
+      "FeatureOrigin": {
+        "type": "string",
+        "enum": [
+          "measurement",
+          "model",
+          "derived"
+        ],
+        "title": "FeatureOrigin",
+        "description": "Where a feature value came from, so objective and subjective data stay distinct."
+      },
+      "FeatureSeverity": {
+        "type": "string",
+        "enum": [
+          "info",
+          "warning"
+        ],
+        "title": "FeatureSeverity"
+      },
       "FeedbackAction": {
         "type": "string",
         "enum": [
@@ -9299,6 +9576,82 @@
         ],
         "title": "PersonalAvoidEffect"
       },
+      "PersonalStyleAnalysisResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleReferenceAnalysis"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "References",
+            "default": []
+          },
+          "completedCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Completedcount"
+          },
+          "totalCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Totalcount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "completedCount",
+          "totalCount"
+        ],
+        "title": "PersonalStyleAnalysisResponse"
+      },
+      "PersonalStyleAnalysisStatus": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "pending",
+          "processing",
+          "failed",
+          "missing",
+          "analysis_required"
+        ],
+        "title": "PersonalStyleAnalysisStatus"
+      },
+      "PersonalStyleAnalyzeRequest": {
+        "properties": {
+          "referenceIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referenceids"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonalStyleAnalyzeRequest"
+      },
       "PersonalStyleChangeSource": {
         "type": "string",
         "enum": [
@@ -9958,6 +10311,96 @@
         ],
         "title": "PersonalStyleReferenceAddRequest"
       },
+      "PersonalStyleReferenceAnalysis": {
+        "properties": {
+          "referenceId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Referenceid"
+          },
+          "imageId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PersonalStyleAnalysisStatus"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "analysisId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysisid"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "anomalyCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Anomalycount",
+            "default": 0
+          },
+          "featureAvailable": {
+            "type": "boolean",
+            "title": "Featureavailable",
+            "default": false
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "referenceId",
+          "status"
+        ],
+        "title": "PersonalStyleReferenceAnalysis"
+      },
       "PersonalStyleReferenceListResponse": {
         "properties": {
           "styleId": {
@@ -10247,6 +10690,627 @@
           "createdAt"
         ],
         "title": "PersonalStyleVersionSummary"
+      },
+      "PhotoColorFeatures": {
+        "properties": {
+          "temperatureOffset": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Temperatureoffset"
+          },
+          "tintOffset": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Tintoffset"
+          },
+          "saturationMean": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationmean"
+          },
+          "saturationP10": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationp10"
+          },
+          "saturationP50": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationp50"
+          },
+          "saturationP90": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationp90"
+          },
+          "saturationP95": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saturationp95"
+          },
+          "colorConcentration": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Colorconcentration"
+          },
+          "dominantColors": {
+            "items": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Dominantcolors",
+            "default": []
+          },
+          "hueDistribution": {
+            "items": {
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Huedistribution",
+            "default": []
+          },
+          "harmony": {
+            "$ref": "#/components/schemas/ColorHarmony",
+            "default": "unknown"
+          },
+          "tendency": {
+            "$ref": "#/components/schemas/ColorTemperature",
+            "default": "unknown"
+          },
+          "level": {
+            "$ref": "#/components/schemas/SaturationLevel",
+            "default": "unknown"
+          },
+          "monochrome": {
+            "type": "boolean",
+            "title": "Monochrome"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "temperatureOffset",
+          "tintOffset",
+          "saturationMean",
+          "saturationP10",
+          "saturationP50",
+          "saturationP90",
+          "saturationP95",
+          "colorConcentration",
+          "monochrome",
+          "confidence"
+        ],
+        "title": "PhotoColorFeatures"
+      },
+      "PhotoCompositionFeatures": {
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/CompositionBalance",
+            "default": "unknown"
+          },
+          "subjectPosition": {
+            "$ref": "#/components/schemas/SubjectPosition",
+            "default": "unknown"
+          },
+          "negativeSpace": {
+            "$ref": "#/components/schemas/NegativeSpace",
+            "default": "unknown"
+          },
+          "occlusion": {
+            "$ref": "#/components/schemas/Occlusion",
+            "default": "unknown"
+          },
+          "subjectAreaRatio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjectarearatio"
+          },
+          "horizonTiltDeg": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizontiltdeg"
+          },
+          "edgeDensityGrid": {
+            "items": {
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Edgedensitygrid",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confidence"
+        ],
+        "title": "PhotoCompositionFeatures"
+      },
+      "PhotoFeatureAnomaly": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          },
+          "category": {
+            "$ref": "#/components/schemas/FeatureCategory"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/FeatureSeverity",
+            "default": "warning"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Evidence",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "category",
+          "message"
+        ],
+        "title": "PhotoFeatureAnomaly"
+      },
+      "PhotoFeatureReading": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/FeatureCategory"
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z0-9.]{1,63}$",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "title": "Value"
+          },
+          "normalized": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": -1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Evidence",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/FeatureOrigin"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "key",
+          "label",
+          "value",
+          "description",
+          "confidence",
+          "origin",
+          "editable"
+        ],
+        "title": "PhotoFeatureReading",
+        "description": "One explainable feature value.\n\n``measurement`` readings are objective and read-only. ``model`` and\n``derived`` readings describe an interpretation and may be edited by the\nuser when they are promoted into a personal style."
+      },
+      "PhotoLightFeatures": {
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/LightingDirection",
+            "default": "unknown"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LightingType",
+            "default": "unknown"
+          },
+          "contrast": {
+            "$ref": "#/components/schemas/ContrastLevel",
+            "default": "unknown"
+          },
+          "softness": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Softness"
+          },
+          "directional": {
+            "type": "boolean",
+            "title": "Directional"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "softness",
+          "directional",
+          "confidence"
+        ],
+        "title": "PhotoLightFeatures"
+      },
+      "PhotoSceneFeatures": {
+        "properties": {
+          "primary": {
+            "$ref": "#/components/schemas/SceneLabel"
+          },
+          "secondary": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Secondary",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "primary",
+          "confidence"
+        ],
+        "title": "PhotoSceneFeatures"
+      },
+      "PhotoTextureFeatures": {
+        "properties": {
+          "sharpness": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Sharpness"
+          },
+          "noise": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Noise"
+          },
+          "gradientAnisotropy": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Gradientanisotropy"
+          },
+          "grainTendency": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Graintendency"
+          },
+          "detailRetention": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Detailretention"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sharpness",
+          "noise",
+          "gradientAnisotropy",
+          "grainTendency",
+          "detailRetention",
+          "confidence"
+        ],
+        "title": "PhotoTextureFeatures"
+      },
+      "PhotoToneFeatures": {
+        "properties": {
+          "luminanceMean": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Luminancemean"
+          },
+          "luminanceStd": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Luminancestd"
+          },
+          "luminanceP5": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Luminancep5"
+          },
+          "luminanceP50": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Luminancep50"
+          },
+          "luminanceP95": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Luminancep95"
+          },
+          "highlightsPct": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Highlightspct"
+          },
+          "shadowsPct": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Shadowspct"
+          },
+          "contrastStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Contraststrength"
+          },
+          "highKey": {
+            "type": "boolean",
+            "title": "Highkey"
+          },
+          "lowKey": {
+            "type": "boolean",
+            "title": "Lowkey"
+          },
+          "lowLight": {
+            "type": "boolean",
+            "title": "Lowlight"
+          },
+          "contrastLevel": {
+            "$ref": "#/components/schemas/ContrastLevel",
+            "default": "unknown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "luminanceMean",
+          "luminanceStd",
+          "luminanceP5",
+          "luminanceP50",
+          "luminanceP95",
+          "highlightsPct",
+          "shadowsPct",
+          "contrastStrength",
+          "highKey",
+          "lowKey",
+          "lowLight"
+        ],
+        "title": "PhotoToneFeatures"
+      },
+      "PhotoVisualFeatures": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "visual-dna-photo/1",
+            "title": "Schemaversion",
+            "default": "visual-dna-photo/1"
+          },
+          "extractorVersion": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Extractorversion"
+          },
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "imageSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Imagesha256"
+          },
+          "analysisId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analysisid"
+          },
+          "analyzedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Analyzedat"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "overallConfidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overallconfidence"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/PhotoSceneFeatures"
+          },
+          "color": {
+            "$ref": "#/components/schemas/PhotoColorFeatures"
+          },
+          "tone": {
+            "$ref": "#/components/schemas/PhotoToneFeatures"
+          },
+          "light": {
+            "$ref": "#/components/schemas/PhotoLightFeatures"
+          },
+          "texture": {
+            "$ref": "#/components/schemas/PhotoTextureFeatures"
+          },
+          "composition": {
+            "$ref": "#/components/schemas/PhotoCompositionFeatures"
+          },
+          "readings": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoFeatureReading"
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "Readings",
+            "default": []
+          },
+          "anomalies": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoFeatureAnomaly"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Anomalies",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Limitations",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "extractorVersion",
+          "imageId",
+          "imageSha256",
+          "analysisId",
+          "analyzedAt",
+          "isMock",
+          "overallConfidence",
+          "scene",
+          "color",
+          "tone",
+          "light",
+          "texture",
+          "composition"
+        ],
+        "title": "PhotoVisualFeatures"
       },
       "PhotographerCritiqueRequest": {
         "properties": {

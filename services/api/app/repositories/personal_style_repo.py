@@ -15,6 +15,7 @@ from app.models.personal_style import (
     PersonalStyleSource,
     PersonalStyleStatus,
 )
+from app.models.visual_dna import PhotoVisualFeatures
 from app.repositories.db import connect, utc_now
 
 
@@ -36,6 +37,10 @@ class PersonalStyleVersionConflictError(ValueError):
 
 class PersonalStyleReferenceNotFoundError(LookupError):
     """The requested reference photo does not belong to this personal style."""
+
+
+class PersonalStyleFeatureMismatchError(ValueError):
+    """The extracted features do not belong to the reference photo."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -520,6 +525,190 @@ class SqlitePersonalStyleRepository:
             connection.close()
         return [_reference_from_row(row) for row in rows]
 
+    def get_reference(
+        self,
+        style_id: str,
+        reference_id: str,
+        *,
+        owner_id: str,
+    ) -> PersonalStyleReference | None:
+        connection = connect(self._path)
+        try:
+            if not self._owns(connection, style_id, owner_id):
+                return None
+            row = connection.execute(
+                "SELECT * FROM personal_style_reference WHERE id = ? AND style_id = ?",
+                (reference_id, style_id),
+            ).fetchone()
+        finally:
+            connection.close()
+        return _reference_from_row(row) if row is not None else None
+
+    def set_reference_analysis(
+        self,
+        style_id: str,
+        reference_id: str,
+        *,
+        owner_id: str,
+        analysis_id: str,
+    ) -> None:
+        connection = connect(self._path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            if not self._owns(connection, style_id, owner_id):
+                raise PersonalStyleNotFoundError(
+                    f"personal style '{style_id}' does not exist for this owner"
+                )
+            cursor = connection.execute(
+                "UPDATE personal_style_reference SET analysis_id = ? "
+                "WHERE id = ? AND style_id = ?",
+                (analysis_id, reference_id, style_id),
+            )
+            if cursor.rowcount == 0:
+                raise PersonalStyleReferenceNotFoundError(
+                    f"reference '{reference_id}' does not belong to '{style_id}'"
+                )
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def mark_reference_missing(
+        self,
+        style_id: str,
+        reference_id: str,
+        *,
+        owner_id: str,
+    ) -> None:
+        connection = connect(self._path)
+        try:
+            if not self._owns(connection, style_id, owner_id):
+                raise PersonalStyleNotFoundError(
+                    f"personal style '{style_id}' does not exist for this owner"
+                )
+            connection.execute(
+                "UPDATE personal_style_reference SET status = 'missing' "
+                "WHERE id = ? AND style_id = ?",
+                (reference_id, style_id),
+            )
+        finally:
+            connection.close()
+
+    def upsert_feature(
+        self,
+        style_id: str,
+        reference_id: str,
+        *,
+        owner_id: str,
+        features: PhotoVisualFeatures,
+    ) -> None:
+        connection = connect(self._path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            if not self._owns(connection, style_id, owner_id):
+                raise PersonalStyleNotFoundError(
+                    f"personal style '{style_id}' does not exist for this owner"
+                )
+            reference = connection.execute(
+                "SELECT image_sha256 FROM personal_style_reference "
+                "WHERE id = ? AND style_id = ?",
+                (reference_id, style_id),
+            ).fetchone()
+            if reference is None:
+                raise PersonalStyleReferenceNotFoundError(
+                    f"reference '{reference_id}' does not belong to '{style_id}'"
+                )
+            if str(reference["image_sha256"]) != features.image_sha256:
+                raise PersonalStyleFeatureMismatchError(
+                    "extracted features do not belong to the reference photo"
+                )
+            connection.execute(
+                "INSERT INTO personal_style_photo_feature "
+                "(reference_id, style_id, image_sha256, analysis_id, extractor_version, "
+                " features_json, confidence, is_mock, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(reference_id) DO UPDATE SET "
+                " image_sha256 = excluded.image_sha256, "
+                " analysis_id = excluded.analysis_id, "
+                " extractor_version = excluded.extractor_version, "
+                " features_json = excluded.features_json, "
+                " confidence = excluded.confidence, "
+                " is_mock = excluded.is_mock, "
+                " created_at = excluded.created_at",
+                (
+                    reference_id,
+                    style_id,
+                    features.image_sha256,
+                    str(features.analysis_id),
+                    features.extractor_version,
+                    features.model_dump_json(by_alias=True),
+                    features.overall_confidence,
+                    int(features.is_mock),
+                    utc_now(),
+                ),
+            )
+            connection.execute(
+                "UPDATE personal_style_reference SET analysis_id = ? "
+                "WHERE id = ? AND style_id = ?",
+                (str(features.analysis_id), reference_id, style_id),
+            )
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def get_feature(
+        self,
+        style_id: str,
+        reference_id: str,
+        *,
+        owner_id: str,
+    ) -> PhotoVisualFeatures | None:
+        connection = connect(self._path)
+        try:
+            if not self._owns(connection, style_id, owner_id):
+                return None
+            row = connection.execute(
+                "SELECT f.features_json AS features_json "
+                "FROM personal_style_photo_feature f "
+                "JOIN personal_style_reference r ON r.id = f.reference_id "
+                "WHERE f.reference_id = ? AND f.style_id = ? AND r.style_id = ?",
+                (reference_id, style_id, style_id),
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is None:
+            return None
+        return PhotoVisualFeatures.model_validate_json(str(row["features_json"]))
+
+    def list_features(
+        self,
+        style_id: str,
+        *,
+        owner_id: str,
+    ) -> dict[str, PhotoVisualFeatures]:
+        connection = connect(self._path)
+        try:
+            if not self._owns(connection, style_id, owner_id):
+                return {}
+            rows = connection.execute(
+                "SELECT reference_id, features_json FROM personal_style_photo_feature "
+                "WHERE style_id = ?",
+                (style_id,),
+            ).fetchall()
+        finally:
+            connection.close()
+        return {
+            str(row["reference_id"]): PhotoVisualFeatures.model_validate_json(
+                str(row["features_json"])
+            )
+            for row in rows
+        }
+
     def remove_reference(
         self,
         style_id: str,
@@ -571,6 +760,7 @@ __all__ = [
     "DeletionStatus",
     "DuplicatePersonalStyleIdError",
     "DuplicatePersonalStyleNameError",
+    "PersonalStyleFeatureMismatchError",
     "PersonalStyleHead",
     "PersonalStyleListItemRecord",
     "PersonalStyleNotFoundError",

@@ -5,7 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 
-from app.api.deps import get_owner_scope, get_personal_style_service
+from app.api.deps import (
+    get_owner_scope,
+    get_personal_style_analysis_service,
+    get_personal_style_service,
+)
 from app.core.identity import OwnerScope
 from app.models.personal_style import (
     PersonalStyleCompareResponse,
@@ -25,6 +29,12 @@ from app.models.personal_style import (
 )
 from app.models.schemas import ErrorResponse
 from app.models.style_profile import StyleProfileVersion
+from app.models.visual_dna import (
+    PersonalStyleAnalysisResponse,
+    PersonalStyleAnalyzeRequest,
+    PhotoVisualFeatures,
+)
+from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -166,6 +176,51 @@ def remove_personal_style_reference(
 ) -> Response:
     service.remove_reference(style_id, str(reference_id), owner_id=owner.owner_id)
     return Response(status_code=204)
+
+
+@router.post(
+    "/{style_id}/analyze",
+    response_model=PersonalStyleAnalysisResponse,
+    status_code=202,
+)
+def analyze_personal_style_references(
+    style_id: _StylePath,
+    payload: PersonalStyleAnalyzeRequest,
+    service: Annotated[
+        PersonalStyleAnalysisService,
+        Depends(get_personal_style_analysis_service),
+    ],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> PersonalStyleAnalysisResponse:
+    return service.analyze(style_id, payload, owner_id=owner.owner_id)
+
+
+@router.get("/{style_id}/analysis", response_model=PersonalStyleAnalysisResponse)
+def read_personal_style_analysis(
+    style_id: _StylePath,
+    service: Annotated[
+        PersonalStyleAnalysisService,
+        Depends(get_personal_style_analysis_service),
+    ],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> PersonalStyleAnalysisResponse:
+    return service.status(style_id, owner_id=owner.owner_id)
+
+
+@router.get(
+    "/{style_id}/references/{reference_id}/features",
+    response_model=PhotoVisualFeatures,
+)
+def read_personal_style_reference_features(
+    style_id: _StylePath,
+    reference_id: _ReferencePath,
+    service: Annotated[
+        PersonalStyleAnalysisService,
+        Depends(get_personal_style_analysis_service),
+    ],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> PhotoVisualFeatures:
+    return service.features(style_id, str(reference_id), owner_id=owner.owner_id)
 
 
 @router.get("/{style_id}/versions", response_model=PersonalStyleVersionListResponse)

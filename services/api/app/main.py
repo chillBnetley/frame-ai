@@ -41,6 +41,7 @@ from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
+from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
 from app.services.preview_store import PreviewStore
 from app.services.provider_settings_service import ProviderSettingsService
@@ -140,9 +141,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             images=service,
             analysis=analysis_tasks,
         )
+        personal_styles = SqlitePersonalStyleRepository(resolved_settings.database_path)
         personal_style_service = PersonalStyleService(
-            SqlitePersonalStyleRepository(resolved_settings.database_path),
+            personal_styles,
             images=service,
+            analysis=analysis_tasks,
+        )
+        personal_style_analysis_service = PersonalStyleAnalysisService(
+            personal_styles,
             analysis=analysis_tasks,
         )
 
@@ -167,6 +173,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.style_library_service = style_library_service
         app.state.style_matching_service = style_matching_service
         app.state.personal_style_service = personal_style_service
+        app.state.personal_style_analysis_service = personal_style_analysis_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,

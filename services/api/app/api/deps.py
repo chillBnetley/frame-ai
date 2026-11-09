@@ -12,6 +12,7 @@ from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
 from app.services.image_service import ImageService
+from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
 from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
@@ -112,6 +113,17 @@ def get_personal_style_service(request: Request) -> PersonalStyleService:
             503,
             "personal_style_unavailable",
             "The personal style service is not available.",
+        )
+    return service
+
+
+def get_personal_style_analysis_service(request: Request) -> PersonalStyleAnalysisService:
+    service = getattr(request.app.state, "personal_style_analysis_service", None)
+    if not isinstance(service, PersonalStyleAnalysisService):
+        raise AppError(
+            503,
+            "personal_style_unavailable",
+            "The personal style analysis service is not available.",
         )
     return service
 

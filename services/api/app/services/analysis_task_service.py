@@ -217,6 +217,11 @@ class AnalysisTaskService:
                 exc.message,
             ) from None
 
+    def record(self, task_id: str) -> AnalysisTaskRecord:
+        """Return the lightweight task row without loading the report payload."""
+
+        return self._require(task_id)
+
     def status(self, task_id: str) -> AnalysisTaskStatusResponse:
         task = self._require(task_id)
         stored = (

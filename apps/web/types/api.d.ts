@@ -903,6 +903,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/personal-styles/{style_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze Personal Style References */
+        post: operations["analyze_personal_style_references_api_v1_personal_styles__style_id__analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal-styles/{style_id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Personal Style Analysis */
+        get: operations["read_personal_style_analysis_api_v1_personal_styles__style_id__analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal-styles/{style_id}/references/{reference_id}/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Personal Style Reference Features */
+        get: operations["read_personal_style_reference_features_api_v1_personal_styles__style_id__references__reference_id__features_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/personal-styles/{style_id}/versions": {
         parameters: {
             query?: never;
@@ -1966,6 +2017,22 @@ export interface components {
          */
         ExposureQuality: "underexposed" | "slightly_underexposed" | "balanced" | "slightly_overexposed" | "overexposed" | "unknown";
         /**
+         * FeatureCategory
+         * @enum {string}
+         */
+        FeatureCategory: "color" | "tone" | "light" | "texture" | "scene" | "composition";
+        /**
+         * FeatureOrigin
+         * @description Where a feature value came from, so objective and subjective data stay distinct.
+         * @enum {string}
+         */
+        FeatureOrigin: "measurement" | "model" | "derived";
+        /**
+         * FeatureSeverity
+         * @enum {string}
+         */
+        FeatureSeverity: "info" | "warning";
+        /**
          * FeedbackAction
          * @enum {string}
          */
@@ -2359,6 +2426,35 @@ export interface components {
          * @enum {string}
          */
         PersonalAvoidEffect: "oversaturated" | "crushed_blacks" | "clipped_highlights" | "color_cast" | "unnatural_skin" | "heavy_filter" | "over_sharpened" | "flat_contrast";
+        /** PersonalStyleAnalysisResponse */
+        PersonalStyleAnalysisResponse: {
+            /** Styleid */
+            styleId: string;
+            /**
+             * References
+             * @default []
+             */
+            references: components["schemas"]["PersonalStyleReferenceAnalysis"][];
+            /** Completedcount */
+            completedCount: number;
+            /** Totalcount */
+            totalCount: number;
+        };
+        /**
+         * PersonalStyleAnalysisStatus
+         * @enum {string}
+         */
+        PersonalStyleAnalysisStatus: "completed" | "pending" | "processing" | "failed" | "missing" | "analysis_required";
+        /** PersonalStyleAnalyzeRequest */
+        PersonalStyleAnalyzeRequest: {
+            /** Referenceids */
+            referenceIds?: string[] | null;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
         /**
          * PersonalStyleChangeSource
          * @enum {string}
@@ -2657,6 +2753,34 @@ export interface components {
             /** Consent */
             consent: boolean;
         };
+        /** PersonalStyleReferenceAnalysis */
+        PersonalStyleReferenceAnalysis: {
+            /**
+             * Referenceid
+             * Format: uuid
+             */
+            referenceId: string;
+            /** Imageid */
+            imageId?: string | null;
+            status: components["schemas"]["PersonalStyleAnalysisStatus"];
+            stage?: components["schemas"]["TaskStage"] | null;
+            /** Analysisid */
+            analysisId?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Anomalycount
+             * @default 0
+             */
+            anomalyCount: number;
+            /**
+             * Featureavailable
+             * @default false
+             */
+            featureAvailable: boolean;
+            /** Error */
+            error?: string | null;
+        };
         /** PersonalStyleReferenceListResponse */
         PersonalStyleReferenceListResponse: {
             /** Styleid */
@@ -2748,6 +2872,234 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+        };
+        /** PhotoColorFeatures */
+        PhotoColorFeatures: {
+            /** Temperatureoffset */
+            temperatureOffset: number;
+            /** Tintoffset */
+            tintOffset: number;
+            /** Saturationmean */
+            saturationMean: number;
+            /** Saturationp10 */
+            saturationP10: number;
+            /** Saturationp50 */
+            saturationP50: number;
+            /** Saturationp90 */
+            saturationP90: number;
+            /** Saturationp95 */
+            saturationP95: number;
+            /** Colorconcentration */
+            colorConcentration: number;
+            /**
+             * Dominantcolors
+             * @default []
+             */
+            dominantColors: string[];
+            /**
+             * Huedistribution
+             * @default []
+             */
+            hueDistribution: number[];
+            /** @default unknown */
+            harmony: components["schemas"]["ColorHarmony"];
+            /** @default unknown */
+            tendency: components["schemas"]["ColorTemperature"];
+            /** @default unknown */
+            level: components["schemas"]["SaturationLevel"];
+            /** Monochrome */
+            monochrome: boolean;
+            /** Confidence */
+            confidence: number;
+        };
+        /** PhotoCompositionFeatures */
+        PhotoCompositionFeatures: {
+            /** @default unknown */
+            balance: components["schemas"]["CompositionBalance"];
+            /** @default unknown */
+            subjectPosition: components["schemas"]["SubjectPosition"];
+            /** @default unknown */
+            negativeSpace: components["schemas"]["NegativeSpace"];
+            /** @default unknown */
+            occlusion: components["schemas"]["Occlusion"];
+            /** Subjectarearatio */
+            subjectAreaRatio?: number | null;
+            /** Horizontiltdeg */
+            horizonTiltDeg?: number | null;
+            /**
+             * Edgedensitygrid
+             * @default []
+             */
+            edgeDensityGrid: number[];
+            /** Confidence */
+            confidence: number;
+        };
+        /** PhotoFeatureAnomaly */
+        PhotoFeatureAnomaly: {
+            /** Code */
+            code: string;
+            category: components["schemas"]["FeatureCategory"];
+            /** @default warning */
+            severity: components["schemas"]["FeatureSeverity"];
+            /** Message */
+            message: string;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: string[];
+        };
+        /**
+         * PhotoFeatureReading
+         * @description One explainable feature value.
+         *
+         *     ``measurement`` readings are objective and read-only. ``model`` and
+         *     ``derived`` readings describe an interpretation and may be edited by the
+         *     user when they are promoted into a personal style.
+         */
+        PhotoFeatureReading: {
+            category: components["schemas"]["FeatureCategory"];
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Value */
+            value: number | string | boolean;
+            /** Normalized */
+            normalized?: number | null;
+            /** Description */
+            description: string;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: string[];
+            /** Confidence */
+            confidence: number;
+            origin: components["schemas"]["FeatureOrigin"];
+            /** Editable */
+            editable: boolean;
+        };
+        /** PhotoLightFeatures */
+        PhotoLightFeatures: {
+            /** @default unknown */
+            direction: components["schemas"]["LightingDirection"];
+            /** @default unknown */
+            type: components["schemas"]["LightingType"];
+            /** @default unknown */
+            contrast: components["schemas"]["ContrastLevel"];
+            /** Softness */
+            softness: number;
+            /** Directional */
+            directional: boolean;
+            /** Confidence */
+            confidence: number;
+        };
+        /** PhotoSceneFeatures */
+        PhotoSceneFeatures: {
+            primary: components["schemas"]["SceneLabel"];
+            /**
+             * Secondary
+             * @default []
+             */
+            secondary: components["schemas"]["SceneLabel"][];
+            /** Confidence */
+            confidence: number;
+        };
+        /** PhotoTextureFeatures */
+        PhotoTextureFeatures: {
+            /** Sharpness */
+            sharpness: number;
+            /** Noise */
+            noise: number;
+            /** Gradientanisotropy */
+            gradientAnisotropy: number;
+            /** Graintendency */
+            grainTendency: number;
+            /** Detailretention */
+            detailRetention: number;
+            /** Confidence */
+            confidence: number;
+        };
+        /** PhotoToneFeatures */
+        PhotoToneFeatures: {
+            /** Luminancemean */
+            luminanceMean: number;
+            /** Luminancestd */
+            luminanceStd: number;
+            /** Luminancep5 */
+            luminanceP5: number;
+            /** Luminancep50 */
+            luminanceP50: number;
+            /** Luminancep95 */
+            luminanceP95: number;
+            /** Highlightspct */
+            highlightsPct: number;
+            /** Shadowspct */
+            shadowsPct: number;
+            /** Contraststrength */
+            contrastStrength: number;
+            /** Highkey */
+            highKey: boolean;
+            /** Lowkey */
+            lowKey: boolean;
+            /** Lowlight */
+            lowLight: boolean;
+            /** @default unknown */
+            contrastLevel: components["schemas"]["ContrastLevel"];
+        };
+        /** PhotoVisualFeatures */
+        PhotoVisualFeatures: {
+            /**
+             * Schemaversion
+             * @default visual-dna-photo/1
+             * @constant
+             */
+            schemaVersion: "visual-dna-photo/1";
+            /** Extractorversion */
+            extractorVersion: string;
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            /** Imagesha256 */
+            imageSha256: string;
+            /**
+             * Analysisid
+             * Format: uuid
+             */
+            analysisId: string;
+            /**
+             * Analyzedat
+             * Format: date-time
+             */
+            analyzedAt: string;
+            /** Ismock */
+            isMock: boolean;
+            /** Overallconfidence */
+            overallConfidence: number;
+            scene: components["schemas"]["PhotoSceneFeatures"];
+            color: components["schemas"]["PhotoColorFeatures"];
+            tone: components["schemas"]["PhotoToneFeatures"];
+            light: components["schemas"]["PhotoLightFeatures"];
+            texture: components["schemas"]["PhotoTextureFeatures"];
+            composition: components["schemas"]["PhotoCompositionFeatures"];
+            /**
+             * Readings
+             * @default []
+             */
+            readings: components["schemas"]["PhotoFeatureReading"][];
+            /**
+             * Anomalies
+             * @default []
+             */
+            anomalies: components["schemas"]["PhotoFeatureAnomaly"][];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
         };
         /** PhotographerCritiqueRequest */
         PhotographerCritiqueRequest: {
@@ -8276,6 +8628,189 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    analyze_personal_style_references_api_v1_personal_styles__style_id__analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalStyleAnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalStyleAnalysisResponse"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_personal_style_analysis_api_v1_personal_styles__style_id__analysis_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalStyleAnalysisResponse"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_personal_style_reference_features_api_v1_personal_styles__style_id__references__reference_id__features_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+                /** @description Reference photo identifier. */
+                reference_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoVisualFeatures"];
+                };
             };
             /** @description Personal style, version, or reference photo not found */
             404: {
