@@ -14,10 +14,16 @@ from app.ai.base import PatchRequest, PlannerRequest
 from app.ai.contracts import AnalysisOptions
 from app.ai.errors import ProviderError
 from app.ai.prompts import PLANNER_PROMPT_VERSION
+from app.ai.providers.mock import MockPlannerProvider
 from app.core.config import Settings
 from app.main import create_app
 from app.models.analysis_task import AnalysisTaskRecord, TaskStage, TaskStatus
-from app.models.photographer import PatchDraft, PlannerDraft
+from app.models.photographer import (
+    AdjustmentIntent,
+    LocalAdjustmentIntent,
+    PatchDraft,
+    PlannerDraft,
+)
 from app.models.recipe import EditRecipe, recipe_hash
 from app.repositories.analysis_repo import SqliteAnalysisRepository
 from app.repositories.db import connect
@@ -44,6 +50,27 @@ class FailingPlanner:
     def check_connection(self, *, timeout: float | None = None) -> int:
         del timeout
         raise self.error
+
+
+class BadMaskPlanner(MockPlannerProvider):
+    """Simulates a model inventing a mask that the recipe never contained."""
+
+    name = "bad-mask"
+    model = "bad-mask-model"
+    is_mock = False
+
+    def plan(self, request: PlannerRequest) -> PlannerDraft:
+        draft = super().plan(request)
+        return draft.model_copy(
+            update={
+                "local_adjustments": (
+                    LocalAdjustmentIntent(
+                        mask_id="mask_invented",
+                        adjustments=AdjustmentIntent(exposure_ev=0.2),
+                    ),
+                )
+            }
+        )
 
 
 def _settings(tmp_path: Path, *, semantic_masks: bool = False) -> Settings:
@@ -702,3 +729,66 @@ def test_accepting_a_plan_rejects_a_stale_base_revision(plan_client: TestClient)
     )
     assert stale.status_code == 409, stale.text
     assert stale.json()["error"]["code"] == "plan_base_mismatch"
+    session = plan_client.get(f"/api/v1/sessions/{session_id}").json()
+    assert session["activeRevisionId"] == new_head
+    assert session["headRevisionId"] == new_head
+    history = plan_client.get(f"/api/v1/sessions/{session_id}/revisions").json()
+    assert len(history["items"]) == 2
+
+
+def test_invented_mask_is_rejected_and_a_valid_plan_is_returned(plan_client: TestClient):
+    payload = make_image("PNG", (96, 64), (120, 80, 40))
+    uploaded = upload(plan_client, payload)
+    image_id = str(uploaded.json()["imageId"])
+    session_id = str(
+        plan_client.post("/api/v1/sessions", json={"imageId": image_id}).json()["sessionId"]
+    )
+    analysis_id = _analyze(plan_client, image_id)
+    plan_client.app.state.photographer_service.update_planner(BadMaskPlanner())
+
+    response = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "environmental_portrait",
+            "styleStrength": 0.6,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["degraded"] is True
+    assert body["recipe"]["localAdjustments"] == []
+    assert all(
+        mask["id"] in {"full"} or mask["id"].startswith("mask_") for mask in body["recipe"]["masks"]
+    )
+    original = plan_client.get(f"/api/v1/images/{image_id}/original")
+    assert original.status_code == 200
+    assert original.content == payload
+
+
+def test_repeated_generation_is_stable_for_the_same_inputs(plan_client: TestClient):
+    image_id, session_id = _prepare(plan_client)
+    analysis_id = _analyze(plan_client, image_id)
+    request = {
+        "sessionId": session_id,
+        "analysisId": analysis_id,
+        "mode": "style",
+        "styleId": "environmental_portrait",
+        "styleStrength": 0.6,
+        "conversionMode": "style",
+    }
+
+    first = plan_client.post("/api/v1/ai/photographer/plan", json=request)
+    second = plan_client.post("/api/v1/ai/photographer/plan", json=request)
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    first_body = first.json()
+    second_body = second.json()
+    assert first_body["planId"] != second_body["planId"]
+    assert first_body["baseRevisionId"] == second_body["baseRevisionId"]
+    assert first_body["recipe"] == second_body["recipe"]
+    assert first_body["changes"] == second_body["changes"]

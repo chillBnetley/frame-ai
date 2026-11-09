@@ -216,7 +216,7 @@ def _apply_constraints(
 
 def _saturation_hint(profile: StyleProfile) -> float | None:
     text = f"{profile.color.tendency}{profile.color.saturation}"
-    if any(word in text for word in ("黑白", "单色", "去饱和")):
+    if any(phrase in text for phrase in ("完全去饱和", "去饱和至单色", "纯黑白", "黑白影调")):
         return -100.0
     if "低饱和" in text:
         return -12.0
