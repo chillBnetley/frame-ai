@@ -20,7 +20,24 @@ def _new_session(client: TestClient) -> dict[str, object]:
     image_id = str(response.json()["imageId"])
     created = client.post("/api/v1/sessions", json={"imageId": image_id})
     assert created.status_code == 201, created.text
-    return created.json()
+    session = created.json()
+    session["maskId"] = _create_edit_mask(client, str(session["sessionId"]))
+    return session
+
+
+def _create_edit_mask(client: TestClient, session_id: str) -> str:
+    response = client.post(
+        "/api/v1/generative/masks",
+        json={
+            "sessionId": session_id,
+            "kind": "rect",
+            "definition": {
+                "region": {"x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5},
+            },
+        },
+    )
+    assert response.status_code == 201, response.text
+    return str(response.json()["maskId"])
 
 
 def _create_task(
@@ -29,6 +46,7 @@ def _create_task(
     *,
     instruction: str = "warm the scene slightly",
     idempotency_key: str | None = None,
+    mask_id: str | None = None,
 ):
     headers = {} if idempotency_key is None else {"Idempotency-Key": idempotency_key}
     return client.post(
@@ -37,6 +55,7 @@ def _create_task(
             "sessionId": session["sessionId"],
             "taskType": "local_edit",
             "instruction": instruction,
+            "maskId": mask_id or str(session["maskId"]),
             "params": {"candidates": 1},
         },
         headers=headers,

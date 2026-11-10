@@ -4,6 +4,7 @@ import hashlib
 from io import BytesIO
 
 import numpy as np
+from numpy.typing import NDArray
 from PIL import Image, ImageOps
 
 from app.ai.generative import (
@@ -17,11 +18,18 @@ from app.ai.generative import (
 from app.ai.generative import (
     validate_spec as validate_capability_spec,
 )
+from app.imaging.generative_local_edit import simulate_local_repaint
 from app.imaging.generative_removal import simulate_object_removal
 from app.imaging.output import encode_image
 from app.models.generative import GenerativeTaskType
 
 _MOCK_RETENTION = "Mock provider runs in-process and sends no pixels off this machine."
+
+_MASK_REQUIRED_TASK_TYPES = (
+    GenerativeTaskType.OUTPAINT,
+    GenerativeTaskType.REMOVE,
+    GenerativeTaskType.LOCAL_EDIT,
+)
 
 
 class MockGenerativeProvider:
@@ -64,13 +72,18 @@ class MockGenerativeProvider:
                 "generative_invalid_input",
                 "The input image is empty.",
             )
-        if (
-            request.task_type in (GenerativeTaskType.OUTPAINT, GenerativeTaskType.REMOVE)
-            and request.image.mask is None
-        ):
+        if request.task_type in _MASK_REQUIRED_TASK_TYPES and request.image.mask is None:
             raise GenerativeProviderError(
                 "generative_invalid_input",
                 f"{request.task_type.value} requests require a mask.",
+            )
+        if (
+            request.task_type == GenerativeTaskType.LOCAL_EDIT
+            and not request.instruction.strip()
+        ):
+            raise GenerativeProviderError(
+                "generative_invalid_input",
+                "local_edit requests require a non-empty instruction.",
             )
         raw_candidates = request.params.get("candidates", 1)
         candidates = (
@@ -115,19 +128,32 @@ class MockGenerativeProvider:
     def check_connection(self, *, timeout: float | None = None) -> int:
         return 0
 
+    def _decode_mask(
+        self, request: GenerativeRequest, width: int, height: int
+    ) -> NDArray[np.uint8]:
+        if request.image.mask is None:
+            raise GenerativeProviderError("generative_invalid_input", "No mask was supplied.")
+        with Image.open(BytesIO(request.image.mask)) as opened_mask:
+            mask = opened_mask.convert("L")
+            if mask.size != (width, height):
+                mask = mask.resize((width, height), Image.Resampling.NEAREST)
+            return np.asarray(mask, dtype=np.uint8)
+
     def _render(self, request: GenerativeRequest) -> GeneratedImage:
         with Image.open(BytesIO(request.image.data)) as opened:
             image = ImageOps.exif_transpose(opened).convert("RGB")
         width, height = image.size
 
-        if request.task_type == GenerativeTaskType.REMOVE and request.image.mask is not None:
-            with Image.open(BytesIO(request.image.mask)) as opened_mask:
-                mask_obj = opened_mask.convert("L")
-                if mask_obj.size != (width, height):
-                    mask_obj = mask_obj.resize((width, height), Image.Resampling.NEAREST)
-                mask_array = np.asarray(mask_obj, dtype=np.uint8)
+        if (
+            request.task_type in (GenerativeTaskType.REMOVE, GenerativeTaskType.LOCAL_EDIT)
+            and request.image.mask is not None
+        ):
+            mask_array = self._decode_mask(request, width, height)
             source_u8 = np.asarray(image, dtype=np.uint8)
-            pixels = simulate_object_removal(source_u8, mask_array)
+            if request.task_type == GenerativeTaskType.REMOVE:
+                pixels = simulate_object_removal(source_u8, mask_array)
+            else:
+                pixels = simulate_local_repaint(source_u8, mask_array, request.instruction)
             data = encode_image(pixels, image_format="png")
             return GeneratedImage(
                 data=data,
@@ -156,11 +182,8 @@ class MockGenerativeProvider:
         generated += ((checker - np.float32(0.5)) * np.float32(18.0))[..., None]
 
         if request.image.mask is not None:
-            with Image.open(BytesIO(request.image.mask)) as opened_mask:
-                mask = opened_mask.convert("L")
-                if mask.size != (width, height):
-                    mask = mask.resize((width, height), Image.Resampling.NEAREST)
-                alpha = np.asarray(mask, dtype=np.float32) / np.float32(255.0)
+            mask_array = self._decode_mask(request, width, height)
+            alpha = mask_array.astype(np.float32) / np.float32(255.0)
             generated = source * (np.float32(1.0) - alpha[..., None]) + generated * alpha[..., None]
 
         pixels = np.clip(np.rint(generated), 0.0, 255.0).astype(np.uint8)

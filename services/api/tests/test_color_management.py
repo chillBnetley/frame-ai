@@ -640,6 +640,7 @@ def test_only_the_documented_sites_quantise_to_uint8() -> None:
         "semantic_models.py",
         "generative_masks.py",
         "generative_outpaint.py",
+        "generative_local_edit.py",
         "generative_removal.py",
     }
 

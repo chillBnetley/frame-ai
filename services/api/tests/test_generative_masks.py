@@ -613,6 +613,7 @@ def test_delete_mask_returns_409_when_active_task_references_it(client: TestClie
         json={
             "sessionId": session["sessionId"],
             "taskType": "local_edit",
+            "instruction": "warm the marked region",
             "maskId": mask_id,
         },
     )
@@ -728,6 +729,7 @@ def test_task_uses_sha_verified_mask(client: TestClient):
         json={
             "sessionId": session["sessionId"],
             "taskType": "local_edit",
+            "instruction": "warm the marked region",
             "maskId": mask_id,
         },
     )

@@ -25,6 +25,10 @@ from app.ai.generative import (
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.identity import OwnerScope
+from app.imaging.generative_local_edit import (
+    restore_local_edit_protected_region,
+    validate_local_edit_mask,
+)
 from app.imaging.generative_masks import encode_mask
 from app.imaging.generative_outpaint import (
     OutpaintGeometry,
@@ -158,11 +162,23 @@ class GenerativeTaskService:
             else str(session.revision.base_generated_asset_id)
         )
         mask_id = None if request.mask_id is None else str(request.mask_id)
-        if request.task_type == GenerativeTaskType.REMOVE and mask_id is None:
+        if mask_id is None and request.task_type in (
+            GenerativeTaskType.REMOVE,
+            GenerativeTaskType.LOCAL_EDIT,
+        ):
             raise AppError(
                 422,
                 "generative_mask_required",
-                "Object removal requires a mask indicating regions to remove.",
+                "This task type requires a mask indicating the editable region.",
+            )
+        if (
+            request.task_type == GenerativeTaskType.LOCAL_EDIT
+            and not request.instruction.strip()
+        ):
+            raise AppError(
+                422,
+                "generative_instruction_required",
+                "Local generative editing requires a non-empty instruction.",
             )
         if mask_id is not None:
             self._validate_mask(mask_id, image_id, base_generated_asset_id, owner)
@@ -225,7 +241,10 @@ class GenerativeTaskService:
         if request.task_type == GenerativeTaskType.OUTPAINT:
             plan_target = "expanded-canvas"
             plan_preserve = ["original photo region"]
-        elif request.task_type == GenerativeTaskType.REMOVE:
+        elif request.task_type in (
+            GenerativeTaskType.REMOVE,
+            GenerativeTaskType.LOCAL_EDIT,
+        ):
             plan_target = "mask"
             plan_preserve = ["unmasked original photo pixels"]
         elif mask_id is not None:
@@ -564,15 +583,20 @@ class GenerativeTaskService:
             capabilities.max_output_pixels,
         )
         inner_mask = self._load_mask(task, width, height)
-        if task.task_type == GenerativeTaskType.REMOVE:
+        if task.task_type in (GenerativeTaskType.REMOVE, GenerativeTaskType.LOCAL_EDIT):
             if inner_mask is None:
                 raise AppError(
                     422,
                     "generative_mask_required",
-                    "Object removal requires a mask.",
+                    f"{task.task_type.value} requires a mask.",
                 )
+            validator = (
+                validate_removal_mask
+                if task.task_type is GenerativeTaskType.REMOVE
+                else validate_local_edit_mask
+            )
             try:
-                validate_removal_mask(inner_mask)
+                validator(inner_mask)
             except ValueError as exc:
                 raise AppError(422, "generative_mask_invalid", str(exc)) from exc
         self._raise_if_cancelled(task.id)
@@ -809,16 +833,27 @@ class GenerativeTaskService:
             except ValueError as exc:
                 raise AppError(502, "generative_invalid_output", str(exc)) from exc
             warnings.extend(outpaint_warnings)
-        elif task.task_type == GenerativeTaskType.REMOVE and mask is not None:
-            try:
-                pixels, removal_warnings = restore_removal_protected_region(
-                    input_pixels,
-                    pixels,
-                    mask,
+        elif mask is not None and task.task_type in (
+            GenerativeTaskType.REMOVE,
+            GenerativeTaskType.LOCAL_EDIT,
+        ):
+            active = mask > 0
+            if np.array_equal(pixels[active], input_pixels[active]):
+                raise AppError(
+                    502,
+                    "generative_no_visible_change",
+                    "The provider returned an image identical to the input.",
                 )
+            restorer = (
+                restore_removal_protected_region
+                if task.task_type is GenerativeTaskType.REMOVE
+                else restore_local_edit_protected_region
+            )
+            try:
+                pixels, mask_warnings = restorer(input_pixels, pixels, mask)
             except ValueError as exc:
                 raise AppError(502, "generative_invalid_output", str(exc)) from exc
-            warnings.extend(removal_warnings)
+            warnings.extend(mask_warnings)
         else:
             if mask is not None:
                 pixels = composite_protected_region(input_pixels, pixels, mask)

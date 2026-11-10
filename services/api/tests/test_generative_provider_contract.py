@@ -19,6 +19,17 @@ from app.models.generative import GenerativeTaskType
 from tests.conftest import make_image
 
 
+def _mask_png(*, left_half: bool = False) -> bytes:
+    mask = np.zeros((48, 64), dtype=np.uint8)
+    if left_half:
+        mask[:, :32] = 255
+    else:
+        mask[:, 32:] = 255
+    buffer = BytesIO()
+    Image.fromarray(mask, mode="L").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def _spec(
     *,
     task_type: GenerativeTaskType = GenerativeTaskType.LOCAL_EDIT,
@@ -120,6 +131,8 @@ def test_mock_lifecycle_and_output_shape():
             mime_type="image/png",
             width=64,
             height=48,
+            mask=_mask_png(),
+            mask_mime_type="image/png",
         ),
         params={"candidates": 1},
     )
@@ -141,10 +154,6 @@ def test_mock_lifecycle_and_output_shape():
 def test_mock_honours_the_mask():
     provider = MockGenerativeProvider()
     image = make_image(size=(64, 48))
-    mask = np.zeros((48, 64), dtype=np.uint8)
-    mask[:, 32:] = 255
-    mask_buffer = BytesIO()
-    Image.fromarray(mask, mode="L").save(mask_buffer, format="PNG")
     request = GenerativeRequest(
         task_id="task-mask",
         task_type=GenerativeTaskType.LOCAL_EDIT,
@@ -154,7 +163,7 @@ def test_mock_honours_the_mask():
             mime_type="image/png",
             width=64,
             height=48,
-            mask=mask_buffer.getvalue(),
+            mask=_mask_png(),
             mask_mime_type="image/png",
         ),
         params={"candidates": 1},
@@ -165,3 +174,72 @@ def test_mock_honours_the_mask():
     source_pixels = np.asarray(Image.open(BytesIO(image)).convert("RGB"))
     assert np.array_equal(result_pixels[:, :32], source_pixels[:, :32])
     assert not np.array_equal(result_pixels[:, 32:], source_pixels[:, 32:])
+
+
+def _local_edit_request(
+    provider: MockGenerativeProvider,
+    *,
+    instruction: str = "edit the right half",
+    mask: bytes | None = None,
+    task_id: str = "task-local",
+    image: bytes | None = None,
+) -> GenerativeRequest:
+    return GenerativeRequest(
+        task_id=task_id,
+        task_type=GenerativeTaskType.LOCAL_EDIT,
+        instruction=instruction,
+        image=GenerativeImageInput(
+            data=image if image is not None else make_image(size=(64, 48)),
+            mime_type="image/png",
+            width=64,
+            height=48,
+            mask=mask,
+            mask_mime_type="image/png" if mask is not None else None,
+        ),
+        params={"candidates": 1},
+    )
+
+
+def test_validate_request_requires_a_mask_for_local_edit():
+    provider = MockGenerativeProvider()
+    with pytest.raises(GenerativeProviderError) as excinfo:
+        provider.validate_request(_local_edit_request(provider, mask=None))
+    assert excinfo.value.code == "generative_invalid_input"
+    assert "mask" in excinfo.value.message
+
+
+def test_validate_request_requires_an_instruction_for_local_edit():
+    provider = MockGenerativeProvider()
+    with pytest.raises(GenerativeProviderError) as excinfo:
+        provider.validate_request(
+            _local_edit_request(provider, instruction="   ", mask=_mask_png())
+        )
+    assert excinfo.value.code == "generative_invalid_input"
+    assert "instruction" in excinfo.value.message
+
+
+def test_local_edit_repaint_follows_the_instruction():
+    provider = MockGenerativeProvider()
+    image = make_image(size=(64, 48))
+    mask = _mask_png()
+
+    def repaint(instruction: str, task_id: str) -> np.ndarray:
+        result = provider.fetch(
+            provider.submit(
+                _local_edit_request(
+                    provider,
+                    instruction=instruction,
+                    mask=mask,
+                    task_id=task_id,
+                    image=image,
+                )
+            )
+        )
+        return np.asarray(Image.open(BytesIO(result.data)).convert("RGB"))
+
+    dusk = repaint("make it dusk", "task-a")
+    dusk_again = repaint("make it dusk", "task-b")
+    ocean = repaint("replace with water", "task-c")
+
+    assert np.array_equal(dusk, dusk_again)
+    assert not np.array_equal(dusk, ocean)

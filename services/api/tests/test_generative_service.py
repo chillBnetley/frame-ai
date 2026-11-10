@@ -52,6 +52,18 @@ def _new_session(client: TestClient) -> dict[str, object]:
     assert created.status_code == 201, created.text
     session = created.json()
     session["imageId"] = image_id
+    mask = client.post(
+        "/api/v1/generative/masks",
+        json={
+            "sessionId": session["sessionId"],
+            "kind": "rect",
+            "definition": {
+                "region": {"x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5},
+            },
+        },
+    )
+    assert mask.status_code == 201, mask.text
+    session["maskId"] = mask.json()["maskId"]
     return session
 
 
@@ -86,7 +98,7 @@ def _create(
             session_id=UUID(str(session["sessionId"])),
             task_type=GenerativeTaskType.LOCAL_EDIT,
             instruction=instruction,
-            mask_id=mask_id,
+            mask_id=mask_id or UUID(str(session["maskId"])),
         ),
         owner=OWNER,
         idempotency_key=None,
@@ -449,6 +461,7 @@ def test_recovery_marks_processing_tasks_and_requeues_queued_ones(
             base_revision_id=str(session["activeRevisionId"]),
             task_type=GenerativeTaskType.LOCAL_EDIT,
             instruction="recover",
+            mask_id=str(session["maskId"]),
             plan_json="{}",
             params_json='{"candidates":1}',
             provider="fake",
