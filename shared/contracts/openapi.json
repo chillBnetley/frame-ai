@@ -7319,6 +7319,148 @@
           }
         }
       }
+    },
+    "/api/v1/style-mixes/preview": {
+      "post": {
+        "tags": [
+          "style-mixes"
+        ],
+        "summary": "Preview Style Mix",
+        "operationId": "preview_style_mix_api_v1_style_mixes_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleMixRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleMixPreviewResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "One of the source styles is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A personal style with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style mix service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/style-mixes": {
+      "post": {
+        "tags": [
+          "style-mixes"
+        ],
+        "summary": "Save Style Mix",
+        "operationId": "save_style_mix_api_v1_style_mixes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleMixSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "One of the source styles is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A personal style with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Style mix service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -16130,6 +16272,551 @@
         "additionalProperties": false,
         "type": "object",
         "title": "StyleListResponse"
+      },
+      "StyleMixConflict": {
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Dimension"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "labels": {
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Labels"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "suggestion": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Suggestion"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "a",
+              "b",
+              "neutral",
+              "auto"
+            ],
+            "title": "Resolution"
+          },
+          "resolvedBy": {
+            "type": "string",
+            "enum": [
+              "weight",
+              "source",
+              "protection",
+              "user"
+            ],
+            "title": "Resolvedby"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dimension",
+          "title",
+          "labels",
+          "message",
+          "suggestion",
+          "resolution",
+          "resolvedBy"
+        ],
+        "title": "StyleMixConflict"
+      },
+      "StyleMixDimensionPlan": {
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "color",
+              "tone",
+              "light",
+              "texture",
+              "composition",
+              "scene"
+            ],
+            "title": "Dimension"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "a",
+              "b",
+              "blend"
+            ],
+            "title": "Source"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "fromA": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Froma"
+          },
+          "fromB": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Fromb"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dimension",
+          "title",
+          "source",
+          "description",
+          "fromA",
+          "fromB"
+        ],
+        "title": "StyleMixDimensionPlan"
+      },
+      "StyleMixPreviewResponse": {
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/PersonalStyleProfile"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PersonalStyleDefinition"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Weight"
+          },
+          "sources": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "blend"
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "color",
+                "tone",
+                "light",
+                "texture",
+                "composition",
+                "scene"
+              ]
+            },
+            "type": "object",
+            "title": "Sources"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/StyleMixDimensionPlan"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Dimensions",
+            "default": []
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/StyleMixConflict"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Conflicts",
+            "default": []
+          },
+          "protections": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Protections",
+            "default": []
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Limitations",
+            "default": []
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/StyleMixProvenance"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile",
+          "definition",
+          "weight",
+          "sources",
+          "summary",
+          "provenance"
+        ],
+        "title": "StyleMixPreviewResponse"
+      },
+      "StyleMixProvenance": {
+        "properties": {
+          "styleAId": {
+            "type": "string",
+            "title": "Styleaid"
+          },
+          "styleAVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Styleaversion"
+          },
+          "styleAName": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Styleaname"
+          },
+          "styleBId": {
+            "type": "string",
+            "title": "Stylebid"
+          },
+          "styleBVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Stylebversion"
+          },
+          "styleBName": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Stylebname"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Weight"
+          },
+          "sources": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "blend"
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "color",
+                "tone",
+                "light",
+                "texture",
+                "composition",
+                "scene"
+              ]
+            },
+            "type": "object",
+            "title": "Sources"
+          },
+          "resolutions": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "neutral",
+                "auto"
+              ]
+            },
+            "type": "object",
+            "title": "Resolutions"
+          },
+          "combinationRules": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Combinationrules",
+            "default": []
+          },
+          "userOverrides": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Useroverrides"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleAId",
+          "styleAVersion",
+          "styleAName",
+          "styleBId",
+          "styleBVersion",
+          "styleBName",
+          "weight",
+          "sources"
+        ],
+        "title": "StyleMixProvenance"
+      },
+      "StyleMixRequest": {
+        "properties": {
+          "styleA": {
+            "$ref": "#/components/schemas/StyleMixSourceRef"
+          },
+          "styleB": {
+            "$ref": "#/components/schemas/StyleMixSourceRef"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "default": 50
+          },
+          "sources": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "blend"
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "color",
+                "tone",
+                "light",
+                "texture",
+                "composition",
+                "scene"
+              ]
+            },
+            "type": "object",
+            "title": "Sources"
+          },
+          "resolutions": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "neutral",
+                "auto"
+              ]
+            },
+            "type": "object",
+            "title": "Resolutions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleA",
+          "styleB"
+        ],
+        "title": "StyleMixRequest"
+      },
+      "StyleMixSaveRequest": {
+        "properties": {
+          "styleA": {
+            "$ref": "#/components/schemas/StyleMixSourceRef"
+          },
+          "styleB": {
+            "$ref": "#/components/schemas/StyleMixSourceRef"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "default": 50
+          },
+          "sources": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "blend"
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "color",
+                "tone",
+                "light",
+                "texture",
+                "composition",
+                "scene"
+              ]
+            },
+            "type": "object",
+            "title": "Sources"
+          },
+          "resolutions": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "neutral",
+                "auto"
+              ]
+            },
+            "type": "object",
+            "title": "Resolutions"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number",
+                  "maximum": 100.0,
+                  "minimum": -100.0
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targets"
+          },
+          "avoid": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonalAvoidEffect"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avoid"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleA",
+          "styleB",
+          "name"
+        ],
+        "title": "StyleMixSaveRequest"
+      },
+      "StyleMixSourceRef": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Styleid"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId"
+        ],
+        "title": "StyleMixSourceRef"
       },
       "StyleProfile": {
         "properties": {

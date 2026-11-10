@@ -1108,6 +1108,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/style-mixes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Style Mix */
+        post: operations["preview_style_mix_api_v1_style_mixes_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/style-mixes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Style Mix */
+        post: operations["save_style_mix_api_v1_style_mixes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4535,6 +4569,176 @@ export interface components {
              * @default []
              */
             styles: components["schemas"]["StyleDefinition"][];
+        };
+        /** StyleMixConflict */
+        StyleMixConflict: {
+            /** Dimension */
+            dimension: string;
+            /** Title */
+            title: string;
+            /** Labels */
+            labels: [
+                string,
+                string
+            ];
+            /** Message */
+            message: string;
+            /** Suggestion */
+            suggestion: string;
+            /**
+             * Resolution
+             * @enum {string}
+             */
+            resolution: "a" | "b" | "neutral" | "auto";
+            /**
+             * Resolvedby
+             * @enum {string}
+             */
+            resolvedBy: "weight" | "source" | "protection" | "user";
+        };
+        /** StyleMixDimensionPlan */
+        StyleMixDimensionPlan: {
+            /**
+             * Dimension
+             * @enum {string}
+             */
+            dimension: "color" | "tone" | "light" | "texture" | "composition" | "scene";
+            /** Title */
+            title: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "a" | "b" | "blend";
+            /** Description */
+            description: string;
+            /** Froma */
+            fromA: string;
+            /** Fromb */
+            fromB: string;
+        };
+        /** StyleMixPreviewResponse */
+        StyleMixPreviewResponse: {
+            profile: components["schemas"]["PersonalStyleProfile"];
+            definition: components["schemas"]["PersonalStyleDefinition"];
+            /** Weight */
+            weight: number;
+            /** Sources */
+            sources: {
+                [key: string]: "a" | "b" | "blend";
+            };
+            /**
+             * Dimensions
+             * @default []
+             */
+            dimensions: components["schemas"]["StyleMixDimensionPlan"][];
+            /**
+             * Conflicts
+             * @default []
+             */
+            conflicts: components["schemas"]["StyleMixConflict"][];
+            /**
+             * Protections
+             * @default []
+             */
+            protections: string[];
+            /** Summary */
+            summary: string;
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            provenance: components["schemas"]["StyleMixProvenance"];
+        };
+        /** StyleMixProvenance */
+        StyleMixProvenance: {
+            /** Styleaid */
+            styleAId: string;
+            /** Styleaversion */
+            styleAVersion: string;
+            /** Styleaname */
+            styleAName: string;
+            /** Stylebid */
+            styleBId: string;
+            /** Stylebversion */
+            styleBVersion: string;
+            /** Stylebname */
+            styleBName: string;
+            /** Weight */
+            weight: number;
+            /** Sources */
+            sources: {
+                [key: string]: "a" | "b" | "blend";
+            };
+            /** Resolutions */
+            resolutions?: {
+                [key: string]: "a" | "b" | "neutral" | "auto";
+            };
+            /**
+             * Combinationrules
+             * @default []
+             */
+            combinationRules: string[];
+            /** Useroverrides */
+            userOverrides?: {
+                [key: string]: unknown;
+            };
+        };
+        /** StyleMixRequest */
+        StyleMixRequest: {
+            styleA: components["schemas"]["StyleMixSourceRef"];
+            styleB: components["schemas"]["StyleMixSourceRef"];
+            /**
+             * Weight
+             * @default 50
+             */
+            weight: number;
+            /** Sources */
+            sources?: {
+                [key: string]: "a" | "b" | "blend";
+            };
+            /** Resolutions */
+            resolutions?: {
+                [key: string]: "a" | "b" | "neutral" | "auto";
+            };
+        };
+        /** StyleMixSaveRequest */
+        StyleMixSaveRequest: {
+            styleA: components["schemas"]["StyleMixSourceRef"];
+            styleB: components["schemas"]["StyleMixSourceRef"];
+            /**
+             * Weight
+             * @default 50
+             */
+            weight: number;
+            /** Sources */
+            sources?: {
+                [key: string]: "a" | "b" | "blend";
+            };
+            /** Resolutions */
+            resolutions?: {
+                [key: string]: "a" | "b" | "neutral" | "auto";
+            };
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Targets */
+            targets?: {
+                [key: string]: number;
+            } | null;
+            /** Avoid */
+            avoid?: components["schemas"]["PersonalAvoidEffect"][] | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** StyleMixSourceRef */
+        StyleMixSourceRef: {
+            /** Styleid */
+            styleId: string;
+            /** Version */
+            version?: string | null;
         };
         /**
          * StyleProfile
@@ -10533,6 +10737,126 @@ export interface operations {
             };
             /** @description Style authoring provider timed out */
             504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_style_mix_api_v1_style_mixes_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StyleMixRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleMixPreviewResponse"];
+                };
+            };
+            /** @description One of the source styles is not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A personal style with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style mix service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_style_mix_api_v1_style_mixes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StyleMixSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalStyleDetailResponse"];
+                };
+            };
+            /** @description One of the source styles is not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A personal style with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style mix service not ready */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

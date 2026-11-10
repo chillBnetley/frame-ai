@@ -13,6 +13,7 @@ import type {
   PhotoVisualFeatures,
   StyleAuthoringDraft,
 } from "@/types/personal-style";
+import type { StyleMixPreviewResponse } from "@/types/style-mix";
 
 export const PERSONAL_STYLE_ID = "personal_abcdef123456";
 export const PERSONAL_IMAGE_ID = "11111111-1111-4111-8111-111111111111";
@@ -534,6 +535,75 @@ export function customRefineResponse(): CustomStyleRefineResponse {
       promptVersion: "stage6.2-style-authoring/1",
       isMock: true,
     },
+  };
+}
+
+export function styleMixPreview(
+  overrides: Partial<StyleMixPreviewResponse> = {},
+): StyleMixPreviewResponse {
+  return {
+    profile: personalStyleProfile({
+      name: "Fan Ho 光影几何 × 克制的城市叙事",
+      personal: {
+        ...personalStyleProfile().personal,
+        source: "mixed",
+        targets: { saturation: -100, contrast: 12 },
+        protected: ["preserve_skin_tone", "preserve_highlight_detail", "maintain_neutrality"],
+      },
+    }),
+    definition: {
+      schemaVersion: "personal-definition/1",
+      userOverrides: {},
+      note: null,
+    },
+    weight: 50,
+    sources: { color: "blend", tone: "a", light: "a", texture: "blend", composition: "a", scene: "blend" },
+    dimensions: [
+      {
+        dimension: "color",
+        title: "色彩",
+        source: "blend",
+        description: "以黑白灰阶为主，保留少量环境色。",
+        fromA: "去饱和至单色",
+        fromB: "低饱和",
+      },
+      {
+        dimension: "tone",
+        title: "影调",
+        source: "a",
+        description: "高对比，明暗交界清晰。",
+        fromA: "高对比",
+        fromB: "中等反差",
+      },
+    ],
+    conflicts: [
+      {
+        dimension: "color.saturation",
+        title: "饱和度方向冲突",
+        labels: ["去饱和至单色", "低饱和"],
+        message: "一方倾向黑白单色，另一方保留低饱和色彩。",
+        suggestion: "建议以黑白为主，或明确选择保留色彩的一方。",
+        resolution: "a",
+        resolvedBy: "protection",
+      },
+    ],
+    protections: ["保护肤色", "保护高光细节", "保持中性白平衡"],
+    summary: "混合概览（A 50% / B 50%）：\n色彩：以黑白灰阶为主。\n影调：高对比。",
+    limitations: ["检测到 1 处风格冲突，已按优先级处理而非平均。"],
+    provenance: {
+      styleAId: "fan_ho",
+      styleAVersion: "1.0",
+      styleAName: "Fan Ho 光影几何",
+      styleBId: PERSONAL_STYLE_ID,
+      styleBVersion: "1.1",
+      styleBName: "克制的城市叙事",
+      weight: 50,
+      sources: { color: "blend", tone: "a" },
+      resolutions: {},
+      combinationRules: ["保护约束取并集。"],
+      userOverrides: {},
+    },
+    ...overrides,
   };
 }
 

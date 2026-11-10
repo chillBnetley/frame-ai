@@ -157,13 +157,16 @@ class PersonalStyleService:
         definition: PersonalStyleDefinition,
         *,
         owner_id: str,
+        change_source: PersonalStyleChangeSource = PersonalStyleChangeSource.CUSTOM,
+        change_note: str | None = None,
     ) -> PersonalStyleDetailResponse:
         try:
             self._repository.create(
                 profile,
                 definition,
                 owner_id=owner_id,
-                change_source=PersonalStyleChangeSource.CUSTOM,
+                change_source=change_source,
+                change_note=change_note,
             )
         except DuplicatePersonalStyleNameError as exc:
             raise AppError(

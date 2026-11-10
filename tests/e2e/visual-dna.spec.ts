@@ -70,6 +70,78 @@ test("applies a published personal style in the workspace", async ({
   ).toBeDisabled({ timeout: 60_000 });
 });
 
+test("mixes two styles, saves an independent profile, and reapplies it", async ({
+  page,
+}, testInfo) => {
+  const personalName = `MixSource ${testInfo.project.name}`;
+  const parsed = await page.request.post("/api/v1/personal-styles/custom/parse", {
+    data: {
+      name: personalName,
+      description: "低饱和、偏冷的环境色，保留暗部层次，人物肤色自然。",
+      avoid: "不要过饱和，高光不要溢出",
+    },
+  });
+  expect(parsed.ok()).toBeTruthy();
+  const draft = (await parsed.json()).draft;
+  const savedSource = await page.request.post("/api/v1/personal-styles/custom", {
+    data: { draft },
+  });
+  expect(savedSource.ok()).toBeTruthy();
+  const personalId = (await savedSource.json()).style.id;
+
+  await page.goto("/visual-dna/mix");
+  await expect(page.getByRole("heading", { name: "混合两种风格" })).toBeVisible();
+  await expect(page.getByLabel("风格 A")).toBeEnabled({ timeout: 60_000 });
+  await page.getByLabel("风格 A").selectOption("fan_ho");
+  await page.getByLabel("风格 B").selectOption(personalId);
+
+  await expect(page.getByRole("heading", { name: "混合预览" })).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(page.getByText(/保护约束来自两种风格的并集/)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /检测到 \d+ 处风格冲突/ }),
+  ).toBeVisible();
+
+  const mixedName = `Mixed ${testInfo.project.name}`;
+  await page.getByLabel("混合风格名称").fill(mixedName);
+  await page.getByRole("button", { name: /保存混合风格/ }).click();
+  await page.waitForURL(/\/visual-dna\/personal_[a-z0-9]+$/, { timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: mixedName })).toBeVisible();
+  const mixedId = new URL(page.url()).pathname.split("/").pop() ?? "";
+  expect(mixedId).not.toBe(personalId);
+
+  await page.getByRole("button", { name: "发布", exact: true }).click();
+  await expect(page.getByText("个人风格已发布。")).toBeVisible({ timeout: 30_000 });
+
+  await page.goto(`/master-vision/workspace?style=${mixedId}`);
+  await expect(
+    page.getByRole("heading", { name: "风格创作工作台" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("选择大师、流派或个人风格")).toHaveValue(mixedId);
+  await page.getByTestId("file-input").setInputFiles(fixturePath(FIXTURE_JSON));
+  await expect(page.getByAltText("当前照片")).toBeVisible({ timeout: 90_000 });
+
+  const generate = page.getByRole("button", { name: /生成风格方案/ });
+  await expect(generate).toBeEnabled({ timeout: 90_000 });
+  const planResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/v1/ai/photographer/plan") &&
+      response.request().method() === "POST",
+    { timeout: 90_000 },
+  );
+  await generate.click();
+  const plan = await (await planResponse).json();
+  expect(plan.styleId).toBe(mixedId);
+
+  const save = page.getByRole("button", { name: /应用并保存/ });
+  await expect(save).toBeEnabled({ timeout: 90_000 });
+  await save.click();
+  await expect(
+    page.getByRole("button", { name: "已保存为 AI 创作" }),
+  ).toBeDisabled({ timeout: 60_000 });
+});
+
 test("creates and refines a style from natural language", async ({ page }, testInfo) => {
   const styleName = `NL ${testInfo.project.name}`;
   const confirmedName = `${styleName} confirmed`;

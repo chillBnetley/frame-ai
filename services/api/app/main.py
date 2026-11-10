@@ -14,6 +14,7 @@ from app.api.routes import analysis, config, exports, health, images, previews, 
 from app.api.routes import personal_styles as personal_style_routes
 from app.api.routes import photographer as photographer_routes
 from app.api.routes import settings as settings_routes
+from app.api.routes import style_mixes as style_mix_routes
 from app.api.routes import styles as style_routes
 from app.core.auth import ApiTokenService
 from app.core.config import Settings, get_settings
@@ -52,6 +53,7 @@ from app.services.session_service import SessionService
 from app.services.style_fusion_service import StyleFusionService
 from app.services.style_library_service import StyleLibraryService
 from app.services.style_matching_service import StyleMatchingService
+from app.services.style_mix_service import StyleMixService
 from app.styles.library import seed_style_library
 
 logger = logging.getLogger("frame_ai.main")
@@ -162,6 +164,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             personal_style_service,
             personal_styles,
         )
+        style_mix_service = StyleMixService(
+            style_profiles,
+            personal_styles,
+            personal_style_service,
+        )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -187,6 +194,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.personal_style_analysis_service = personal_style_analysis_service
         app.state.style_fusion_service = style_fusion_service
         app.state.custom_style_service = custom_style_service
+        app.state.style_mix_service = style_mix_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,
@@ -271,6 +279,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(photographer_routes.router, prefix=API_PREFIX)
     app.include_router(style_routes.router, prefix=API_PREFIX)
     app.include_router(personal_style_routes.router, prefix=API_PREFIX)
+    app.include_router(style_mix_routes.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict[str, str]:

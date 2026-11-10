@@ -109,6 +109,13 @@ export function VisualDnaHome() {
                 用自然语言创建
               </Link>
               <Link
+                href="/visual-dna/mix"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#d7dfda] bg-white px-5 text-sm font-medium text-[#415049] transition-colors hover:border-[#bfcfc6] hover:bg-[#f7faf8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <SparkleIcon className="size-4" />
+                混合两种风格
+              </Link>
+              <Link
                 href="/master-vision/workspace"
                 className="inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-medium text-[#277a68] hover:bg-[#eef5f1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >

@@ -22,6 +22,7 @@ from app.services.session_service import SessionService
 from app.services.style_fusion_service import StyleFusionService
 from app.services.style_library_service import StyleLibraryService
 from app.services.style_matching_service import StyleMatchingService
+from app.services.style_mix_service import StyleMixService
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -152,6 +153,13 @@ def get_style_fusion_service(request: Request) -> StyleFusionService:
     service = getattr(request.app.state, "style_fusion_service", None)
     if not isinstance(service, StyleFusionService):
         raise AppError(503, "personal_style_unavailable", "The fusion service is not available.")
+    return service
+
+
+def get_style_mix_service(request: Request) -> StyleMixService:
+    service = getattr(request.app.state, "style_mix_service", None)
+    if not isinstance(service, StyleMixService):
+        raise AppError(503, "style_mix_unavailable", "The style mix service is not available.")
     return service
 
 
