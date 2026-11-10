@@ -125,6 +125,12 @@ export function VisualDnaHome() {
             </div>
             <p className="mt-4 text-[11px] leading-relaxed text-[#8a9690]">
               参考照片仅在你主动授权后用于本风格分析，不用于模型训练，也不会自动公开。
+              <Link
+                href="/visual-dna/privacy"
+                className="ml-1 font-medium text-[#277a68] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                查看授权说明
+              </Link>
             </p>
           </div>
           <div className="relative hidden min-h-64 overflow-hidden rounded-2xl border border-[rgba(255,255,255,0.14)] bg-[#101b20] lg:block">

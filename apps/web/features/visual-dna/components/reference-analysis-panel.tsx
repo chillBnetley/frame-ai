@@ -197,6 +197,7 @@ export function ReferenceAnalysisPanel({
           已完成 {completed} / {analysis.totalCount} 张。分析状态来自真实任务进度。
           {hasCompleted && " 完成分析后可以生成或更新风格版本。"}
           重新分析不会删除旧版本，用户手动确认的字段也不会被静默覆盖。
+          撤回授权会删除该照片的提取特征，但会保留你的原始图片。
         </p>
       )}
 
@@ -258,8 +259,9 @@ export function ReferenceAnalysisPanel({
                       )}
                     </div>
                     <p className="mt-1 text-[10px] text-[#8a9690]">
-                      授权：仅用于本风格分析 · 添加于{" "}
-                      {new Date(reference.addedAt).toLocaleDateString("zh-CN")}
+                      授权范围：仅用于本风格分析 · 授权于{" "}
+                      {new Date(reference.consentAt).toLocaleDateString("zh-CN")}
+                      {reference.status === "removed" ? " · 授权已撤回" : ""}
                       {item?.error ? ` · ${item.error}` : ""}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -292,7 +294,7 @@ export function ReferenceAnalysisPanel({
                         onClick={() => onRemoveReference(reference)}
                         className="inline-flex min-h-8 items-center rounded-lg px-2.5 text-[10px] font-medium text-[#8a3a2e] hover:bg-[#fdf4f2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                       >
-                        移除
+                        撤回授权
                       </button>
                     </div>
                   </div>

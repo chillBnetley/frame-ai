@@ -14,6 +14,7 @@ from app.models.personal_style import (
     PersonalStyleSource,
     build_default_personal_profile,
 )
+from app.repositories.db import connect
 from app.repositories.personal_style_repo import SqlitePersonalStyleRepository
 from tests.conftest import make_image, upload
 
@@ -271,6 +272,148 @@ def test_owner_scope_hides_another_owners_style(personal_client) -> None:
     assert client.get(f"{PREFIX}/{profile.id}").status_code == 404
     assert client.patch(f"{PREFIX}/{profile.id}", json={"name": "改名"}).status_code == 404
     assert client.delete(f"{PREFIX}/{profile.id}?confirm=true").status_code == 404
+
+
+def _insert_photo_feature(settings: Settings, style_id: str, reference_id: str) -> None:
+    connection = connect(settings.database_path)
+    try:
+        connection.execute(
+            "INSERT INTO personal_style_photo_feature "
+            "(reference_id, style_id, image_sha256, analysis_id, extractor_version, "
+            " features_json, confidence, is_mock, created_at) "
+            "VALUES (?, ?, ?, ?, ?, '{}', 0.8, 1, ?)",
+            (
+                reference_id,
+                style_id,
+                "a" * 64,
+                str(uuid4()),
+                "visual-dna/1",
+                "2026-11-09T00:00:00Z",
+            ),
+        )
+    finally:
+        connection.close()
+
+
+def test_revoking_consent_removes_features_and_keeps_style_and_original(
+    personal_client,
+) -> None:
+    client, settings = personal_client
+    created = _create(client, name="撤回授权的风格")
+    style_id = str(created["style"]["id"])
+    image_id = _upload_image(client)
+    added = client.post(
+        f"{PREFIX}/{style_id}/references",
+        json={"imageIds": [image_id], "consent": True},
+    )
+    assert added.status_code == 201, added.text
+    reference_id = str(added.json()["references"][0]["id"])
+    _insert_photo_feature(settings, style_id, reference_id)
+
+    revoked = client.delete(f"{PREFIX}/{style_id}/references/{reference_id}")
+    assert revoked.status_code == 204
+
+    assert client.get(f"{PREFIX}/{style_id}/references").json()["references"] == []
+    assert client.get(f"{PREFIX}/{style_id}").status_code == 200
+    assert client.get(f"/api/v1/images/{image_id}/original").status_code == 200
+
+    connection = connect(settings.database_path)
+    try:
+        features = connection.execute(
+            "SELECT COUNT(*) FROM personal_style_photo_feature WHERE reference_id = ?",
+            (reference_id,),
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    assert features == 0
+
+
+def test_delete_cascades_every_related_row_and_keeps_the_original_image(
+    personal_client,
+) -> None:
+    client, settings = personal_client
+    removed = _create(client, name="待删除的风格")
+    removed_id = str(removed["style"]["id"])
+    kept = _create(client, name="保留的风格")
+    kept_id = str(kept["style"]["id"])
+    image_id = _upload_image(client)
+
+    added = client.post(
+        f"{PREFIX}/{removed_id}/references",
+        json={"imageIds": [image_id], "consent": True},
+    )
+    assert added.status_code == 201, added.text
+    reference_id = str(added.json()["references"][0]["id"])
+    _insert_photo_feature(settings, removed_id, reference_id)
+
+    feedback = client.post(
+        f"{PREFIX}/{removed_id}/feedback",
+        json={"feedbackType": "color_too_strong", "scope": "profile"},
+    )
+    assert feedback.status_code == 201, feedback.text
+    preview = client.post(f"{PREFIX}/{removed_id}/evolve/preview", json={})
+    assert preview.status_code == 200, preview.text
+    evolution_id = preview.json()["evolution"]["id"]
+    applied = client.post(
+        f"{PREFIX}/{removed_id}/evolve/{evolution_id}/apply",
+        json={"confirm": True},
+    )
+    assert applied.status_code == 200, applied.text
+
+    assert client.delete(f"{PREFIX}/{removed_id}?confirm=true").status_code == 204
+
+    connection = connect(settings.database_path)
+    try:
+        style_rows = connection.execute(
+            "SELECT COUNT(*) FROM personal_style WHERE id = ?", (removed_id,)
+        ).fetchone()[0]
+        related = {
+            table: connection.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE style_id = ?", (removed_id,)
+            ).fetchone()[0]
+            for table in (
+                "personal_style_version",
+                "personal_style_reference",
+                "personal_style_photo_feature",
+                "personal_style_feedback",
+                "personal_style_evolution",
+            )
+        }
+        tombstone = connection.execute(
+            "SELECT COUNT(*) FROM personal_style_tombstone WHERE style_id = ?",
+            (removed_id,),
+        ).fetchone()[0]
+        image_rows = connection.execute(
+            "SELECT COUNT(*) FROM image_asset WHERE id = ?", (image_id,)
+        ).fetchone()[0]
+        kept_rows = connection.execute(
+            "SELECT COUNT(*) FROM personal_style WHERE id = ?", (kept_id,)
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert style_rows == 0
+    assert all(count == 0 for count in related.values())
+    assert tombstone == 1
+    assert image_rows == 1
+    assert kept_rows == 1
+    assert client.get(f"/api/v1/images/{image_id}/original").status_code == 200
+
+
+def test_new_styles_stay_private_until_explicitly_published(personal_client) -> None:
+    client, _ = personal_client
+    created = _create(client, name="默认私有的风格", source="custom")
+    style_id = str(created["style"]["id"])
+
+    assert created["status"] == "draft"
+    assert client.get(f"{PREFIX}?status=published").json()["styles"] == []
+    drafts = client.get(f"{PREFIX}?status=draft").json()["styles"]
+    assert [item["id"] for item in drafts] == [style_id]
+
+    published = client.post(f"{PREFIX}/{style_id}/status", json={"status": "published"})
+    assert published.status_code == 200, published.text
+    listed = client.get(f"{PREFIX}?status=published").json()["styles"]
+    assert [item["id"] for item in listed] == [style_id]
 
 
 def test_deleting_an_image_marks_the_reference_missing(personal_client) -> None:

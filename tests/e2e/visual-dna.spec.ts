@@ -295,3 +295,79 @@ test("creates, analyses, fuses, edits, and reviews a personal style", async ({
   );
   expect(noHorizontalOverflow).toBe(true);
 });
+
+test("revokes consent and deletes a style without deleting the original", async ({
+  page,
+}, testInfo) => {
+  const styleName = `Privacy ${testInfo.project.name}`;
+  const parsed = await page.request.post("/api/v1/personal-styles/custom/parse", {
+    data: {
+      name: styleName,
+      description: "低饱和、偏冷的环境色，保留暗部层次，人物肤色自然。",
+      avoid: "不要过饱和，高光不要溢出",
+    },
+  });
+  expect(parsed.ok()).toBeTruthy();
+  const draft = (await parsed.json()).draft;
+  const saved = await page.request.post("/api/v1/personal-styles/custom", {
+    data: { draft },
+  });
+  expect(saved.ok()).toBeTruthy();
+  const styleId = (await saved.json()).style.id;
+
+  const uploaded = await page.request.post("/api/v1/images", {
+    multipart: {
+      file: {
+        name: "consent-fixture.jpg",
+        mimeType: "image/jpeg",
+        buffer: fs.readFileSync(fixturePath(FIXTURE_JSON)),
+      },
+    },
+  });
+  expect(uploaded.ok()).toBeTruthy();
+  const imageId = (await uploaded.json()).imageId;
+
+  const referenced = await page.request.post(
+    `/api/v1/personal-styles/${styleId}/references`,
+    { data: { imageIds: [imageId], consent: true } },
+  );
+  expect(referenced.ok()).toBeTruthy();
+
+  await page.goto(`/visual-dna/${styleId}`);
+  await expect(page.getByRole("heading", { name: styleName })).toBeVisible();
+  await expect(page.getByText(/授权范围：仅用于本风格分析/)).toBeVisible();
+
+  // Revoking consent detaches the photo and its features but keeps the original.
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "撤回授权" }).click();
+  await expect(
+    page.getByText("还没有参考照片。请在下方添加照片后再开始分析。"),
+  ).toBeVisible();
+  expect(
+    (await page.request.get(`/api/v1/images/${imageId}/original`)).status(),
+  ).toBe(200);
+
+  await page.getByRole("link", { name: "隐私与授权" }).click();
+  await expect(
+    page.getByRole("heading", { name: "隐私与授权说明" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "不会默认用于模型训练" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "默认私有，不会自动公开" }),
+  ).toBeVisible();
+
+  // Deleting the style never deletes the original image.
+  await page.goto(`/visual-dna/${styleId}`);
+  await expect(page.getByRole("heading", { name: styleName })).toBeVisible();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "删除" }).click();
+  await page.waitForURL(/\/visual-dna$/, { timeout: 60_000 });
+  expect(
+    (await page.request.get(`/api/v1/personal-styles/${styleId}`)).status(),
+  ).toBe(404);
+  expect(
+    (await page.request.get(`/api/v1/images/${imageId}/original`)).status(),
+  ).toBe(200);
+});

@@ -7,6 +7,12 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
+from app.models.personal_style import (
+    PersonalStyleDefinition,
+    PersonalStyleSource,
+    build_default_personal_profile,
+)
+from app.repositories.personal_style_repo import SqlitePersonalStyleRepository
 
 PERSONAL = "/api/v1/personal-styles"
 
@@ -34,6 +40,13 @@ def client(tmp_path: Path):
     settings = _settings(tmp_path)
     with TestClient(create_app(settings)) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def client_with_settings(tmp_path: Path):
+    settings = _settings(tmp_path)
+    with TestClient(create_app(settings)) as test_client:
+        yield test_client, settings
 
 
 def _style(client: TestClient, *, name: str, targets: dict[str, float] | None = None) -> str:
@@ -322,3 +335,30 @@ def test_unknown_style_returns_404(client: TestClient) -> None:
     assert response.status_code == 404, response.text
     preview = client.post(f"{PERSONAL}/personal_missing00/evolve/preview", json={})
     assert preview.status_code == 404, preview.text
+
+
+def test_feedback_and_evolutions_are_owner_scoped(client_with_settings) -> None:
+    client, settings = client_with_settings
+    profile = build_default_personal_profile(
+        style_id="personal_0123456789ab",
+        name="别人的风格",
+        description="不属于当前用户。",
+        source=PersonalStyleSource.CUSTOM,
+    )
+    SqlitePersonalStyleRepository(settings.database_path).create(
+        profile,
+        PersonalStyleDefinition(),
+        owner_id="someone-else",
+    )
+    other = profile.id
+
+    assert client.get(f"{PERSONAL}/{other}/feedback").status_code == 404
+    assert (
+        client.post(
+            f"{PERSONAL}/{other}/feedback",
+            json={"feedbackType": "like_result", "scope": "profile"},
+        ).status_code
+        == 404
+    )
+    assert client.post(f"{PERSONAL}/{other}/evolve/preview", json={}).status_code == 404
+    assert client.get(f"{PERSONAL}/{other}/evolutions").status_code == 404

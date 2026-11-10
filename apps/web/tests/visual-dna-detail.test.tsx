@@ -157,14 +157,17 @@ describe("VisualDnaDetail", () => {
     );
   });
 
-  it("removes a reference after confirmation", async () => {
+  it("revokes reference consent after confirmation", async () => {
     const calls = installDetailMock();
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     render(<VisualDnaDetail styleId={PERSONAL_STYLE_ID} />);
 
     await screen.findByRole("heading", { name: "克制的城市叙事" });
-    await user.click(screen.getByRole("button", { name: "移除" }));
+    expect(
+      screen.getByText(/授权范围：仅用于本风格分析/),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "撤回授权" }));
 
     await waitFor(() =>
       expect(

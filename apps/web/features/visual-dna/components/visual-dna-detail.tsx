@@ -29,6 +29,7 @@ import type {
 
 import { AddReferencesSection } from "./add-references-section";
 import { FusionResultPanel } from "./fusion-result-panel";
+import { PrivacySummary } from "./privacy-notice";
 import { ReferenceAnalysisPanel } from "./reference-analysis-panel";
 import { TraitPanel } from "./trait-panel";
 import { VisualDnaNav } from "./visual-dna-nav";
@@ -263,8 +264,12 @@ export function VisualDnaDetail({
     }
   }
 
-  async function handleRemoveReference(reference: PersonalStyleReference) {
-    if (!window.confirm(`从个人风格中移除「${reference.originalName}」？该照片的提取特征会一并删除。`)) {
+  async function handleRevokeConsent(reference: PersonalStyleReference) {
+    if (
+      !window.confirm(
+        `撤回「${reference.originalName}」的使用授权？该照片会从分析中移除，提取特征会被删除，你的原始图片会保留。`,
+      )
+    ) {
       return;
     }
     setActionFailure(null);
@@ -274,7 +279,7 @@ export function VisualDnaDetail({
       setContributions([]);
       await refresh();
     } catch (reason: unknown) {
-      setActionFailure(actionError(reason, "移除参考照片失败。"));
+      setActionFailure(actionError(reason, "撤回授权失败。"));
     }
   }
 
@@ -444,7 +449,7 @@ export function VisualDnaDetail({
             busy={busy === "analyze" || busy === "fuse" ? busy : null}
             error={null}
             onToggleFeatures={(referenceId) => void toggleReferenceFeatures(referenceId)}
-            onRemoveReference={(reference) => void handleRemoveReference(reference)}
+            onRemoveReference={(reference) => void handleRevokeConsent(reference)}
             onAnalyze={() => void startAnalysis(analyzed || running === true)}
             onAnalyzeReference={(referenceId) =>
               void startAnalysis(true, [referenceId])
@@ -466,13 +471,7 @@ export function VisualDnaDetail({
           <div className="rounded-2xl border border-[#dfe5e1] bg-white p-5">
             <TraitPanel profile={style} />
           </div>
-          <div className="rounded-xl border border-[#dfe5e1] bg-[#f9fbf9] p-4 text-[11px] leading-relaxed text-[#7a8680]">
-            <p className="font-semibold text-[#55625b]">隐私与授权</p>
-            <p className="mt-1">
-              参考照片仅在你主动授权后用于本风格分析，不用于模型训练，也不会自动公开。
-              移除参考照片会同时删除该照片的提取特征，但不会删除你的原始图片或已发布风格版本。
-            </p>
-          </div>
+          <PrivacySummary />
         </aside>
       </div>
     </main>

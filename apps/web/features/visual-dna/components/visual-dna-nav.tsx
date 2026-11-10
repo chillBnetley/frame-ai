@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/visual-dna/new", label: "参考照片创建" },
   { href: "/visual-dna/custom", label: "自然语言创建" },
   { href: "/visual-dna/mix", label: "风格混合" },
+  { href: "/visual-dna/privacy", label: "隐私与授权" },
   { href: "/master-vision/masters", label: "大师风格" },
 ];
 
@@ -26,7 +27,8 @@ export function VisualDnaNav() {
               (pathname.startsWith("/visual-dna/") &&
                 !pathname.startsWith("/visual-dna/new") &&
                 !pathname.startsWith("/visual-dna/custom") &&
-                !pathname.startsWith("/visual-dna/mix"))
+                !pathname.startsWith("/visual-dna/mix") &&
+                !pathname.startsWith("/visual-dna/privacy"))
             : pathname.startsWith(link.href);
         return (
           <Link
