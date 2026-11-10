@@ -232,6 +232,36 @@ def test_anomalous_photos_contribute_less_and_are_counted() -> None:
     assert any("异常" in limitation for limitation in outcome.limitations)
 
 
+def test_noise_only_references_do_not_add_grain() -> None:
+    outcome = fuse_photo_features(_photos(5, noise=0.55, sharpness=0.50))
+
+    assert "grain" not in outcome.targets
+    assert outcome.stability["texture"] == 0.0
+    assert any("质感证据不足" in message for message in outcome.occasional)
+    assert any("未计入质感偏好" in limitation for limitation in outcome.limitations)
+    assert "画质限制" in outcome.texture.grain
+    # The planner adds grain from the word "颗粒"; quality-limited text must not
+    # reintroduce it through that heuristic.
+    assert "颗粒" not in outcome.texture.grain
+
+
+def test_blurred_references_do_not_add_negative_clarity() -> None:
+    outcome = fuse_photo_features(_photos(5, noise=0.05, sharpness=0.04))
+
+    assert "clarity" not in outcome.targets
+    assert outcome.stability["texture"] == 0.0
+    assert any("未计入质感偏好" in limitation for limitation in outcome.limitations)
+    assert "画质限制" in outcome.texture.sharpness
+
+
+def test_crisp_references_keep_positive_clarity() -> None:
+    outcome = fuse_photo_features(_photos(5, noise=0.05, sharpness=0.70))
+
+    assert outcome.targets["clarity"] > 0
+    assert outcome.stability["texture"] >= 0.9
+    assert "清晰锐利" in outcome.texture.sharpness
+
+
 def test_mock_analysis_lowers_confidence_versus_real_analysis() -> None:
     real = fuse_photo_features(_photos(5, is_mock=False))
     mock = fuse_photo_features(_photos(5, is_mock=True))

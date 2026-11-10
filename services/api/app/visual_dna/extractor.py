@@ -27,7 +27,7 @@ from app.models.visual_dna import (
     PhotoVisualFeatures,
 )
 
-EXTRACTOR_VERSION = "visual-dna/1"
+EXTRACTOR_VERSION = "visual-dna/2"
 
 LOW_CONFIDENCE = 0.5
 HIGH_CLIP_PCT = 10.0
@@ -96,12 +96,15 @@ def _contrast_intent(strength: float) -> tuple[str, str]:
 
 
 def _texture_intent(sharpness: float, noise: float) -> tuple[str, str]:
+    # Noise and low sharpness are quality limits, not evidence of a grain or
+    # soft-focus preference; the stage 3 measurements cannot separate sensor
+    # noise from film grain or defocus from intentional soft focus.
     if noise >= HIGH_NOISE:
-        return "grainy", "噪声估计偏高，画面呈现出颗粒感。"
+        return "noisy", "噪声估计偏高，属于画质限制，不构成颗粒偏好。"
+    if sharpness <= LOW_SHARPNESS:
+        return "quality_soft", "清晰度偏低，可能受对焦或运动模糊影响，不构成柔焦偏好。"
     if sharpness >= 0.55:
         return "crisp", "清晰度较高，细节表现锐利。"
-    if sharpness <= LOW_SHARPNESS:
-        return "soft_detail", "清晰度偏低，画面更柔和、细节较少。"
     return "natural", "清晰度与噪声处于自然范围，质感克制。"
 
 

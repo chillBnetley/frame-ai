@@ -137,6 +137,21 @@ def test_real_provider_reports_do_not_carry_the_mock_limitation() -> None:
     assert real_features.overall_confidence > mock_features.overall_confidence
 
 
+def test_high_noise_is_not_a_grain_preference() -> None:
+    features = extract_photo_features(report(sharpness=0.5, noise_estimate=0.55))
+
+    assert _reading(features, "intent").value == "noisy"
+    assert "画质限制" in _reading(features, "intent").description
+    assert features.texture.grain_tendency == 0.55
+
+
+def test_low_sharpness_is_not_a_soft_focus_preference() -> None:
+    features = extract_photo_features(report(sharpness=0.04, noise_estimate=0.05))
+
+    assert _reading(features, "intent").value == "quality_soft"
+    assert "柔焦" in _reading(features, "intent").description
+
+
 def test_every_reading_has_evidence_and_a_unique_key() -> None:
     features = extract_photo_features(report())
     keys = [(reading.category, reading.key) for reading in features.readings]

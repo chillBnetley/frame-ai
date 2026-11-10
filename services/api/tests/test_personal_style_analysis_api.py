@@ -14,6 +14,7 @@ from app.models.personal_style import (
     build_default_personal_profile,
 )
 from app.repositories.personal_style_repo import SqlitePersonalStyleRepository
+from app.visual_dna.extractor import EXTRACTOR_VERSION
 from tests.conftest import make_image, upload
 
 PREFIX = "/api/v1/personal-styles"
@@ -116,7 +117,7 @@ def test_analysis_extracts_and_persists_visual_features(analysis_client) -> None
     assert features_response.status_code == 200, features_response.text
     features = features_response.json()
     assert features["schemaVersion"] == "visual-dna-photo/1"
-    assert features["extractorVersion"] == "visual-dna/1"
+    assert features["extractorVersion"] == EXTRACTOR_VERSION
     assert features["imageId"] == image_id
     assert features["isMock"] is True
     assert features["color"]["saturationMean"] >= 0.0

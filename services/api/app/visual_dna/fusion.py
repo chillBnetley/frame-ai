@@ -251,12 +251,13 @@ def _light_label(value: float) -> str:
 
 
 def _texture_label(sharpness: float, noise: float) -> str:
+    # Quality limits are kept out of the preference distribution below.
     if noise >= 0.35:
-        return "grainy"
+        return "noisy"
+    if sharpness <= 0.08:
+        return "quality_soft"
     if sharpness >= 0.55:
         return "crisp"
-    if sharpness <= 0.08:
-        return "soft_detail"
     return "natural"
 
 
@@ -303,7 +304,11 @@ _TEXTURE_TEXT = {
     "crisp": "清晰锐利",
     "soft_detail": "画面柔和、细节较少",
     "natural": "自然质感",
+    "noisy": "噪声偏高，质感证据受限",
+    "quality_soft": "清晰度偏低，质感证据受限",
 }
+
+_TEXTURE_PREFERENCE_LABELS = frozenset({"crisp", "natural"})
 
 
 _CONFLICT_TEXT = {
@@ -344,7 +349,6 @@ def _numeric_targets(
     temperature_median: float,
     tint_median: float,
     contrast_median: float,
-    noise_median: float,
     sharpness_median: float,
     shares: dict[str, float],
     conflict_dimensions: frozenset[str],
@@ -373,10 +377,6 @@ def _numeric_targets(
             targets["contrast"] = value
     if shares.get("crisp", 0.0) >= CANDIDATE_SUPPORT:
         targets["clarity"] = _round(_clamp((sharpness_median - 0.50) * 20.0, 3.0, 10.0))
-    elif shares.get("soft_detail", 0.0) >= CANDIDATE_SUPPORT:
-        targets["clarity"] = _round(_clamp((sharpness_median - 0.50) * 20.0, -8.0, -2.0))
-    if shares.get("grainy", 0.0) >= CANDIDATE_SUPPORT:
-        targets["grain"] = _round(_clamp((noise_median - 0.20) * 40.0, 3.0, 15.0))
     return targets
 
 
@@ -646,15 +646,25 @@ def fuse_photo_features(
         for photo, weight in weighted
     )
     key_shares = _shares((_key_label(photo.features), weight) for photo, weight in weighted)
-    texture_shares = _shares(
-        (
-            _texture_label(
-                photo.features.texture.sharpness,
-                photo.features.texture.noise,
-            ),
-            weight,
+    texture_labels = {
+        photo.reference_id: _texture_label(
+            photo.features.texture.sharpness,
+            photo.features.texture.noise,
         )
+        for photo, _ in weighted
+    }
+    texture_shares = _shares(
+        (texture_labels[photo.reference_id], weight) for photo, weight in weighted
+    )
+    texture_preference_shares = _shares(
+        (texture_labels[photo.reference_id], weight)
         for photo, weight in weighted
+        if texture_labels[photo.reference_id] in _TEXTURE_PREFERENCE_LABELS
+    )
+    quality_limited_count = sum(
+        1
+        for photo, _ in weighted
+        if texture_labels[photo.reference_id] in {"noisy", "quality_soft"}
     )
     monochrome_share = sum(
         weight for photo, weight in weighted if photo.features.color.monochrome
@@ -678,14 +688,10 @@ def fuse_photo_features(
         temperature_median=global_medians["temperature"],
         tint_median=global_medians["tint"],
         contrast_median=global_medians["contrast"],
-        noise_median=global_medians["noise"],
         sharpness_median=global_medians["sharpness"],
         shares={
-            **texture_shares,
+            **texture_preference_shares,
             "monochrome": monochrome_share,
-            "crisp": texture_shares.get("crisp", 0.0),
-            "soft_detail": texture_shares.get("soft_detail", 0.0),
-            "grainy": texture_shares.get("grainy", 0.0),
         },
         conflict_dimensions=conflict_dimensions,
     )
@@ -697,25 +703,26 @@ def fuse_photo_features(
         if len(group) < 2:
             continue
         group_medians = medians(group)
-        group_texture = _shares(
-            (
-                _texture_label(
-                    photo.features.texture.sharpness,
-                    photo.features.texture.noise,
-                ),
-                weight,
+        group_labels = {
+            photo.reference_id: _texture_label(
+                photo.features.texture.sharpness,
+                photo.features.texture.noise,
             )
+            for photo, _ in group
+        }
+        group_texture_preference = _shares(
+            (group_labels[photo.reference_id], weight)
             for photo, weight in group
+            if group_labels[photo.reference_id] in _TEXTURE_PREFERENCE_LABELS
         )
         group_targets = _numeric_targets(
             saturation_median=group_medians["saturation"],
             temperature_median=group_medians["temperature"],
             tint_median=group_medians["tint"],
             contrast_median=group_medians["contrast"],
-            noise_median=group_medians["noise"],
             sharpness_median=group_medians["sharpness"],
             shares={
-                **group_texture,
+                **group_texture_preference,
                 "monochrome": sum(
                     weight
                     for photo, weight in group
@@ -746,7 +753,12 @@ def fuse_photo_features(
             3,
         ),
         "light": round(_support(light_shares, _top_label(light_shares)), 3),
-        "texture": round(_support(texture_shares, _top_label(texture_shares)), 3),
+        "texture": round(
+            _support(texture_preference_shares, _top_label(texture_preference_shares))
+            if texture_preference_shares
+            else 0.0,
+            3,
+        ),
         "scene": round(scene_stability, 3),
     }
     consistency = (
@@ -809,7 +821,12 @@ def fuse_photo_features(
     tint_text = _TINT_TEXT[top_tint]
     light_text = _LIGHT_TEXT[top_light]
     key_text = _KEY_TEXT[top_key]
-    texture_text = _TEXTURE_TEXT[top_texture]
+    quality_limited = top_texture in {"noisy", "quality_soft"}
+    texture_text = (
+        "质感受画质限制，未能可靠判断颗粒或清晰度偏好"
+        if quality_limited
+        else _TEXTURE_TEXT[top_texture]
+    )
     harmony_text = _HARMONY_LABELS.get(top_harmony, "色彩关系待确认")
     direction_text = _DIRECTION_LABELS.get(top_direction, "光线方向待确认")
 
@@ -867,9 +884,13 @@ def fuse_photo_features(
                 f"常见光线方向：{direction_text}",
             ),
             "texture": (
-                _share_text(
-                    _support(texture_shares, top_texture),
-                    _TEXTURE_TEXT[top_texture],
+                (
+                    f"{quality_limited_count} 张照片噪声或清晰度异常，未计入质感偏好。"
+                    if quality_limited
+                    else _share_text(
+                        _support(texture_shares, top_texture),
+                        _TEXTURE_TEXT[top_texture],
+                    )
                 ),
             ),
             "scene": tuple(
@@ -884,6 +905,8 @@ def fuse_photo_features(
     )
 
     occasional: list[str] = []
+    if not texture_preference_shares:
+        occasional.append("质感证据不足：参考照片噪声或清晰度异常，未形成稳定质感偏好。")
     for key, label in (
         ("color", "色彩"),
         ("tone", "影调"),
@@ -891,6 +914,8 @@ def fuse_photo_features(
         ("texture", "质感"),
         ("scene", "场景"),
     ):
+        if key == "texture" and not texture_preference_shares:
+            continue
         if stability[key] < CANDIDATE_SUPPORT:
             occasional.append(f"{label}倾向不稳定，暂不作为稳定个人特征。")
     occasional.extend(
@@ -915,6 +940,10 @@ def fuse_photo_features(
         limitations.append(f"检测到 {len(conflicts)} 处偏好冲突，已保留为候选而非平均。")
     if len(scene_groups) > 1 and scene_stability < CANDIDATE_SUPPORT:
         limitations.append("参考照片场景差异较大，全局风格仅保留跨场景一致的方向。")
+    if quality_limited_count:
+        limitations.append(
+            f"{quality_limited_count} 张照片噪声或清晰度异常，未计入质感偏好。"
+        )
     if anomaly_count:
         limitations.append(f"{anomaly_count} 张照片存在裁切、清晰度或噪声异常，已降低其权重。")
 
@@ -967,22 +996,22 @@ def fuse_photo_features(
         composition=_composition_traits(weighted),
         texture=StyleTextureTraits(
             grain=(
-                "颗粒感明显"
-                if texture_shares.get("grainy", 0.0) >= CANDIDATE_SUPPORT
+                "质感特征受画质限制，暂不形成偏好"
+                if quality_limited
                 else "颗粒克制"
             ),
             sharpness=(
-                "清晰锐利"
-                if texture_shares.get("crisp", 0.0) >= CANDIDATE_SUPPORT
-                else "画面柔和"
-                if texture_shares.get("soft_detail", 0.0) >= CANDIDATE_SUPPORT
+                "清晰度受画质限制，暂不形成偏好"
+                if quality_limited
+                else "清晰锐利"
+                if texture_preference_shares.get("crisp", 0.0) >= CANDIDATE_SUPPORT
                 else "清晰度自然"
             ),
             detail=(
-                "保留较多细节"
-                if texture_shares.get("crisp", 0.0) >= CANDIDATE_SUPPORT
-                else "细节保留有限"
-                if texture_shares.get("soft_detail", 0.0) >= CANDIDATE_SUPPORT
+                "质感证据受限"
+                if quality_limited
+                else "保留较多细节"
+                if texture_preference_shares.get("crisp", 0.0) >= CANDIDATE_SUPPORT
                 else "细节保留自然"
             ),
         ),
