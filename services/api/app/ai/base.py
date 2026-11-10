@@ -8,9 +8,11 @@ from app.ai.contracts import (
     DecisionResult,
     IssueCandidate,
     MeasurementSummary,
+    SceneLabel,
     VisionResult,
 )
 from app.models.analysis_report import AnalysisReport
+from app.models.personal_style import PersonalStyleProfile
 from app.models.photographer import (
     CreativeDirection,
     PatchDraft,
@@ -20,6 +22,7 @@ from app.models.photographer import (
     StyleDefinition,
 )
 from app.models.recipe import EditRecipe
+from app.models.style_authoring import StyleAuthoringDraft
 
 if TYPE_CHECKING:
     from app.ai.style_context import StyleGenerationContext
@@ -68,6 +71,18 @@ class PatchRequest:
     direction: CreativeDirection | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class StyleAuthoringRequest:
+    """Natural-language style creation or refinement request."""
+
+    name: str
+    description: str
+    avoid_text: str | None = None
+    suitable_scenes: tuple[SceneLabel, ...] = ()
+    base_profile: PersonalStyleProfile | None = None
+    instruction: str | None = None
+
+
 class VisionProvider(Protocol):
     name: str
     model: str
@@ -108,6 +123,10 @@ class PhotographyPlannerProvider(Protocol):
 
     def adjust(self, request: PatchRequest) -> PatchDraft:
         """Return a minimal structured patch draft for a natural-language instruction."""
+        ...
+
+    def author_style(self, request: StyleAuthoringRequest) -> StyleAuthoringDraft:
+        """Parse or refine a structured personal style without executing it."""
         ...
 
     def check_connection(self, *, timeout: float | None = None) -> int:

@@ -8,6 +8,7 @@ from app.core.identity import OwnerScope
 from app.imaging.semantic_models import SemanticModelRegistry
 from app.photographer.service import PhotographerService
 from app.services.analysis_task_service import AnalysisTaskService
+from app.services.custom_style_service import CustomStyleService
 from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
@@ -49,6 +50,17 @@ def get_owner_scope(request: Request) -> OwnerScope:
     if not isinstance(scope, OwnerScope):
         raise AppError(503, "service_unavailable", "The service is not ready.")
     return scope
+
+
+def get_custom_style_service(request: Request) -> CustomStyleService:
+    service = getattr(request.app.state, "custom_style_service", None)
+    if not isinstance(service, CustomStyleService):
+        raise AppError(
+            503,
+            "style_authoring_unavailable",
+            "The custom style service is not available.",
+        )
+    return service
 
 
 def get_image_service(request: Request) -> ImageService:

@@ -4762,6 +4762,438 @@
         }
       }
     },
+    "/api/v1/personal-styles/custom/parse": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Parse Custom Style",
+        "operationId": "parse_custom_style_api_v1_personal_styles_custom_parse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomStyleParseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomStyleParseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/custom": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Save Custom Style",
+        "operationId": "save_custom_style_api_v1_personal_styles_custom_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomStyleSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/refine": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Refine Personal Style",
+        "operationId": "refine_personal_style_api_v1_personal_styles__style_id__refine_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomStyleRefineRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomStyleRefineResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/refine/apply": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Apply Personal Style Refinement",
+        "operationId": "apply_personal_style_refinement_api_v1_personal_styles__style_id__refine_apply_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomStyleRefineApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/personal-styles": {
       "get": {
         "tags": [
@@ -4830,8 +5262,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -4899,8 +5361,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -4993,8 +5485,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5076,8 +5598,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5154,8 +5706,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5239,8 +5821,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5314,8 +5926,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5387,8 +6029,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5462,8 +6134,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5545,8 +6247,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5625,8 +6357,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5710,8 +6472,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5785,8 +6577,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5870,8 +6692,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -5957,8 +6809,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -6032,8 +6914,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -6119,8 +7031,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -6206,8 +7148,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -6305,8 +7277,38 @@
               }
             }
           },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -8136,6 +9138,165 @@
         "additionalProperties": false,
         "type": "object",
         "title": "CurveSet"
+      },
+      "CustomStyleParseRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "avoid": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avoid"
+          },
+          "suitableScenes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Suitablescenes",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "CustomStyleParseRequest"
+      },
+      "CustomStyleParseResponse": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/StyleAuthoringDraft"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/StyleAuthoringProviderInfo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft",
+          "provider"
+        ],
+        "title": "CustomStyleParseResponse"
+      },
+      "CustomStyleRefineApplyRequest": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/StyleAuthoringDraft"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft"
+        ],
+        "title": "CustomStyleRefineApplyRequest"
+      },
+      "CustomStyleRefineRequest": {
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Instruction"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "instruction"
+        ],
+        "title": "CustomStyleRefineRequest"
+      },
+      "CustomStyleRefineResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "currentVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Currentversion"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/StyleAuthoringDraft"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/StyleAuthoringProviderInfo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId",
+          "currentVersion",
+          "draft",
+          "provider"
+        ],
+        "title": "CustomStyleRefineResponse"
+      },
+      "CustomStyleSaveRequest": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/StyleAuthoringDraft"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft"
+        ],
+        "title": "CustomStyleSaveRequest"
       },
       "DetailMeasurement": {
         "properties": {
@@ -13993,6 +15154,182 @@
         ],
         "title": "StorageHealth"
       },
+      "StyleAuthoringDraft": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "color": {
+            "$ref": "#/components/schemas/StyleColorTraits"
+          },
+          "light": {
+            "$ref": "#/components/schemas/StyleLightTraits"
+          },
+          "composition": {
+            "$ref": "#/components/schemas/StyleCompositionTraits"
+          },
+          "texture": {
+            "$ref": "#/components/schemas/StyleTextureTraits"
+          },
+          "suitableScenes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "minItems": 1,
+            "title": "Suitablescenes"
+          },
+          "unsuitableNotes": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Unsuitablenotes"
+          },
+          "targets": {
+            "additionalProperties": {
+              "type": "number",
+              "maximum": 100.0,
+              "minimum": -100.0
+            },
+            "type": "object",
+            "title": "Targets"
+          },
+          "protected": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionConstraint"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Protected",
+            "default": []
+          },
+          "avoid": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalAvoidEffect"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Avoid",
+            "default": []
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "rationale": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Rationale",
+            "default": []
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Warnings",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Limitations",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.5
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsageInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "color",
+          "light",
+          "composition",
+          "texture",
+          "suitableScenes",
+          "unsuitableNotes",
+          "summary"
+        ],
+        "title": "StyleAuthoringDraft",
+        "description": "Validated structured style proposal produced by the authoring provider."
+      },
+      "StyleAuthoringProviderInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Model"
+          },
+          "promptVersion": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Promptversion"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "model",
+          "promptVersion",
+          "isMock"
+        ],
+        "title": "StyleAuthoringProviderInfo"
+      },
       "StyleCategory": {
         "type": "string",
         "enum": [
@@ -15282,6 +16619,48 @@
           "bytes"
         ],
         "title": "UploadImageResponse"
+      },
+      "UsageInfo": {
+        "properties": {
+          "promptTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompttokens"
+          },
+          "completionTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completiontokens"
+          },
+          "totalTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totaltokens"
+          }
+        },
+        "type": "object",
+        "title": "UsageInfo"
       },
       "UserMask": {
         "properties": {

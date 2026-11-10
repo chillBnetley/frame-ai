@@ -124,6 +124,13 @@ def test_personal_style_routes_use_the_same_token_gate(tmp_path: Path):
             ).status_code
             == 401
         )
+        assert (
+            client.post(
+                "/api/v1/personal-styles/custom/parse",
+                json={"name": "测试", "description": "低饱和"},
+            ).status_code
+            == 401
+        )
         allowed = client.get(
             "/api/v1/personal-styles",
             headers=auth_headers(settings),

@@ -1,4 +1,6 @@
 import type {
+  CustomStyleParseResponse,
+  CustomStyleRefineResponse,
   ImageListResponse,
   PersonalStyleAnalysisResponse,
   PersonalStyleCompareResponse,
@@ -9,6 +11,7 @@ import type {
   PersonalStyleReference,
   PersonalStyleVersionListResponse,
   PhotoVisualFeatures,
+  StyleAuthoringDraft,
 } from "@/types/personal-style";
 
 export const PERSONAL_STYLE_ID = "personal_abcdef123456";
@@ -440,6 +443,92 @@ export function personalStyleCompare(): PersonalStyleCompareResponse {
         after: 0.62,
       },
     ],
+  };
+}
+
+export function styleAuthoringDraft(
+  overrides: Partial<StyleAuthoringDraft> = {},
+): StyleAuthoringDraft {
+  return {
+    name: "克制的城市叙事",
+    description: "低饱和、偏冷的环境色，保留暗部层次与自然肤色。",
+    color: {
+      tendency: "整体偏冷，低饱和",
+      relationships: "环境色自然，主色与辅助色关系克制",
+      saturation: "低饱和",
+    },
+    light: {
+      contrast: "中等反差",
+      shadows: "保留暗部层次",
+      highlights: "高光柔和",
+      expression: "自然光优先",
+    },
+    composition: {
+      space: "负空间适中",
+      geometry: "平衡构图",
+      negativeSpace: "适中",
+      subjectRelation: "主体与环境保护克制关系",
+    },
+    texture: {
+      grain: "颗粒克制",
+      sharpness: "清晰度自然",
+      detail: "细节自然",
+    },
+    suitableScenes: ["street", "portrait"],
+    unsuitableNotes: "未覆盖场景需要重新适配。",
+    targets: { saturation: -12, temperature: -8 },
+    protected: ["preserve_skin_tone", "preserve_highlight_detail"],
+    avoid: ["oversaturated"],
+    summary: "色彩：整体偏冷，低饱和；影调：中等反差；光线：自然光优先。",
+    rationale: ["识别到低饱和或克制的色彩倾向。", "识别到肤色保护需求。"],
+    warnings: [],
+    limitations: ["模拟数据：自然语言风格由关键词规则解析。"],
+    confidence: 0.55,
+    ...overrides,
+  };
+}
+
+export function customParseResponse(): CustomStyleParseResponse {
+  return {
+    draft: styleAuthoringDraft(),
+    provider: {
+      name: "mock",
+      model: "mock-planner",
+      promptVersion: "stage6.2-style-authoring/1",
+      isMock: true,
+    },
+  };
+}
+
+export function customRefineResponse(): CustomStyleRefineResponse {
+  return {
+    styleId: PERSONAL_STYLE_ID,
+    currentVersion: "1.0",
+    draft: styleAuthoringDraft({
+      targets: {
+        saturation: -16,
+        temperature: -6,
+        highlights: -4,
+        shadows: 4,
+      },
+      light: {
+        contrast: "中等反差",
+        shadows: "保留更多暗部层次",
+        highlights: "保留更多高光细节",
+        expression: "自然光优先",
+      },
+      protected: [
+        "preserve_skin_tone",
+        "preserve_highlight_detail",
+        "preserve_shadow_detail",
+      ],
+    }),
+    provider: {
+      name: "mock",
+      model: "mock-planner",
+      promptVersion: "stage6.2-style-authoring/1",
+      isMock: true,
+    },
   };
 }
 

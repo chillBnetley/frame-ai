@@ -109,17 +109,79 @@ export const TRAIT_FIELDS: Array<{
   key: TraitKey;
   label: string;
   placeholder: string;
+  section: "color" | "light" | "texture";
+  field: string;
 }> = [
-  { key: "colorTendency", label: "色彩倾向", placeholder: "例如：低饱和、偏冷" },
-  { key: "colorRelationships", label: "色彩关系", placeholder: "例如：环境色自然，避免强对比" },
-  { key: "colorSaturation", label: "饱和度表达", placeholder: "例如：低饱和，保留少量色彩" },
-  { key: "lightContrast", label: "影调反差", placeholder: "例如：中等反差，保留暗部" },
-  { key: "lightShadows", label: "暗部表现", placeholder: "例如：暗部较深但有层次" },
-  { key: "lightHighlights", label: "高光表现", placeholder: "例如：高光柔和，不溢出" },
-  { key: "lightExpression", label: "光线表达", placeholder: "例如：自然侧光，重视明暗关系" },
-  { key: "textureGrain", label: "颗粒", placeholder: "例如：颗粒克制" },
-  { key: "textureSharpness", label: "锐度", placeholder: "例如：清晰度自然" },
-  { key: "textureDetail", label: "细节", placeholder: "例如：保留自然细节" },
+  {
+    key: "colorTendency",
+    label: "色彩倾向",
+    placeholder: "例如：低饱和、偏冷",
+    section: "color",
+    field: "tendency",
+  },
+  {
+    key: "colorRelationships",
+    label: "色彩关系",
+    placeholder: "例如：环境色自然，避免强对比",
+    section: "color",
+    field: "relationships",
+  },
+  {
+    key: "colorSaturation",
+    label: "饱和度表达",
+    placeholder: "例如：低饱和，保留少量色彩",
+    section: "color",
+    field: "saturation",
+  },
+  {
+    key: "lightContrast",
+    label: "影调反差",
+    placeholder: "例如：中等反差，保留暗部",
+    section: "light",
+    field: "contrast",
+  },
+  {
+    key: "lightShadows",
+    label: "暗部表现",
+    placeholder: "例如：暗部较深但有层次",
+    section: "light",
+    field: "shadows",
+  },
+  {
+    key: "lightHighlights",
+    label: "高光表现",
+    placeholder: "例如：高光柔和，不溢出",
+    section: "light",
+    field: "highlights",
+  },
+  {
+    key: "lightExpression",
+    label: "光线表达",
+    placeholder: "例如：自然侧光，重视明暗关系",
+    section: "light",
+    field: "expression",
+  },
+  {
+    key: "textureGrain",
+    label: "颗粒",
+    placeholder: "例如：颗粒克制",
+    section: "texture",
+    field: "grain",
+  },
+  {
+    key: "textureSharpness",
+    label: "锐度",
+    placeholder: "例如：清晰度自然",
+    section: "texture",
+    field: "sharpness",
+  },
+  {
+    key: "textureDetail",
+    label: "细节",
+    placeholder: "例如：保留自然细节",
+    section: "texture",
+    field: "detail",
+  },
 ];
 
 export function traitValuesFrom(profile: {

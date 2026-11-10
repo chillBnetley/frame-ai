@@ -37,6 +37,7 @@ from app.repositories.photographer_repo import (
 )
 from app.repositories.style_repo import SqliteStyleProfileRepository
 from app.services.analysis_task_service import AnalysisTaskService
+from app.services.custom_style_service import CustomStyleService
 from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
@@ -153,6 +154,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             analysis=analysis_tasks,
         )
         style_fusion_service = StyleFusionService(personal_styles)
+        custom_style_service = CustomStyleService(
+            providers,
+            personal_style_service,
+            personal_styles,
+        )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -177,6 +183,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.personal_style_service = personal_style_service
         app.state.personal_style_analysis_service = personal_style_analysis_service
         app.state.style_fusion_service = style_fusion_service
+        app.state.custom_style_service = custom_style_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,

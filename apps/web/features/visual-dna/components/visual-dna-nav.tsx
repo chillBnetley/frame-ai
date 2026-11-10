@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/visual-dna", label: "我的风格" },
-  { href: "/visual-dna/new", label: "新建风格" },
+  { href: "/visual-dna/new", label: "参考照片创建" },
+  { href: "/visual-dna/custom", label: "自然语言创建" },
   { href: "/master-vision/masters", label: "大师风格" },
 ];
 
@@ -20,9 +21,10 @@ export function VisualDnaNav() {
       {LINKS.map((link) => {
         const active =
           link.href === "/visual-dna"
-            ? pathname === link.href || pathname.startsWith("/visual-dna/")
-              ? !pathname.startsWith("/visual-dna/new")
-              : false
+            ? pathname === link.href ||
+              (pathname.startsWith("/visual-dna/") &&
+                !pathname.startsWith("/visual-dna/new") &&
+                !pathname.startsWith("/visual-dna/custom"))
             : pathname.startsWith(link.href);
         return (
           <Link

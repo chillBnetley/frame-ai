@@ -1,5 +1,8 @@
 import { apiJson, apiRequest } from "@/lib/api/client";
 import type {
+  CustomStyleParseRequest,
+  CustomStyleParseResponse,
+  CustomStyleRefineResponse,
   ImageListResponse,
   PersonalStyleAnalysisResponse,
   PersonalStyleCompareResponse,
@@ -15,6 +18,7 @@ import type {
   PersonalStyleVersionDetailResponse,
   PersonalStyleVersionListResponse,
   PhotoVisualFeatures,
+  StyleAuthoringDraft,
 } from "@/types/personal-style";
 
 const LIST_TIMEOUT_MS = 15_000;
@@ -267,6 +271,68 @@ export async function comparePersonalStyleVersions(
     `${stylePath(styleId)}/compare?${params.toString()}`,
     { cache: "no-store" },
     { signal, timeoutMs: DETAIL_TIMEOUT_MS },
+  );
+}
+
+export async function parseCustomStyle(
+  payload: CustomStyleParseRequest,
+  signal?: AbortSignal,
+): Promise<CustomStyleParseResponse> {
+  return apiJson<CustomStyleParseResponse>(
+    `${PREFIX}/custom/parse`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    { signal, timeoutMs: FUSION_TIMEOUT_MS },
+  );
+}
+
+export async function saveCustomStyle(
+  draft: StyleAuthoringDraft,
+  options: { note?: string; signal?: AbortSignal } = {},
+): Promise<PersonalStyleDetailResponse> {
+  return apiJson<PersonalStyleDetailResponse>(
+    `${PREFIX}/custom`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ draft, note: options.note }),
+    },
+    { signal: options.signal, timeoutMs: MUTATION_TIMEOUT_MS },
+  );
+}
+
+export async function refinePersonalStyle(
+  styleId: string,
+  instruction: string,
+  signal?: AbortSignal,
+): Promise<CustomStyleRefineResponse> {
+  return apiJson<CustomStyleRefineResponse>(
+    `${stylePath(styleId)}/refine`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ instruction }),
+    },
+    { signal, timeoutMs: FUSION_TIMEOUT_MS },
+  );
+}
+
+export async function applyPersonalStyleRefinement(
+  styleId: string,
+  draft: StyleAuthoringDraft,
+  options: { note?: string; signal?: AbortSignal } = {},
+): Promise<PersonalStyleDetailResponse> {
+  return apiJson<PersonalStyleDetailResponse>(
+    `${stylePath(styleId)}/refine/apply`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ draft, note: options.note }),
+    },
+    { signal: options.signal, timeoutMs: MUTATION_TIMEOUT_MS },
   );
 }
 

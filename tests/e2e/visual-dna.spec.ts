@@ -18,6 +18,44 @@ function fixturePath(metadataPath: string): string {
   return metadata.path;
 }
 
+test("creates and refines a style from natural language", async ({ page }, testInfo) => {
+  const styleName = `NL ${testInfo.project.name}`;
+  const confirmedName = `${styleName} confirmed`;
+
+  await page.goto("/visual-dna/custom");
+  await expect(
+    page.getByRole("heading", { name: "用自然语言创建个人风格" }),
+  ).toBeVisible();
+
+  await page.getByLabel("风格名称").fill(styleName);
+  await page
+    .getByLabel("风格描述")
+    .fill("低饱和、偏冷的环境色，保留暗部层次，人物肤色自然。");
+  await page.getByLabel(/不希望出现的效果/).fill("不要过饱和，不要压黑");
+  await page.getByRole("button", { name: /解析风格/ }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "AI 理解的风格" }),
+  ).toBeVisible();
+  await expect(page.getByText(/模拟解析/)).toBeVisible();
+  await page.getByLabel("确认后的名称").fill(confirmedName);
+  await page.getByRole("button", { name: "保存个人风格" }).click();
+  await page.waitForURL(/\/visual-dna\/personal_[a-z0-9]+$/, { timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: confirmedName })).toBeVisible();
+
+  await page.getByRole("link", { name: "继续调整" }).click();
+  await expect(
+    page.getByRole("heading", { name: new RegExp(`继续调整「${confirmedName}」`) }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "保留更多高光" }).click();
+  await page.getByRole("button", { name: "解析修改" }).click();
+  await expect(page.getByText("修改预览")).toBeVisible();
+  await expect(page.getByText("保留更多高光细节")).toBeVisible();
+  await page.getByRole("button", { name: "应用为新版本" }).click();
+  await page.waitForURL(/\/visual-dna\/personal_[a-z0-9]+$/, { timeout: 60_000 });
+  await expect(page.getByText(/v1\.1/).first()).toBeVisible();
+});
+
 test("creates, analyses, fuses, edits, and reviews a personal style", async ({
   page,
 }, testInfo) => {

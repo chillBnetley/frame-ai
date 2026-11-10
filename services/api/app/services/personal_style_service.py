@@ -151,6 +151,48 @@ class PersonalStyleService:
             ) from exc
         return self._detail_from(self._require(style_id, owner_id))
 
+    def create_from_profile(
+        self,
+        profile: PersonalStyleProfile,
+        definition: PersonalStyleDefinition,
+        *,
+        owner_id: str,
+    ) -> PersonalStyleDetailResponse:
+        try:
+            self._repository.create(
+                profile,
+                definition,
+                owner_id=owner_id,
+                change_source=PersonalStyleChangeSource.CUSTOM,
+            )
+        except DuplicatePersonalStyleNameError as exc:
+            raise AppError(
+                409,
+                "personal_style_name_conflict",
+                "A personal style with this name already exists.",
+            ) from exc
+        return self._detail_from(self._require(profile.id, owner_id))
+
+    def apply_profile_version(
+        self,
+        style_id: str,
+        profile: PersonalStyleProfile,
+        definition: PersonalStyleDefinition,
+        *,
+        owner_id: str,
+        change_source: PersonalStyleChangeSource,
+        change_note: str | None,
+    ) -> PersonalStyleDetailResponse:
+        self._require(style_id, owner_id)
+        self._add_version(
+            profile,
+            definition,
+            owner_id=owner_id,
+            change_source=change_source,
+            change_note=change_note,
+        )
+        return self._detail_from(self._require(style_id, owner_id))
+
     def list(
         self,
         *,

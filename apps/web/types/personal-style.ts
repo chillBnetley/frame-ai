@@ -14,6 +14,21 @@ export type PersonalStyleUpdateRequest =
   components["schemas"]["PersonalStyleUpdateRequest"];
 export type PersonalStyleTraitUpdate =
   components["schemas"]["PersonalStyleTraitUpdate"];
+export type StyleAuthoringDraft = components["schemas"]["StyleAuthoringDraft"];
+export type StyleAuthoringProviderInfo =
+  components["schemas"]["StyleAuthoringProviderInfo"];
+export type CustomStyleParseRequest =
+  components["schemas"]["CustomStyleParseRequest"];
+export type CustomStyleParseResponse =
+  components["schemas"]["CustomStyleParseResponse"];
+export type CustomStyleSaveRequest =
+  components["schemas"]["CustomStyleSaveRequest"];
+export type CustomStyleRefineRequest =
+  components["schemas"]["CustomStyleRefineRequest"];
+export type CustomStyleRefineResponse =
+  components["schemas"]["CustomStyleRefineResponse"];
+export type CustomStyleRefineApplyRequest =
+  components["schemas"]["CustomStyleRefineApplyRequest"];
 export type PersonalStyleStatus = components["schemas"]["PersonalStyleStatus"];
 export type PersonalStyleStatusResponse =
   components["schemas"]["PersonalStyleStatusResponse"];

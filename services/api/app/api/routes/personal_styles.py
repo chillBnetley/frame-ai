@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Path, Query, Response
 
 from app.api.deps import (
+    get_custom_style_service,
     get_owner_scope,
     get_personal_style_analysis_service,
     get_personal_style_service,
@@ -29,6 +30,14 @@ from app.models.personal_style import (
     PersonalStyleVersionListResponse,
 )
 from app.models.schemas import ErrorResponse
+from app.models.style_authoring import (
+    CustomStyleParseRequest,
+    CustomStyleParseResponse,
+    CustomStyleRefineApplyRequest,
+    CustomStyleRefineRequest,
+    CustomStyleRefineResponse,
+    CustomStyleSaveRequest,
+)
 from app.models.style_fusion import (
     PersonalStyleFusionRequest,
     PersonalStyleFusionResponse,
@@ -39,6 +48,7 @@ from app.models.visual_dna import (
     PersonalStyleAnalyzeRequest,
     PhotoVisualFeatures,
 )
+from app.services.custom_style_service import CustomStyleService
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
 from app.services.style_fusion_service import StyleFusionService
@@ -49,7 +59,10 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
         404: "Personal style, version, or reference photo not found",
         409: "Name/version conflict, missing confirmation, or publish prerequisite",
         422: "Invalid request payload",
+        429: "Style authoring daily model budget exhausted",
+        502: "Style authoring provider returned invalid output",
         503: "Personal style service not ready",
+        504: "Style authoring provider timed out",
     }.items()
 }
 
@@ -62,6 +75,43 @@ router = APIRouter(
 _StylePath = Annotated[PersonalStyleId, Path(description="Personal style identifier.")]
 _VersionPath = Annotated[StyleProfileVersion, Path(description="Archived version.")]
 _ReferencePath = Annotated[UUID, Path(description="Reference photo identifier.")]
+
+
+@router.post("/custom/parse", response_model=CustomStyleParseResponse)
+def parse_custom_style(
+    payload: CustomStyleParseRequest,
+    service: Annotated[CustomStyleService, Depends(get_custom_style_service)],
+) -> CustomStyleParseResponse:
+    return service.parse(payload)
+
+
+@router.post("/custom", response_model=PersonalStyleDetailResponse, status_code=201)
+def save_custom_style(
+    payload: CustomStyleSaveRequest,
+    service: Annotated[CustomStyleService, Depends(get_custom_style_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> PersonalStyleDetailResponse:
+    return service.save(payload, owner_id=owner.owner_id)
+
+
+@router.post("/{style_id}/refine", response_model=CustomStyleRefineResponse)
+def refine_personal_style(
+    style_id: _StylePath,
+    payload: CustomStyleRefineRequest,
+    service: Annotated[CustomStyleService, Depends(get_custom_style_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> CustomStyleRefineResponse:
+    return service.refine(style_id, payload, owner_id=owner.owner_id)
+
+
+@router.post("/{style_id}/refine/apply", response_model=PersonalStyleDetailResponse)
+def apply_personal_style_refinement(
+    style_id: _StylePath,
+    payload: CustomStyleRefineApplyRequest,
+    service: Annotated[CustomStyleService, Depends(get_custom_style_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> PersonalStyleDetailResponse:
+    return service.apply_refine(style_id, payload, owner_id=owner.owner_id)
 
 
 @router.get("", response_model=PersonalStyleListResponse)

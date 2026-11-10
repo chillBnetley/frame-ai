@@ -9,7 +9,13 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from app.ai.base import DecisionRequest, PatchRequest, PlannerRequest, VisionRequest
+from app.ai.base import (
+    DecisionRequest,
+    PatchRequest,
+    PlannerRequest,
+    StyleAuthoringRequest,
+    VisionRequest,
+)
 from app.ai.contracts import DecisionResult, UsageInfo, VisionResult
 from app.ai.errors import ProviderBudgetExceeded, ProviderError, ProviderUsageUnavailable
 from app.ai.prompts import (
@@ -20,6 +26,7 @@ from app.ai.prompts import (
     build_patch_messages,
     build_planner_messages,
     build_repair_messages,
+    build_style_authoring_messages,
     build_vision_messages,
 )
 from app.ai.transport import JsonHttpClient
@@ -29,6 +36,7 @@ from app.models.photographer import (
     canonical_evidence_refs,
 )
 from app.models.provider_settings import SecretKind
+from app.models.style_authoring import StyleAuthoringDraft
 from app.services.usage_meter import UsageMeter
 
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
@@ -303,6 +311,10 @@ class OpenAICompatiblePlannerProvider(_OpenAICompatibleBase):
     def adjust(self, request: PatchRequest) -> PatchDraft:
         messages = build_patch_messages(request)
         return self._run(messages, PatchDraft, "patch")
+
+    def author_style(self, request: StyleAuthoringRequest) -> StyleAuthoringDraft:
+        messages = build_style_authoring_messages(request)
+        return self._run(messages, StyleAuthoringDraft, "style_authoring")
 
 
 def _extract_content(response: dict[str, Any], prefix: str) -> str:
