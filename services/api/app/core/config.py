@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     generative_max_input_pixels: int = Field(default=24_000_000, gt=0)
     generative_max_output_pixels: int = Field(default=24_000_000, gt=0)
     generative_max_output_bytes: int = Field(default=64 * 1024 * 1024, gt=0)
+    generative_provider_timeout_seconds: float = Field(default=120.0, gt=0, le=1800)
+    generative_provider_max_retries: int = Field(default=1, ge=0, le=5)
+    generative_max_download_bytes: int = Field(default=96 * 1024 * 1024, gt=0)
 
     @field_validator("data_dir")
     @classmethod

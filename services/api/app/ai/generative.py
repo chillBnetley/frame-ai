@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from app.models.generative import GenerativeTaskType
 
@@ -9,10 +9,19 @@ ProviderJobStatus = Literal["queued", "processing", "succeeded", "failed"]
 
 
 class GenerativeProviderError(RuntimeError):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        retryable: bool = False,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.retryable = retryable
+        self.details = details or {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +36,72 @@ class GenerativeCapabilities:
     allowed_output_formats: tuple[str, ...]
     declared_retention: str
     notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class GenerativeRequestSpec:
+    """What the service knows before it prepares pixels."""
+
+    task_type: GenerativeTaskType
+    instruction: str
+    has_mask: bool
+    candidates: int
+    input_width: int
+    input_height: int
+
+    @property
+    def input_pixels(self) -> int:
+        return self.input_width * self.input_height
+
+
+def validate_spec(
+    capabilities: GenerativeCapabilities,
+    spec: GenerativeRequestSpec,
+) -> None:
+    """Validate a task against the provider's declared capabilities."""
+    if spec.task_type not in capabilities.supported_task_types:
+        raise GenerativeProviderError(
+            "generative_capability_unsupported",
+            "The selected provider does not support this task type.",
+            details={
+                "taskType": spec.task_type.value,
+                "supported": [item.value for item in capabilities.supported_task_types],
+            },
+        )
+    if spec.candidates < 1 or (spec.candidates > 1 and not capabilities.supports_multiple_outputs):
+        raise GenerativeProviderError(
+            "generative_capability_unsupported",
+            "The selected provider does not support this candidate count.",
+            details={"candidates": spec.candidates},
+        )
+    if spec.has_mask and not capabilities.supports_mask:
+        raise GenerativeProviderError(
+            "generative_capability_unsupported",
+            "The selected provider does not support masks.",
+        )
+    if spec.input_width <= 0 or spec.input_height <= 0:
+        raise GenerativeProviderError(
+            "generative_invalid_input",
+            "The input image has invalid dimensions.",
+        )
+    if spec.input_pixels > capabilities.max_output_pixels:
+        raise GenerativeProviderError(
+            "generative_input_too_large",
+            "The input image is larger than the provider accepts.",
+            details={
+                "pixels": spec.input_pixels,
+                "maxPixels": capabilities.max_output_pixels,
+            },
+        )
+    if max(spec.input_width, spec.input_height) > capabilities.max_long_edge:
+        raise GenerativeProviderError(
+            "generative_input_too_large",
+            "The input image is longer than the provider accepts.",
+            details={
+                "longEdge": max(spec.input_width, spec.input_height),
+                "maxLongEdge": capabilities.max_long_edge,
+            },
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +151,10 @@ class GenerativeProvider(Protocol):
 
     def capabilities(self) -> GenerativeCapabilities: ...
 
+    def validate_spec(self, spec: GenerativeRequestSpec) -> None: ...
+
+    def validate_request(self, request: GenerativeRequest) -> None: ...
+
     def submit(self, request: GenerativeRequest) -> GenerativeProviderJob: ...
 
     def poll(self, job: GenerativeProviderJob) -> GenerativeProviderJob: ...
@@ -95,5 +174,7 @@ __all__ = [
     "GenerativeProviderError",
     "GenerativeProviderJob",
     "GenerativeRequest",
+    "GenerativeRequestSpec",
     "ProviderJobStatus",
+    "validate_spec",
 ]

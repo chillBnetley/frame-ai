@@ -12,6 +12,10 @@ from app.ai.generative import (
     GenerativeProviderError,
     GenerativeProviderJob,
     GenerativeRequest,
+    GenerativeRequestSpec,
+)
+from app.ai.generative import (
+    validate_spec as validate_capability_spec,
 )
 from app.imaging.output import encode_image
 from app.models.generative import GenerativeTaskType
@@ -46,12 +50,34 @@ class MockGenerativeProvider:
             notes=("模拟生成：仅用于验证任务、版本与存储链路，不代表真实模型效果。",),
         )
 
-    def submit(self, request: GenerativeRequest) -> GenerativeProviderJob:
-        if request.task_type not in self.capabilities().supported_task_types:
+    def validate_spec(self, spec: GenerativeRequestSpec) -> None:
+        validate_capability_spec(self.capabilities(), spec)
+
+    def validate_request(self, request: GenerativeRequest) -> None:
+        if not request.image.data:
             raise GenerativeProviderError(
-                "generative_capability_unsupported",
-                f"The mock provider does not support {request.task_type.value}.",
+                "generative_invalid_input",
+                "The input image is empty.",
             )
+        raw_candidates = request.params.get("candidates", 1)
+        candidates = (
+            raw_candidates
+            if isinstance(raw_candidates, int) and not isinstance(raw_candidates, bool)
+            else 1
+        )
+        self.validate_spec(
+            GenerativeRequestSpec(
+                task_type=request.task_type,
+                instruction=request.instruction,
+                has_mask=request.image.mask is not None,
+                candidates=candidates,
+                input_width=request.image.width,
+                input_height=request.image.height,
+            )
+        )
+
+    def submit(self, request: GenerativeRequest) -> GenerativeProviderJob:
+        self.validate_request(request)
         result = self._render(request)
         return GenerativeProviderJob(
             provider_job_id=f"mock-{request.task_id}",

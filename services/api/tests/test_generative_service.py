@@ -4,6 +4,7 @@ import hashlib
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from uuid import UUID, uuid4
@@ -18,6 +19,9 @@ from app.ai.generative import (
     GenerativeCapabilities,
     GenerativeProviderJob,
     GenerativeRequest,
+)
+from app.ai.generative import (
+    validate_spec as validate_capability_spec,
 )
 from app.ai.providers.generative_mock import MockGenerativeProvider
 from app.core.config import Settings
@@ -120,6 +124,12 @@ class _ProviderBase:
         )
 
     def cancel(self, job: GenerativeProviderJob) -> None:
+        return None
+
+    def validate_spec(self, spec) -> None:
+        validate_capability_spec(self.capabilities(), spec)
+
+    def validate_request(self, request) -> None:
         return None
 
     def check_connection(self, *, timeout: float | None = None) -> int:
@@ -259,6 +269,11 @@ class IdentityProvider(_ProviderBase):
         return job.result
 
 
+class TinyLimitProvider(_ProviderBase):
+    def capabilities(self) -> GenerativeCapabilities:
+        return replace(super().capabilities(), max_output_pixels=100)
+
+
 def test_provider_failure_marks_the_task_failed(client: TestClient, settings: Settings):
     service = _make_service(client, settings, FailingProvider())
     try:
@@ -351,6 +366,20 @@ def test_unchanged_output_fails_the_task(client: TestClient, settings: Settings)
         assert status.status is GenerativeTaskStatus.FAILED
         assert status.error is not None
         assert status.error.code == "generative_no_visible_change"
+    finally:
+        service.shutdown()
+
+
+def test_oversized_input_is_rejected_before_queueing(
+    client: TestClient,
+    settings: Settings,
+):
+    service = _make_service(client, settings, TinyLimitProvider())
+    try:
+        with pytest.raises(AppError) as excinfo:
+            _create(service, _new_session(client))
+        assert excinfo.value.status_code == 413
+        assert excinfo.value.code == "generative_input_too_large"
     finally:
         service.shutdown()
 

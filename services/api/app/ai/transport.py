@@ -5,6 +5,7 @@ import json
 import random
 import socket
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -92,6 +93,23 @@ class HttpResponse:
     body: bytes
     headers: Mapping[str, str] = field(default_factory=dict)
 
+    def header(self, name: str) -> str | None:
+        return _header_value(self.headers, name)
+
+
+class HttpTransport(Protocol):
+    def request(
+        self,
+        method: str,
+        url: str,
+        body: bytes | None,
+        headers: Mapping[str, str],
+        timeout: float,
+        max_response_bytes: int,
+    ) -> HttpResponse:
+        """Send an HTTP request and return the raw response."""
+        ...
+
 
 class JsonTransport(Protocol):
     def post(
@@ -108,18 +126,20 @@ class JsonTransport(Protocol):
 class UrllibJsonTransport:
     """Minimal standard-library transport; no third-party runtime dependency."""
 
-    def post(
+    def request(
         self,
+        method: str,
         url: str,
-        body: bytes,
+        body: bytes | None,
         headers: Mapping[str, str],
         timeout: float,
+        max_response_bytes: int,
     ) -> HttpResponse:
         request = urllib.request.Request(
             url,
             data=body,
             headers=dict(headers),
-            method="POST",
+            method=method,
         )
         try:
             origin = _origin(url)
@@ -134,13 +154,13 @@ class UrllibJsonTransport:
             with opener.open(request, timeout=timeout) as response:
                 return HttpResponse(
                     status=int(getattr(response, "status", 200)),
-                    body=_read_limited(response),
+                    body=_read_limited(response, max_response_bytes),
                     headers=dict(response.headers.items()),
                 )
         except urllib.error.HTTPError as exc:
             return HttpResponse(
                 status=exc.code,
-                body=_read_limited(exc),
+                body=_read_limited(exc, max_response_bytes),
                 headers=dict(exc.headers.items()) if exc.headers else {},
             )
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -155,6 +175,22 @@ class UrllibJsonTransport:
                 "The model provider could not be reached.",
                 retryable=True,
             ) from exc
+
+    def post(
+        self,
+        url: str,
+        body: bytes,
+        headers: Mapping[str, str],
+        timeout: float,
+    ) -> HttpResponse:
+        return self.request(
+            "POST",
+            url,
+            body,
+            headers,
+            timeout,
+            MAX_RESPONSE_BYTES,
+        )
 
 
 class PinnedHttpTransport:
@@ -177,16 +213,29 @@ class PinnedHttpTransport:
         self._resolver = resolver
         self._connector = connector
         self._on_attempt = on_attempt
+        # The response cap differs between JSON polling and binary downloads.
+        # A thread-local keeps the _send signature stable for subclasses/tests
+        # while each synchronous request carries its own limit.
+        self._local = threading.local()
 
-    def post(
+    def request(
         self,
+        method: str,
         url: str,
-        body: bytes,
+        body: bytes | None,
         headers: Mapping[str, str],
         timeout: float,
+        max_response_bytes: int,
     ) -> HttpResponse:
         try:
-            return self._post(url, body, headers, timeout)
+            return self._request(
+                method,
+                url,
+                body,
+                headers,
+                timeout,
+                max_response_bytes,
+            )
         except EndpointPolicyError as exc:
             raise ProviderError(
                 "provider_endpoint_error",
@@ -200,15 +249,32 @@ class PinnedHttpTransport:
                 retryable=True,
             ) from exc
 
-    def _post(
+    def post(
         self,
         url: str,
         body: bytes,
         headers: Mapping[str, str],
         timeout: float,
     ) -> HttpResponse:
+        return self.request(
+            "POST",
+            url,
+            body,
+            headers,
+            timeout,
+            MAX_RESPONSE_BYTES,
+        )
+
+    def _request(
+        self,
+        method: str,
+        url: str,
+        body: bytes | None,
+        headers: Mapping[str, str],
+        timeout: float,
+        max_response_bytes: int,
+    ) -> HttpResponse:
         endpoint = parse_endpoint(url)
-        method = "POST"
         payload: bytes | None = body
         request_headers = dict(headers)
         redirects = 0
@@ -223,6 +289,7 @@ class PinnedHttpTransport:
             # once per hop, i.e. a redirect chain counts each real send.
             if self._on_attempt is not None:
                 self._on_attempt()
+            self._local.max_response_bytes = max_response_bytes
             response = self._send(
                 endpoint,
                 pinned,
@@ -280,7 +347,8 @@ class PinnedHttpTransport:
             raw = connection.getresponse()
             try:
                 status = int(raw.status)
-                payload = _read_limited(raw)
+                limit = int(getattr(self._local, "max_response_bytes", MAX_RESPONSE_BYTES))
+                payload = _read_limited(raw, limit)
                 response_headers = dict(raw.getheaders())
             finally:
                 raw.close()
@@ -477,9 +545,11 @@ class JsonHttpClient:
         return base * (0.9 + 0.2 * self._jitter())
 
 
-def _read_limited(response: Any) -> bytes:
-    data = response.read(MAX_RESPONSE_BYTES + 1)
-    if len(data) > MAX_RESPONSE_BYTES:
+def _read_limited(response: Any, max_bytes: int) -> bytes:
+    if max_bytes <= 0:
+        raise ValueError("max_bytes must be positive")
+    data = response.read(max_bytes + 1)
+    if len(data) > max_bytes:
         raise ProviderError(
             "provider_response_too_large",
             "The model provider response exceeded the allowed size.",
@@ -557,12 +627,19 @@ def _error_for_status(status: int) -> ProviderError:
     )
 
 
+def error_for_status(status: int) -> ProviderError:
+    """Public status-to-error mapping shared by JSON and binary clients."""
+    return _error_for_status(status)
+
+
 __all__ = [
     "HttpResponse",
+    "HttpTransport",
     "JsonHttpClient",
     "JsonTransport",
     "MAX_REDIRECTS",
     "MAX_RESPONSE_BYTES",
     "PinnedHttpTransport",
     "UrllibJsonTransport",
+    "error_for_status",
 ]

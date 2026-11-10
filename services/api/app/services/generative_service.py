@@ -22,6 +22,7 @@ from app.ai.generative import (
     GenerativeProviderError,
     GenerativeProviderJob,
     GenerativeRequest,
+    GenerativeRequestSpec,
 )
 from app.core.config import Settings
 from app.core.errors import AppError
@@ -141,27 +142,6 @@ class GenerativeTaskService:
         session = self.sessions.get(str(request.session_id))
         image_id = str(session.image_id)
         capabilities = self.provider.capabilities()
-        if request.task_type not in capabilities.supported_task_types:
-            raise AppError(
-                422,
-                "generative_capability_unsupported",
-                "The selected provider does not support this task type.",
-                {"taskType": request.task_type.value},
-            )
-        if request.params.candidates > 1 and not capabilities.supports_multiple_outputs:
-            raise AppError(
-                422,
-                "generative_capability_unsupported",
-                "The selected provider does not support multiple candidates.",
-                {"candidates": request.params.candidates},
-            )
-        if not self.provider.is_mock and not request.consent:
-            raise AppError(
-                422,
-                "generative_consent_required",
-                "Confirm that the image may be sent to the selected provider.",
-            )
-
         base_generated_asset_id = (
             None
             if session.revision.base_generated_asset_id is None
@@ -170,6 +150,29 @@ class GenerativeTaskService:
         mask_id = None if request.mask_id is None else str(request.mask_id)
         if mask_id is not None:
             self._validate_mask(mask_id, image_id, base_generated_asset_id)
+
+        base = self.assets.resolve(image_id, base_generated_asset_id)
+        try:
+            self.provider.validate_spec(
+                GenerativeRequestSpec(
+                    task_type=request.task_type,
+                    instruction=request.instruction.strip(),
+                    has_mask=mask_id is not None,
+                    candidates=request.params.candidates,
+                    input_width=base.width,
+                    input_height=base.height,
+                )
+            )
+        except GenerativeProviderError as exc:
+            status_code = 413 if exc.code == "generative_input_too_large" else 422
+            raise AppError(status_code, exc.code, exc.message, exc.details) from exc
+
+        if not self.provider.is_mock and not request.consent:
+            raise AppError(
+                422,
+                "generative_consent_required",
+                "Confirm that the image may be sent to the selected provider.",
+            )
 
         plan = GenerativePlan(
             task_type=request.task_type,
@@ -518,6 +521,7 @@ class GenerativeTaskService:
             params=json.loads(task.params_json),
             prompt_version=task.prompt_version,
         )
+        self.provider.validate_request(request)
         job = self.provider.submit(request)
         self.repository.set_provider_job_id(task.id, job.provider_job_id)
         self.repository.set_stage(task.id, GenerativeTaskStage.GENERATING.value)
