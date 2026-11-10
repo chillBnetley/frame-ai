@@ -629,9 +629,18 @@ class PersonalStyleService:
             status=record.head.status,
             version=record.head.current_version,
             favorite=record.head.favorite,
+            enabled=record.profile.enabled,
             confidence=record.profile.personal.confidence,
             sample_count=record.profile.personal.sample_count,
             reference_count=record.reference_count,
+            engine_style=record.profile.engine_style,
+            default_strength=record.profile.default_strength,
+            signature=(
+                record.profile.color.tendency,
+                record.profile.light.expression,
+                record.profile.texture.grain,
+            ),
+            suitable_scenes=record.profile.scene_fit.suitable,
             updated_at=record.head.updated_at,
         )
 

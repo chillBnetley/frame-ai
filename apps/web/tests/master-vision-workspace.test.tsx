@@ -15,6 +15,11 @@ import {
   styleItem,
 } from "./master-vision-fixtures";
 import {
+  PERSONAL_STYLE_ID,
+  personalStyleDetail,
+  personalStyleItem,
+} from "./personal-style-fixtures";
+import {
   IMAGE_ID,
   NEXT_REVISION_ID,
   REVISION_ID,
@@ -33,7 +38,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function installWorkspaceMock() {
+function installWorkspaceMock(options: { personal?: boolean } = {}) {
   const calls: Array<{ method: string; url: string; body: unknown }> = [];
   let renders = 0;
   const plan = masterVisionPlan();
@@ -49,6 +54,16 @@ function installWorkspaceMock() {
       if (url.endsWith("/api/v1/styles")) {
         return jsonResponse({ styles: [styleItem(), GENRE_ITEM] });
       }
+      if (url.includes("/api/v1/personal-styles?status=published")) {
+        return jsonResponse({
+          styles: options.personal
+            ? [personalStyleItem({ status: "published" })]
+            : [],
+        });
+      }
+      if (url.endsWith(`/api/v1/personal-styles/${PERSONAL_STYLE_ID}`)) {
+        return jsonResponse(personalStyleDetail());
+      }
       if (url.endsWith("/api/v1/ai/photographer/conversion-modes")) {
         return jsonResponse(conversionModeList());
       }
@@ -57,6 +72,15 @@ function installWorkspaceMock() {
       }
       if (url.includes(`/api/v1/styles/${MASTER_STYLE_ID}/fit`)) {
         return jsonResponse(styleFit());
+      }
+      if (url.includes(`/api/v1/styles/${PERSONAL_STYLE_ID}/fit`)) {
+        return jsonResponse(
+          styleFit({
+            styleId: PERSONAL_STYLE_ID,
+            styleName: "克制的城市叙事",
+            styleKind: "personal",
+          }),
+        );
       }
       if (url.endsWith("/api/v1/images") && method === "POST") {
         return jsonResponse({
@@ -254,6 +278,39 @@ describe("MasterVisionWorkspace", () => {
     expect(within(initialItem as HTMLElement).getByRole("button", { name: "当前版本" })).toBeDisabled();
   });
 
+  it("applies a personal style and sends locked manual fields", async () => {
+    const calls = installWorkspaceMock({ personal: true });
+    const user = userEvent.setup();
+    render(<MasterVisionWorkspace initialStyleId={PERSONAL_STYLE_ID} />);
+
+    expect(
+      await screen.findByRole("link", { name: "打开个人风格" }),
+    ).toHaveAttribute("href", `/visual-dna/${PERSONAL_STYLE_ID}`);
+    await uploadPhoto(user);
+    const generate = await screen.findByRole("button", { name: /生成风格方案/ });
+    await waitFor(() => expect(generate).toBeEnabled());
+
+    await user.click(screen.getByRole("checkbox", { name: "饱和度" }));
+    await user.click(generate);
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) =>
+            call.method === "POST" &&
+            call.url.endsWith("/ai/photographer/plan"),
+        ),
+      ).toBe(true),
+    );
+    const planCall = calls.find(
+      (call) => call.method === "POST" && call.url.endsWith("/ai/photographer/plan"),
+    );
+    expect(planCall?.body).toMatchObject({
+      styleId: PERSONAL_STYLE_ID,
+      mode: "style",
+      lockedFields: ["saturation"],
+    });
+  });
+
   it("restores a persisted session, history, style, mode, and strength", async () => {
     installWorkspaceMock();
     render(
@@ -263,7 +320,7 @@ describe("MasterVisionWorkspace", () => {
     expect(await screen.findByAltText("当前照片")).toBeInTheDocument();
     expect(await screen.findByText(/v2 · AI 创作/)).toBeInTheDocument();
     expect(
-      screen.getByRole("combobox", { name: "选择大师或流派风格" }),
+      screen.getByRole("combobox", { name: "选择大师、流派或个人风格" }),
     ).toHaveValue(MASTER_STYLE_ID);
     expect(screen.getByRole("slider", { name: "风格强度" })).toHaveValue("70");
     expect(screen.getByRole("button", { name: "Creative" })).toHaveAttribute(
@@ -295,7 +352,7 @@ describe("MasterVisionWorkspace", () => {
 
     await uploadPhoto(user);
 
-    expect(await screen.findByText(/无法连接/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/无法连接/)).length).toBeGreaterThan(0);
     expect(screen.getByText("尚未选择照片")).toBeInTheDocument();
   });
 });

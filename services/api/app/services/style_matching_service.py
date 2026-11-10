@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.core.errors import AppError
+from app.core.identity import LOCAL_OWNER_ID
 from app.models.analysis_report import AnalysisReport
 from app.models.style_fit import FitLevel, StyleFitAlternative, StyleFitResponse
 from app.models.style_profile import StyleKind, StyleProfile
+from app.repositories.personal_style_repo import SqlitePersonalStyleRepository
 from app.repositories.style_repo import SqliteStyleProfileRepository
 from app.services.report_lookup import completed_report_for_image
 from app.styles.fit import FitEvaluation, evaluate_style_fit
@@ -30,10 +32,12 @@ class StyleMatchingService:
         *,
         images: ImageService,
         analysis: AnalysisTaskService,
+        personal_styles: SqlitePersonalStyleRepository | None = None,
     ) -> None:
         self._repository = repository
         self._images = images
         self._analysis = analysis
+        self._personal_styles = personal_styles
 
     def fit(
         self,
@@ -41,8 +45,13 @@ class StyleMatchingService:
         image_id: str,
         *,
         alternatives: int = 3,
+        owner_id: str = LOCAL_OWNER_ID,
     ) -> StyleFitResponse:
         profile = self._repository.get(style_id)
+        if (profile is None or not profile.enabled) and self._personal_styles is not None:
+            personal = self._personal_styles.get(style_id, owner_id=owner_id)
+            if personal is not None and personal.profile.enabled:
+                profile = personal.profile
         if profile is None or not profile.enabled:
             raise _style_not_found()
         canonical, report = completed_report_for_image(self._images, self._analysis, image_id)

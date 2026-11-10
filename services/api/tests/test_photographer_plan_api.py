@@ -643,7 +643,12 @@ def test_accepting_a_plan_writes_an_ai_revision_with_creation_metadata(
     plan = plan_response.json()
     assert plan["baseRevisionId"] == base_revision_id
 
-    render_key = "a" * 64
+    rendered = plan_client.post(
+        f"/api/v1/sessions/{session_id}/render",
+        json={"recipe": plan["recipe"], "quality": "final"},
+    )
+    assert rendered.status_code == 200, rendered.text
+    render_key = str(rendered.json()["previewUrl"]).rsplit("/", 1)[-1]
     accepted = plan_client.post(
         f"/api/v1/ai/photographer/plan/{plan['planId']}/accept",
         headers={"Idempotency-Key": "accept-1"},
@@ -698,6 +703,68 @@ def test_accepting_a_plan_writes_an_ai_revision_with_creation_metadata(
     assert row["conversion_mode"] == "natural"
     assert row["style_strength"] == 0.6
     assert row["render_key"] == render_key
+
+
+def test_accepting_a_plan_rejects_an_unknown_render_key(plan_client: TestClient):
+    payload = make_image("PNG", (96, 64), (120, 80, 40))
+    uploaded = upload(plan_client, payload)
+    assert uploaded.status_code == 201, uploaded.text
+    image_id = str(uploaded.json()["imageId"])
+    session = plan_client.post("/api/v1/sessions", json={"imageId": image_id})
+    session_id = str(session.json()["sessionId"])
+    base_revision_id = session.json()["activeRevisionId"]
+    analysis_id = _analyze(plan_client, image_id)
+    plan = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "environmental_portrait",
+        },
+    ).json()
+
+    rejected = plan_client.post(
+        f"/api/v1/ai/photographer/plan/{plan['planId']}/accept",
+        json={"parentRevisionId": base_revision_id, "renderKey": "a" * 64},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "render_key_unknown"
+
+
+def test_accepting_a_plan_rejects_a_render_for_another_recipe(plan_client: TestClient):
+    payload = make_image("PNG", (96, 64), (120, 80, 40))
+    uploaded = upload(plan_client, payload)
+    assert uploaded.status_code == 201, uploaded.text
+    image_id = str(uploaded.json()["imageId"])
+    session = plan_client.post("/api/v1/sessions", json={"imageId": image_id})
+    session_id = str(session.json()["sessionId"])
+    base_revision_id = session.json()["activeRevisionId"]
+    analysis_id = _analyze(plan_client, image_id)
+    plan = plan_client.post(
+        "/api/v1/ai/photographer/plan",
+        json={
+            "sessionId": session_id,
+            "analysisId": analysis_id,
+            "mode": "style",
+            "styleId": "environmental_portrait",
+        },
+    ).json()
+
+    base_recipe = session.json()["revision"]["recipe"]
+    rendered = plan_client.post(
+        f"/api/v1/sessions/{session_id}/render",
+        json={"recipe": base_recipe, "quality": "final"},
+    )
+    assert rendered.status_code == 200, rendered.text
+    wrong_key = str(rendered.json()["previewUrl"]).rsplit("/", 1)[-1]
+
+    rejected = plan_client.post(
+        f"/api/v1/ai/photographer/plan/{plan['planId']}/accept",
+        json={"parentRevisionId": base_revision_id, "renderKey": wrong_key},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "render_key_mismatch"
 
 
 def test_accepting_a_plan_rejects_a_stale_base_revision(plan_client: TestClient):

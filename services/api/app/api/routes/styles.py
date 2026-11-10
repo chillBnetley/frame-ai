@@ -5,7 +5,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Path, Query
 
 from app.ai.contracts import SceneLabel
-from app.api.deps import get_style_library_service, get_style_matching_service
+from app.api.deps import (
+    get_owner_scope,
+    get_style_library_service,
+    get_style_matching_service,
+)
+from app.core.identity import OwnerScope
 from app.models.photographer import PhotographerStyleId
 from app.models.schemas import ErrorResponse
 from app.models.style_fit import StyleFitResponse
@@ -88,6 +93,7 @@ def list_recommended(
 def evaluate_fit(
     style_id: _StylePath,
     service: Annotated[StyleMatchingService, Depends(get_style_matching_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
     image_id: Annotated[
         str,
         Query(
@@ -101,7 +107,12 @@ def evaluate_fit(
         Query(ge=1, le=5, description="How many better-fitting styles to suggest."),
     ] = 3,
 ) -> StyleFitResponse:
-    return service.fit(style_id, image_id, alternatives=alternatives)
+    return service.fit(
+        style_id,
+        image_id,
+        alternatives=alternatives,
+        owner_id=owner.owner_id,
+    )
 
 
 @router.get("/{style_id}", response_model=StyleDetailResponse)

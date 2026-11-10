@@ -599,6 +599,7 @@ class PhotographerPlanRequest(_PhotographerModel):
     style_id: PhotographerStyleId | None = None
     style_strength: float | None = Field(default=None, ge=0.0, le=1.0)
     conversion_mode: ConversionMode | None = None
+    locked_fields: tuple[str, ...] = Field(default=(), max_length=15)
     preferences: PhotographerPreferences = Field(default_factory=PhotographerPreferences)
 
     @model_validator(mode="after")
@@ -611,6 +612,12 @@ class PhotographerPlanRequest(_PhotographerModel):
             raise ValueError("styleStrength is only accepted when mode is 'style'.")
         if self.mode is PlannerMode.AUTO and self.conversion_mode is not None:
             raise ValueError("conversionMode is only accepted when mode is 'style'.")
+        allowed = set(AdjustmentIntent.model_fields)
+        unknown = sorted(set(self.locked_fields) - allowed)
+        if unknown:
+            raise ValueError("unknown lockedFields: " + ", ".join(unknown))
+        if len(set(self.locked_fields)) != len(self.locked_fields):
+            raise ValueError("lockedFields must be unique.")
         return self
 
 

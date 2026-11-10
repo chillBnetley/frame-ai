@@ -110,6 +110,12 @@ def dynamic_style_adjustments(
 
     style = profile.to_style_definition()
     targets = _dynamic_targets(profile, report)
+    personal = getattr(profile, "personal", None)
+    if personal is not None:
+        targets.update(personal.targets)
+        scene_targets = personal.scene_targets.get(report.scene.primary)
+        if scene_targets:
+            targets.update(scene_targets)
     targets = _apply_constraints(profile, report, targets)
     naturalness_scale = 1.0 - 0.5 * preferences.naturalness
     identity_fields = _colour_mode_fields(profile)
@@ -199,7 +205,10 @@ def _apply_constraints(
     if DirectionConstraint.PRESERVE_SHADOW_DETAIL in constraints:
         result["shadows"] = max(result.get("shadows", 0.0), 3.0)
 
-    if DirectionConstraint.AVOID_EXTREME_SATURATION in constraints:
+    if (
+        DirectionConstraint.AVOID_EXTREME_SATURATION in constraints
+        and _saturation_hint(profile) != -100.0
+    ):
         result["saturation"] = clamp(result.get("saturation", 0.0), -12.0, 12.0)
         result["vibrance"] = clamp(result.get("vibrance", 0.0), -10.0, 10.0)
     if DirectionConstraint.AVOID_EXTREME_CONTRAST in constraints:

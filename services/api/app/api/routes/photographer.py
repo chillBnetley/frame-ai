@@ -6,7 +6,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Path, Query, Response
 
 from app.ai.contracts import SceneLabel
-from app.api.deps import get_photographer_service
+from app.api.deps import get_owner_scope, get_photographer_service
+from app.core.identity import OwnerScope
 from app.models.photographer import (
     MAX_FEEDBACK_ROWS,
     AcceptPlanRequest,
@@ -84,8 +85,9 @@ def list_conversion_modes(
 def create_plan(
     payload: PhotographerPlanRequest,
     service: Annotated[PhotographerService, Depends(get_photographer_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
 ) -> PhotographerPlanResponse:
-    return service.plan(payload)
+    return service.plan(payload, owner_id=owner.owner_id)
 
 
 @router.post("/plan/{plan_id}/accept", response_model=SessionState)

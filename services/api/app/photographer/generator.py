@@ -130,6 +130,7 @@ def generate_recipe(
     *,
     conversion_mode: ConversionMode | None = None,
     dynamic_style: bool = False,
+    locked_fields: frozenset[str] = frozenset(),
 ) -> GeneratedRecipe:
     """Turn an untrusted planner draft into a validated recipe based on the current recipe."""
     prefs = preferences or PhotographerPreferences()
@@ -165,6 +166,7 @@ def generate_recipe(
         style,
         profile,
         dynamic_style,
+        locked_fields,
         warnings,
     )
     values, conflict_warnings = enforce_conflicts(analysis, base.adjustments, values)
@@ -258,6 +260,7 @@ def _apply_intent(
     style: StyleDefinition | None,
     profile: ConversionProfile | None,
     dynamic_style: bool,
+    locked_fields: frozenset[str],
     warnings: list[str],
 ) -> dict[str, float]:
     envelope = style.envelope.model_dump(by_alias=True) if style is not None else {}
@@ -283,6 +286,17 @@ def _apply_intent(
                 if abs(delta) > limit + 1e-9:
                     warnings.append(f"风格参数 {field} 超出包络，已限制。")
                     result[field] = values[field] + clamp(delta, -limit, limit)
+    if locked_fields:
+        changed = [
+            field
+            for field in locked_fields
+            if field in result and abs(result[field] - values[field]) > 1e-9
+        ]
+        for field in locked_fields:
+            if field in result:
+                result[field] = values[field]
+        if changed:
+            warnings.append("已保留用户锁定的手动参数。")
     return result
 
 

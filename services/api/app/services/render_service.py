@@ -18,7 +18,7 @@ from app.imaging.local_masks import local_adjustment_warnings
 from app.imaging.output import JPEG_QUALITY, encode_image
 from app.imaging.params_map import DRAFT_MAX_EDGE, ENGINE_VERSION
 from app.imaging.pipeline import render as render_image
-from app.models.recipe import Adjustments, EditRecipe, render_key
+from app.models.recipe import Adjustments, EditRecipe, recipe_hash, render_key
 from app.models.render import CompareResponse, CompareSide, RenderRequest, RenderTier
 from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
@@ -117,6 +117,13 @@ class RenderService:
             edge=edge,
             quality=request.quality,
             engine_version=ENGINE_VERSION,
+        )
+        self.previews.remember(
+            preview_id,
+            image_sha256=record.sha256,
+            recipe_hash=recipe_hash(request.recipe),
+            edge=edge,
+            quality=request.quality,
         )
 
         cached = self.previews.dimensions(preview_id)

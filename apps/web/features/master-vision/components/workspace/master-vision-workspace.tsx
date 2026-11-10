@@ -25,6 +25,19 @@ import { StyleVisual } from "../style-visual";
 import { MasterVisionCompare } from "./compare-stage";
 import { useMasterVisionWorkspace } from "./use-master-vision-workspace";
 
+const LOCK_FIELDS = [
+  ["exposureEv", "曝光"],
+  ["contrast", "对比度"],
+  ["highlights", "高光"],
+  ["shadows", "暗部"],
+  ["saturation", "饱和度"],
+  ["temperature", "色温"],
+  ["tint", "色调"],
+  ["clarity", "清晰度"],
+  ["grain", "颗粒"],
+  ["vignette", "暗角"],
+] as const;
+
 function stageLabel(stage: string | null): string {
   switch (stage) {
     case "queued":
@@ -74,6 +87,8 @@ export function MasterVisionWorkspace({
     setMode,
     strength,
     setStrength,
+    lockedFields,
+    toggleLockedField,
     plan,
     planLoading,
     planError,
@@ -116,6 +131,7 @@ export function MasterVisionWorkspace({
     plan === null || planStale || saveState !== "idle" || resultUrl === null;
   const masters = styles.filter((item) => item.kind === "master");
   const genres = styles.filter((item) => item.kind === "genre");
+  const personal = styles.filter((item) => item.kind === "personal");
 
   const statusText = uploading
     ? "正在上传照片并建立编辑会话…"
@@ -278,11 +294,20 @@ export function MasterVisionWorkspace({
               <div className="mt-3 h-11 animate-pulse rounded-xl bg-[#f0f3f1]" />
             ) : (
               <select
-                aria-label="选择大师或流派风格"
+                aria-label="选择大师、流派或个人风格"
                 value={styleId}
                 onChange={(event) => selectStyle(event.target.value)}
                 className="mt-3 min-h-11 w-full rounded-xl border border-[#dfe5e1] bg-white px-3 text-xs text-[#2a3530] focus:border-[#9dbdaf] focus:outline-none"
               >
+                {personal.length > 0 && (
+                  <optgroup label="我的风格">
+                    {personal.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 <optgroup label="大师风格">
                   {masters.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -315,10 +340,14 @@ export function MasterVisionWorkspace({
                     适合：{style.suitableScenes.map(sceneLabel).join(" · ")}
                   </p>
                   <Link
-                    href={`/master-vision/styles/${encodeURIComponent(style.id)}`}
+                    href={
+                      style.kind === "personal"
+                        ? `/visual-dna/${encodeURIComponent(style.id)}`
+                        : `/master-vision/styles/${encodeURIComponent(style.id)}`
+                    }
                     className="inline-flex text-[11px] font-medium text-[#277a68] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
-                    查看完整档案
+                    {style.kind === "personal" ? "打开个人风格" : "查看完整档案"}
                   </Link>
                 </div>
               </div>
@@ -492,6 +521,28 @@ export function MasterVisionWorkspace({
                   {Math.round(fit.recommendedStrength.maximum * 100)}
                 </p>
               )}
+            </div>
+            <div className="mt-3 rounded-xl border border-[#e4e8e5] bg-[#f9fbf9] p-2.5">
+              <p className="text-[10px] font-medium text-[#4a574f]">参数保护</p>
+              <p className="mt-0.5 text-[9px] leading-relaxed text-[#8a9690]">
+                勾选你在照片工作台手动调整过、希望生成方案时保留的参数。
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {LOCK_FIELDS.map(([field, label]) => (
+                  <label
+                    key={field}
+                    className="inline-flex items-center gap-1 rounded-full border border-[#dfe5e1] bg-white px-2 py-0.5 text-[9px] text-[#5f6d66]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={lockedFields.includes(field)}
+                      onChange={() => toggleLockedField(field)}
+                      className="size-3 accent-[#277a68]"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
             </div>
             {planStale && (
               <p className="mt-3 rounded-lg border border-[#ead9bd] bg-[#fdf8ee] px-2.5 py-2 text-[10px] text-[#7d6338]">

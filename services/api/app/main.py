@@ -121,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             SqliteAnalysisRepository(resolved_settings.database_path),
         )
         plan_repository = SqlitePhotographerPlanRepository(resolved_settings.database_path)
+        personal_styles = SqlitePersonalStyleRepository(resolved_settings.database_path)
         photographer_service = PhotographerService(
             providers.bundle.planner,
             max_concurrency=resolved_settings.photographer_max_concurrency,
@@ -130,6 +131,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             plans=plan_repository,
             feedback=SqlitePhotographerFeedbackRepository(resolved_settings.database_path),
             styles=style_profiles,
+            personal_styles=personal_styles,
+            render=render_service,
             semantic_masks=semantic_mask_service,
         )
         style_library_service = StyleLibraryService(
@@ -142,8 +145,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             style_profiles,
             images=service,
             analysis=analysis_tasks,
+            personal_styles=personal_styles,
         )
-        personal_styles = SqlitePersonalStyleRepository(resolved_settings.database_path)
         personal_style_service = PersonalStyleService(
             personal_styles,
             images=service,

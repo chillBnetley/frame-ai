@@ -20,6 +20,7 @@ from app.ai.base import (
 from app.ai.contracts import SceneLabel
 from app.ai.errors import ProviderError
 from app.core.errors import AppError
+from app.core.identity import LOCAL_OWNER_ID
 from app.models.analysis_report import AnalysisReport
 from app.models.analysis_task import TaskStatus
 from app.models.conversion import ConversionMode
@@ -78,6 +79,7 @@ from app.photographer.style_generation import (
 )
 from app.photographer.styles import STYLE_CATALOG, get_style
 from app.photographer.validator import RecipeValidationError, validate_critique
+from app.repositories.personal_style_repo import SqlitePersonalStyleRepository
 from app.repositories.photographer_repo import (
     MAX_FEEDBACK_SCAN,
     PhotographerFeedbackRecord,
@@ -91,6 +93,7 @@ from app.repositories.style_repo import SqliteStyleProfileRepository
 if TYPE_CHECKING:
     from app.services.analysis_task_service import AnalysisTaskService
     from app.services.image_service import ImageService
+    from app.services.render_service import RenderService
     from app.services.semantic_mask_service import SemanticMaskService
     from app.services.session_service import SessionService
 
@@ -111,6 +114,8 @@ class PhotographerService:
         plans: SqlitePhotographerPlanRepository | None = None,
         feedback: SqlitePhotographerFeedbackRepository | None = None,
         styles: SqliteStyleProfileRepository | None = None,
+        personal_styles: SqlitePersonalStyleRepository | None = None,
+        render: RenderService | None = None,
         semantic_masks: SemanticMaskService | None = None,
     ) -> None:
         if max_concurrency < 1:
@@ -124,6 +129,8 @@ class PhotographerService:
         self._plans = plans
         self._feedback = feedback
         self._styles = styles
+        self._personal_styles = personal_styles
+        self._render = render
         self._semantic_masks = semantic_masks
 
     @property
@@ -145,14 +152,18 @@ class PhotographerService:
         self,
         mode: PlannerMode,
         style_id: PhotographerStyleId | None,
+        *,
+        owner_id: str = LOCAL_OWNER_ID,
     ) -> StyleDefinition | None:
-        style, _ = self._resolve_style_with_archive(mode, style_id)
+        style, _ = self._resolve_style_with_archive(mode, style_id, owner_id=owner_id)
         return style
 
     def _resolve_style_with_archive(
         self,
         mode: PlannerMode,
         style_id: PhotographerStyleId | None,
+        *,
+        owner_id: str = LOCAL_OWNER_ID,
     ) -> tuple[StyleDefinition | None, StyleProfile | None]:
         if mode is PlannerMode.AUTO:
             return None, None
@@ -167,6 +178,10 @@ class PhotographerService:
             profile = self._styles.get(style_id)
             if profile is not None and profile.enabled:
                 return profile.to_style_definition(), profile
+        if self._personal_styles is not None:
+            personal = self._personal_styles.get(style_id, owner_id=owner_id)
+            if personal is not None and personal.profile.enabled:
+                return personal.profile.to_style_definition(), personal.profile
         raise AppError(404, "style_not_found", "The requested style is not available.")
 
     def list_styles(
@@ -214,7 +229,12 @@ class PhotographerService:
         )
         return AnalysisAdvice(diagnosis=diagnosis, direction=direction)
 
-    def plan(self, request: PhotographerPlanRequest) -> PhotographerPlanResponse:
+    def plan(
+        self,
+        request: PhotographerPlanRequest,
+        *,
+        owner_id: str = LOCAL_OWNER_ID,
+    ) -> PhotographerPlanResponse:
         analysis_service, sessions, images, plans = self._plan_dependencies()
         session = sessions.get(str(request.session_id))
         image_id = str(session.image_id)
@@ -222,7 +242,11 @@ class PhotographerService:
             analysis_service, images, image_id, request.analysis_id
         )
 
-        style, profile = self._resolve_style_with_archive(request.mode, request.style_id)
+        style, profile = self._resolve_style_with_archive(
+            request.mode,
+            request.style_id,
+            owner_id=owner_id,
+        )
         strength = _style_strength(request, style)
         conversion_mode = resolve_conversion_mode(request.mode, request.conversion_mode)
         style_context = (
@@ -285,6 +309,7 @@ class PhotographerService:
                 strength,
                 conversion_mode=conversion_mode,
                 dynamic_style=profile is not None,
+                locked_fields=frozenset(request.locked_fields),
             )
         except (RecipeValidationError, ValidationError) as exc:
             if degraded:
@@ -302,6 +327,7 @@ class PhotographerService:
                     strength,
                     conversion_mode=conversion_mode,
                     dynamic_style=profile is not None,
+                    locked_fields=frozenset(request.locked_fields),
                 )
             except (RecipeValidationError, ValidationError) as fallback_exc:
                 raise _invalid_recipe(fallback_exc) from fallback_exc
@@ -418,6 +444,8 @@ class PhotographerService:
                 "plan_recipe_mismatch",
                 "The stored plan payload no longer matches its recorded hash.",
             )
+        if request.render_key is not None:
+            self._verify_render_key(request.render_key, record.image_id, record.recipe_hash)
 
         creation = RevisionCreation(
             plan_id=record.id,
@@ -444,6 +472,30 @@ class PhotographerService:
             state.active_revision_id,
         )
         return state
+
+    def _verify_render_key(self, render_key: str, image_id: str, expected_hash: str) -> None:
+        if self._render is None or self._images is None:
+            return
+        previews = self._render.previews
+        metadata = previews.metadata(render_key)
+        if metadata is None or previews.resolve(render_key) is None:
+            raise AppError(
+                409,
+                "render_key_unknown",
+                "The preview was not rendered by this service.",
+                {"renderKey": render_key},
+            )
+        image, _ = self._images.get_original(image_id)
+        if (
+            metadata.image_sha256.lower() != image.sha256.lower()
+            or metadata.recipe_hash != expected_hash
+        ):
+            raise AppError(
+                409,
+                "render_key_mismatch",
+                "The preview does not belong to this plan and image.",
+                {"renderKey": render_key},
+            )
 
     def patch(self, request: PhotographerPatchRequest) -> PhotographerPatchResponse:
         analysis_service, sessions, images, plans = self._plan_dependencies()

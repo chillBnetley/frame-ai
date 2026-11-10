@@ -129,7 +129,12 @@ export function usePhotographerChat(
         let planId = anchor;
         if (planId === null) {
           const plan = await createPlan(
-            { sessionId, analysisId: targetAnalysisId, mode: "auto" },
+            {
+              sessionId,
+              analysisId: targetAnalysisId,
+              mode: "auto",
+              lockedFields: [],
+            },
             controller.signal,
           );
           planId = plan.planId;

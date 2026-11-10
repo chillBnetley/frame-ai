@@ -11784,6 +11784,10 @@
             "type": "boolean",
             "title": "Favorite"
           },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
           "confidence": {
             "type": "number",
             "maximum": 1.0,
@@ -11799,6 +11803,45 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Referencecount"
+          },
+          "engineStyle": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "portrait",
+              "landscape",
+              "street",
+              "documentary",
+              "film",
+              "cinematic"
+            ],
+            "title": "Enginestyle"
+          },
+          "defaultStrength": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Defaultstrength"
+          },
+          "signature": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Signature",
+            "default": []
+          },
+          "suitableScenes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneLabel"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Suitablescenes",
+            "default": []
           },
           "updatedAt": {
             "type": "string",
@@ -11816,9 +11859,12 @@
           "status",
           "version",
           "favorite",
+          "enabled",
           "confidence",
           "sampleCount",
           "referenceCount",
+          "engineStyle",
+          "defaultStrength",
           "updatedAt"
         ],
         "title": "PersonalStyleItem"
@@ -13657,6 +13703,15 @@
                 "type": "null"
               }
             ]
+          },
+          "lockedFields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 15,
+            "title": "Lockedfields",
+            "default": []
           },
           "preferences": {
             "$ref": "#/components/schemas/PhotographerPreferences"

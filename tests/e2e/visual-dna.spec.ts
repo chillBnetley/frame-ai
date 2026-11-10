@@ -18,6 +18,58 @@ function fixturePath(metadataPath: string): string {
   return metadata.path;
 }
 
+test("applies a published personal style in the workspace", async ({
+  page,
+}, testInfo) => {
+  const styleName = `Workspace ${testInfo.project.name}`;
+  const parsed = await page.request.post(
+    "/api/v1/personal-styles/custom/parse",
+    {
+      data: {
+        name: styleName,
+        description: "低饱和、偏冷的环境色，保留暗部层次，人物肤色自然。",
+        avoid: "不要过饱和，高光不要溢出",
+      },
+    },
+  );
+  expect(parsed.ok()).toBeTruthy();
+  const draft = (await parsed.json()).draft;
+  const saved = await page.request.post("/api/v1/personal-styles/custom", {
+    data: { draft },
+  });
+  expect(saved.ok()).toBeTruthy();
+  const styleId = (await saved.json()).style.id;
+  const published = await page.request.post(
+    `/api/v1/personal-styles/${styleId}/status`,
+    { data: { status: "published" } },
+  );
+  expect(published.ok()).toBeTruthy();
+
+  await page.goto(`/master-vision/workspace?style=${styleId}`);
+  await expect(
+    page.getByRole("heading", { name: "风格创作工作台" }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("选择大师、流派或个人风格"),
+  ).toHaveValue(styleId);
+  await page
+    .getByTestId("file-input")
+    .setInputFiles(fixturePath(FIXTURE_JSON));
+  await expect(page.getByAltText("当前照片")).toBeVisible({ timeout: 90_000 });
+
+  const generate = page.getByRole("button", { name: /生成风格方案/ });
+  await expect(generate).toBeEnabled({ timeout: 90_000 });
+  await page.getByRole("checkbox", { name: "饱和度" }).check();
+  await generate.click();
+
+  const save = page.getByRole("button", { name: /应用并保存/ });
+  await expect(save).toBeEnabled({ timeout: 90_000 });
+  await save.click();
+  await expect(
+    page.getByRole("button", { name: "已保存为 AI 创作" }),
+  ).toBeDisabled({ timeout: 60_000 });
+});
+
 test("creates and refines a style from natural language", async ({ page }, testInfo) => {
   const styleName = `NL ${testInfo.project.name}`;
   const confirmedName = `${styleName} confirmed`;

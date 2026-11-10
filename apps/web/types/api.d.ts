@@ -2908,12 +2908,31 @@ export interface components {
             version: string;
             /** Favorite */
             favorite: boolean;
+            /** Enabled */
+            enabled: boolean;
             /** Confidence */
             confidence: number;
             /** Samplecount */
             sampleCount: number;
             /** Referencecount */
             referenceCount: number;
+            /**
+             * Enginestyle
+             * @enum {string}
+             */
+            engineStyle: "natural" | "portrait" | "landscape" | "street" | "documentary" | "film" | "cinematic";
+            /** Defaultstrength */
+            defaultStrength: number;
+            /**
+             * Signature
+             * @default []
+             */
+            signature: string[];
+            /**
+             * Suitablescenes
+             * @default []
+             */
+            suitableScenes: components["schemas"]["SceneLabel"][];
             /**
              * Updatedat
              * Format: date-time
@@ -3567,6 +3586,11 @@ export interface components {
             /** Stylestrength */
             styleStrength?: number | null;
             conversionMode?: components["schemas"]["ConversionMode"] | null;
+            /**
+             * Lockedfields
+             * @default []
+             */
+            lockedFields: string[];
             preferences?: components["schemas"]["PhotographerPreferences"];
         };
         /** PhotographerPlanResponse */

@@ -140,6 +140,7 @@ export function usePhotographer(
       const request: PhotographerPlanRequest = {
         sessionId,
         analysisId,
+        lockedFields: [],
         ...(current.styleId === null
           ? { mode: "auto" as const }
           : {

@@ -16,6 +16,7 @@ from pydantic.alias_generators import to_camel
 
 from app.ai.contracts import SceneLabel, Text
 from app.models.photographer import DirectionConstraint, ShortName
+from app.models.recipe import StyleId
 from app.models.style_profile import (
     StyleColorTraits,
     StyleCompositionTraits,
@@ -205,9 +206,14 @@ class PersonalStyleItem(_PersonalModel):
     status: PersonalStyleStatus
     version: StyleProfileVersion
     favorite: bool
+    enabled: bool
     confidence: float = Field(ge=0.0, le=1.0)
     sample_count: int = Field(ge=0)
     reference_count: int = Field(ge=0)
+    engine_style: StyleId
+    default_strength: float = Field(ge=0.0, le=1.0)
+    signature: tuple[Text, ...] = Field(default=(), max_length=3)
+    suitable_scenes: tuple[SceneLabel, ...] = Field(default=(), max_length=9)
     updated_at: datetime
 
 

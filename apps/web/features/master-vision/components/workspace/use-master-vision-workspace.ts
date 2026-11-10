@@ -15,6 +15,10 @@ import {
   undoSession,
 } from "@/lib/api/sessions";
 import {
+  fetchPersonalStyle,
+  listPersonalStyles,
+} from "@/lib/api/personal-style";
+import {
   fetchConversionModes,
   fetchStyleDetail,
   fetchStyleFit,
@@ -22,6 +26,10 @@ import {
 } from "@/lib/api/style-library";
 import { describeEditorError } from "@/lib/error-messages";
 import { validateUploadFile } from "@/lib/upload-validation";
+import type {
+  PersonalStyleDetailResponse,
+  PersonalStyleItem,
+} from "@/types/personal-style";
 import type { PhotographerPlanResponse } from "@/types/photographer";
 import type { EditRecipe, RevisionSummary, SessionState } from "@/types/session";
 import type {
@@ -64,6 +72,8 @@ export interface MasterVisionWorkspaceState {
   setMode: (mode: ConversionMode) => void;
   strength: number;
   setStrength: (strength: number) => void;
+  lockedFields: string[];
+  toggleLockedField: (field: string) => void;
 
   plan: PhotographerPlanResponse | null;
   planLoading: boolean;
@@ -105,6 +115,27 @@ function previewKeyFromUrl(url: string | null): string | null {
   if (!url) return null;
   const match = /\/api\/v1\/previews\/([0-9a-f]{64})$/i.exec(url);
   return match?.[1]?.toLowerCase() ?? null;
+}
+
+function personalLibraryItem(item: PersonalStyleItem): StyleLibraryItem {
+  return {
+    id: item.id,
+    kind: "personal",
+    version: item.version,
+    name: item.name,
+    description: item.description,
+    category: "creative",
+    signature: item.signature.length > 0 ? item.signature : [item.description],
+    suitableScenes: item.suitableScenes,
+    engineStyle: item.engineStyle,
+    defaultStrength: item.defaultStrength,
+    enabled: item.enabled,
+    favorite: item.favorite,
+  };
+}
+
+function personalDetail(response: PersonalStyleDetailResponse): StyleDetailResponse {
+  return { style: response.style, favorite: response.favorite };
 }
 
 function messageFor(error: unknown, fallback: string): string {
@@ -158,6 +189,7 @@ export function useMasterVisionWorkspace(
   const [fitErrorKey, setFitErrorKey] = useState<string | null>(null);
   const [mode, setModeState] = useState<ConversionMode>("style");
   const [strength, setStrengthState] = useState(60);
+  const [lockedFields, setLockedFields] = useState<string[]>([]);
   const touchedRef = useRef(false);
 
   const [plan, setPlan] = useState<PhotographerPlanResponse | null>(null);
@@ -187,6 +219,7 @@ export function useMasterVisionWorkspace(
   const idempotencyKeyRef = useRef<string | null>(null);
 
   const style = styles.find((item) => item.id === styleId) ?? null;
+  const selectedStyleKind = style?.kind ?? null;
   const currentKey = `${styleId}:${mode}:${strength}`;
   const planStale = plan !== null && plannedKey !== currentKey;
   const fitRequestKey = `${styleId}:${analysis.report?.analysisId ?? ""}`;
@@ -238,15 +271,22 @@ export function useMasterVisionWorkspace(
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchStyleLibrary({}, controller.signal)
-      .then((response) => {
+    Promise.all([
+      fetchStyleLibrary({}, controller.signal),
+      listPersonalStyles({ status: "published" }, controller.signal),
+    ])
+      .then(([response, personal]) => {
         if (controller.signal.aborted) return;
-        setStyles(response.styles);
+        const merged = [
+          ...response.styles,
+          ...personal.styles.map(personalLibraryItem),
+        ];
+        setStyles(merged);
         setStylesLoading(false);
         setStylesError(null);
         setStyleId((current) => {
-          if (response.styles.some((item) => item.id === current)) return current;
-          return response.styles[0]?.id ?? "";
+          if (merged.some((item) => item.id === current)) return current;
+          return merged[0]?.id ?? "";
         });
       })
       .catch((error: unknown) => {
@@ -277,7 +317,11 @@ export function useMasterVisionWorkspace(
       return;
     }
     const controller = new AbortController();
-    fetchStyleDetail(styleId, controller.signal)
+    const request =
+      selectedStyleKind === "personal"
+        ? fetchPersonalStyle(styleId, { signal: controller.signal }).then(personalDetail)
+        : fetchStyleDetail(styleId, controller.signal);
+    request
       .then((response) => {
         if (!controller.signal.aborted) {
           setDetail(response);
@@ -291,7 +335,7 @@ export function useMasterVisionWorkspace(
         }
       });
     return () => controller.abort();
-  }, [styleId]);
+  }, [selectedStyleKind, styleId]);
 
   const currentDetail = detailKey === styleId ? detail : null;
   const detailLoading = styleId !== "" && detailKey !== styleId;
@@ -411,6 +455,14 @@ export function useMasterVisionWorkspace(
     setStrengthState(Math.min(100, Math.max(0, nextStrength)));
   }, []);
 
+  const toggleLockedField = useCallback((field: string) => {
+    setLockedFields((current) =>
+      current.includes(field)
+        ? current.filter((item) => item !== field)
+        : [...current, field],
+    );
+  }, []);
+
   const upload = useCallback(async (file: File) => {
     const validation = validateUploadFile(file);
     if (!validation.ok) {
@@ -442,6 +494,7 @@ export function useMasterVisionWorkspace(
       idempotencyKeyRef.current = null;
       setFit(null);
       setFitError(null);
+      setLockedFields([]);
       touchedRef.current = false;
     } catch (error) {
       setUploadError(describeEditorError(error).message);
@@ -472,6 +525,7 @@ export function useMasterVisionWorkspace(
           styleId,
           styleStrength: strength / 100,
           conversionMode: mode,
+          lockedFields,
         },
         controller.signal,
       );
@@ -508,7 +562,7 @@ export function useMasterVisionWorkspace(
         setPlanLoading(false);
       }
     }
-  }, [analysis.analysisId, mode, session, sessionId, strength, styleId]);
+  }, [analysis.analysisId, lockedFields, mode, session, sessionId, strength, styleId]);
 
   const retryRender = useCallback(async () => {
     if (!sessionId || !plan) return;
@@ -660,6 +714,8 @@ export function useMasterVisionWorkspace(
     setMode,
     strength,
     setStrength,
+    lockedFields,
+    toggleLockedField,
     plan,
     planLoading,
     planError,

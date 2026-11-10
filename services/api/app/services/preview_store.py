@@ -5,6 +5,7 @@ import os
 import re
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
@@ -17,6 +18,16 @@ logger = logging.getLogger("frame_ai.previews")
 
 PREVIEW_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _JPEG_SUFFIX = ".jpg"
+
+
+@dataclass(frozen=True)
+class PreviewMetadata:
+    """What a preview was rendered from, kept only in memory."""
+
+    image_sha256: str
+    recipe_hash: str
+    edge: int
+    quality: str
 
 
 @dataclass(frozen=True)
@@ -47,6 +58,9 @@ class PreviewStore:
         self.ttl_seconds = ttl_seconds
         self.max_bytes = max_bytes
         self._write_lock = threading.Lock()
+        self._metadata: OrderedDict[str, PreviewMetadata] = OrderedDict()
+        self._metadata_lock = threading.Lock()
+        self._metadata_limit = 4096
 
     def ensure_ready(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -64,6 +78,37 @@ class PreviewStore:
         if path.is_symlink() or not path.is_file():
             return None
         return path
+
+    def remember(
+        self,
+        preview_id: str,
+        *,
+        image_sha256: str,
+        recipe_hash: str,
+        edge: int,
+        quality: str,
+    ) -> None:
+        with self._metadata_lock:
+            self._metadata[preview_id] = PreviewMetadata(
+                image_sha256=image_sha256.lower(),
+                recipe_hash=recipe_hash,
+                edge=edge,
+                quality=quality,
+            )
+            self._metadata.move_to_end(preview_id)
+            while len(self._metadata) > self._metadata_limit:
+                self._metadata.popitem(last=False)
+
+    def metadata(self, preview_id: str) -> PreviewMetadata | None:
+        with self._metadata_lock:
+            metadata = self._metadata.get(preview_id)
+            if metadata is not None:
+                self._metadata.move_to_end(preview_id)
+            return metadata
+
+    def forget(self, preview_id: str) -> None:
+        with self._metadata_lock:
+            self._metadata.pop(preview_id, None)
 
     def touch(self, path: Path) -> None:
         """Renew the idle TTL of a served preview file.
@@ -166,6 +211,7 @@ class PreviewStore:
                 continue
             deleted.append(entry.name)
             deleted_bytes += stat.st_size
+            self.forget(Path(entry.name).stem)
         if deleted or skipped or errors:
             logger.info(
                 "preview_purge deleted=%s deleted_bytes=%s skipped=%s "
@@ -238,6 +284,7 @@ class PreviewStore:
                 continue
             deleted.append(path.name)
             deleted_bytes += stat.st_size
+            self.forget(Path(path.name).stem)
 
         if self.max_bytes is not None:
             total = sum(stat.st_size for _, stat in remaining)
@@ -260,6 +307,7 @@ class PreviewStore:
                     total -= stat.st_size
                     deleted.append(path.name)
                     deleted_bytes += stat.st_size
+                    self.forget(Path(path.name).stem)
 
         if deleted:
             logger.info(
