@@ -6,14 +6,12 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import numpy as np
 from numpy.typing import NDArray
-from PIL import Image
 
 from app.ai.generative import (
     GeneratedImage,
@@ -27,6 +25,7 @@ from app.ai.generative import (
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.identity import OwnerScope
+from app.imaging.generative_masks import encode_mask
 from app.imaging.loader import load_image
 from app.imaging.output import encode_image, to_uint8
 from app.models.generative import (
@@ -56,12 +55,12 @@ from app.repositories.generative_repo import (
 from app.repositories.session_repo import RevisionCreation
 from app.services.asset_resolver import ImageAssetResolver, ResolvedImage
 from app.services.generated_asset_store import GeneratedAssetStore
+from app.services.generative_mask_service import load_task_mask
 from app.services.session_service import SessionService
 
 logger = logging.getLogger("frame_ai.generative")
 
 _RESULT_URL_PREFIX = "/api/v1/generative/results"
-_MASK_DIRNAME = "masks"
 _MASK_WARNING = "protected_region_restored"
 _MOCK_WARNING = "mock_output"
 _BLANK_STD_THRESHOLD = 0.5
@@ -149,7 +148,7 @@ class GenerativeTaskService:
         )
         mask_id = None if request.mask_id is None else str(request.mask_id)
         if mask_id is not None:
-            self._validate_mask(mask_id, image_id, base_generated_asset_id)
+            self._validate_mask(mask_id, image_id, base_generated_asset_id, owner)
 
         base = self.assets.resolve(image_id, base_generated_asset_id)
         try:
@@ -502,7 +501,8 @@ class GenerativeTaskService:
             base,
             capabilities.max_output_pixels,
         )
-        mask_bytes = self._load_mask(task, width, height)
+        mask = self._load_mask(task, width, height)
+        mask_bytes = None if mask is None else encode_mask(mask)
         self._raise_if_cancelled(task.id)
 
         self.repository.set_stage(task.id, GenerativeTaskStage.SUBMITTING.value)
@@ -535,7 +535,7 @@ class GenerativeTaskService:
             input_pixels=input_pixels,
             width=width,
             height=height,
-            mask_bytes=mask_bytes,
+            mask=mask,
         )
         self._raise_if_cancelled(task.id)
 
@@ -639,7 +639,7 @@ class GenerativeTaskService:
         input_pixels: NDArray[np.uint8],
         width: int,
         height: int,
-        mask_bytes: bytes | None,
+        mask: NDArray[np.uint8] | None,
     ) -> tuple[bytes, list[str]]:
         if not generated.data:
             raise AppError(502, "generative_invalid_output", "The provider returned no image.")
@@ -680,8 +680,7 @@ class GenerativeTaskService:
         warnings: list[str] = []
         if task.is_mock:
             warnings.append(_MOCK_WARNING)
-        if mask_bytes is not None:
-            mask = self._decode_mask(mask_bytes, width, height)
+        if mask is not None:
             pixels = composite_protected_region(input_pixels, pixels, mask)
             warnings.append(_MASK_WARNING)
         if np.array_equal(pixels, input_pixels):
@@ -705,9 +704,10 @@ class GenerativeTaskService:
         mask_id: str,
         image_id: str,
         base_generated_asset_id: str | None,
+        owner: OwnerScope,
     ) -> None:
         mask = self.repository.get_mask(mask_id)
-        if mask is None:
+        if mask is None or mask.owner_id != owner.owner_id:
             raise AppError(404, "generative_mask_not_found", "The mask was not found.")
         if mask.image_id.lower() != image_id.lower():
             raise AppError(409, "generative_mask_mismatch", "The mask belongs to another image.")
@@ -724,11 +724,11 @@ class GenerativeTaskService:
         task: GenerativeTaskRecord,
         width: int,
         height: int,
-    ) -> bytes | None:
+    ) -> NDArray[np.uint8] | None:
         if task.mask_id is None:
             return None
         mask = self.repository.get_mask(task.mask_id)
-        if mask is None:
+        if mask is None or mask.owner_id != task.owner_id:
             raise AppError(409, "generative_mask_missing", "The mask is no longer available.")
         if (mask.width, mask.height) != (width, height):
             raise AppError(
@@ -736,32 +736,20 @@ class GenerativeTaskService:
                 "generative_mask_size_mismatch",
                 "The mask does not match the image dimensions.",
             )
-        root = (self.settings.data_dir / _MASK_DIRNAME).resolve()
-        path = (self.settings.data_dir / mask.storage_key).resolve()
-        if root != path.parent and root not in path.parents:
-            raise AppError(500, "generative_mask_unavailable", "The mask path is invalid.")
         try:
-            return path.read_bytes()
-        except OSError as exc:
-            raise AppError(
-                409,
-                "generative_mask_missing",
-                "The mask file is no longer available.",
-            ) from exc
-
-    def _decode_mask(self, data: bytes, width: int, height: int) -> NDArray[np.uint8]:
-        try:
-            with Image.open(BytesIO(data)) as opened:
-                mask = opened.convert("L")
-                if mask.size != (width, height):
-                    mask = mask.resize((width, height), Image.Resampling.NEAREST)
-                return np.asarray(mask, dtype=np.uint8)
-        except (OSError, ValueError, SyntaxError) as exc:
-            raise AppError(
-                409,
-                "generative_mask_invalid",
-                "The mask could not be read.",
-            ) from exc
+            return load_task_mask(
+                mask,
+                self.store,
+                max_bytes=self.settings.generative_max_output_bytes,
+            )
+        except AppError as exc:
+            if exc.code == "generated_asset_file_missing":
+                raise AppError(
+                    409,
+                    "generative_mask_missing",
+                    "The mask file is no longer available.",
+                ) from exc
+            raise
 
     def _raise_if_cancelled(self, task_id: str) -> None:
         if self.repository.is_cancel_requested(task_id):

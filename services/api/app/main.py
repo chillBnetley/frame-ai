@@ -48,6 +48,7 @@ from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
 from app.services.generated_asset_store import GeneratedAssetStore
+from app.services.generative_mask_service import GenerativeMaskService
 from app.services.generative_service import GenerativeTaskService
 from app.services.image_service import ImageService
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
@@ -199,6 +200,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             generated_store,
             asset_resolver,
         )
+        generative_mask_service = GenerativeMaskService(
+            resolved_settings,
+            session_service,
+            asset_resolver,
+            generative_repo,
+            generated_store,
+            semantic_mask_service,
+        )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -209,6 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         analysis_tasks.recover()
         app.state.analysis_task_service = analysis_tasks
         app.state.generative_service = generative_service
+        app.state.generative_mask_service = generative_mask_service
         generative_service.recover()
         app.state.deletion_service = DeletionService(
             resolved_settings,

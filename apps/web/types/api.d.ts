@@ -1262,6 +1262,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/generative/masks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Masks */
+        get: operations["list_masks_api_v1_generative_masks_get"];
+        put?: never;
+        /** Create Mask */
+        post: operations["create_mask_api_v1_generative_masks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/generative/masks/{mask_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mask */
+        get: operations["get_mask_api_v1_generative_masks__mask_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Mask */
+        delete: operations["delete_mask_api_v1_generative_masks__mask_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/generative/masks/{mask_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mask Image */
+        get: operations["get_mask_image_api_v1_generative_masks__mask_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/generative/tasks": {
         parameters: {
             query?: never;
@@ -2583,6 +2636,149 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        };
+        /** GenerativeMaskCreate */
+        GenerativeMaskCreate: {
+            /**
+             * Sessionid
+             * Format: uuid
+             */
+            sessionId: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "brush" | "rect" | "ellipse" | "semantic";
+            definition?: components["schemas"]["GenerativeMaskDefinition"];
+            /**
+             * Feather
+             * @default 0
+             */
+            feather: number;
+            /**
+             * Inverted
+             * @default false
+             */
+            inverted: boolean;
+        };
+        /** GenerativeMaskDefinition */
+        GenerativeMaskDefinition: {
+            /** Strokes */
+            strokes?: components["schemas"]["GenerativeMaskStroke"][];
+            region?: components["schemas"]["GenerativeMaskRegion"] | null;
+            /** Semanticclass */
+            semanticClass?: ("person" | "sky") | null;
+            /**
+             * Expand
+             * @default 0
+             */
+            expand: number;
+        };
+        /**
+         * GenerativeMaskKind
+         * @enum {string}
+         */
+        GenerativeMaskKind: "brush" | "rect" | "ellipse" | "semantic" | "ai_proposal";
+        /** GenerativeMaskListResponse */
+        GenerativeMaskListResponse: {
+            /** Items */
+            items: components["schemas"]["GenerativeMaskView"][];
+        };
+        /** GenerativeMaskPoint */
+        GenerativeMaskPoint: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /** GenerativeMaskQuality */
+        GenerativeMaskQuality: {
+            /** Coverage */
+            coverage: number;
+            /** Componentcount */
+            componentCount: number;
+            /** Touchesborder */
+            touchesBorder: boolean;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** GenerativeMaskRegion */
+        GenerativeMaskRegion: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
+        /**
+         * GenerativeMaskSource
+         * @enum {string}
+         */
+        GenerativeMaskSource: "user" | "semantic" | "ai";
+        /** GenerativeMaskStroke */
+        GenerativeMaskStroke: {
+            /** Points */
+            points: components["schemas"]["GenerativeMaskPoint"][];
+            /** Radius */
+            radius: number;
+            /**
+             * Hardness
+             * @default 100
+             */
+            hardness: number;
+            /**
+             * Mode
+             * @default add
+             * @enum {string}
+             */
+            mode: "add" | "erase";
+        };
+        /** GenerativeMaskView */
+        GenerativeMaskView: {
+            /**
+             * Maskid
+             * Format: uuid
+             */
+            maskId: string;
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            /** Basegeneratedassetid */
+            baseGeneratedAssetId?: string | null;
+            kind: components["schemas"]["GenerativeMaskKind"];
+            source: components["schemas"]["GenerativeMaskSource"];
+            /**
+             * Coordinatespace
+             * @default base-normalized
+             * @constant
+             */
+            coordinateSpace: "base-normalized";
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Imageurl */
+            imageUrl: string;
+            /** Sha256 */
+            sha256: string;
+            /** Feather */
+            feather: number;
+            /** Inverted */
+            inverted: boolean;
+            definition: components["schemas"]["GenerativeMaskDefinition"];
+            quality: components["schemas"]["GenerativeMaskQuality"];
+            /** Modelversion */
+            modelVersion?: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
         };
         /**
          * GenerativeParams
@@ -12118,7 +12314,7 @@ export interface operations {
                     "application/json": components["schemas"]["GenerativeCapabilitiesResponse"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12128,6 +12324,433 @@ export interface operations {
                 };
             };
             /** @description Task state, mask, or base revision conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generative input or output exceeds the configured limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request, unsupported capability, or missing consent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned an invalid or blank image */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation queue is full or the pipeline is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_masks_api_v1_generative_masks_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerativeMaskListResponse"];
+                };
+            };
+            /** @description Generative task, result, mask, or asset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Task state, mask, or base revision conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generative input or output exceeds the configured limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request, unsupported capability, or missing consent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned an invalid or blank image */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation queue is full or the pipeline is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_mask_api_v1_generative_masks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerativeMaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerativeMaskView"];
+                };
+            };
+            /** @description Generative task, result, mask, or asset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Task state, mask, or base revision conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generative input or output exceeds the configured limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request, unsupported capability, or missing consent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned an invalid or blank image */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation queue is full or the pipeline is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_mask_api_v1_generative_masks__mask_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mask_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerativeMaskView"];
+                };
+            };
+            /** @description Generative task, result, mask, or asset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Task state, mask, or base revision conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generative input or output exceeds the configured limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request, unsupported capability, or missing consent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned an invalid or blank image */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation queue is full or the pipeline is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_mask_api_v1_generative_masks__mask_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mask_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Generative task, result, mask, or asset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Task state, mask, or base revision conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generative input or output exceeds the configured limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request, unsupported capability, or missing consent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned an invalid or blank image */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation queue is full or the pipeline is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_mask_image_api_v1_generative_masks__mask_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mask_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grayscale mask PNG (255 = editable region) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Mask not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Stored mask is damaged */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12205,7 +12828,7 @@ export interface operations {
                     "application/json": components["schemas"]["GenerativeTaskListResponse"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12294,7 +12917,7 @@ export interface operations {
                     "application/json": components["schemas"]["GenerativeTaskCreated"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12379,7 +13002,7 @@ export interface operations {
                     "application/json": components["schemas"]["GenerativeTaskStatusResponse"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12464,7 +13087,7 @@ export interface operations {
                     "application/json": components["schemas"]["GenerativeTaskStatusResponse"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12549,7 +13172,7 @@ export interface operations {
                     "application/json": components["schemas"]["GenerativeTaskStatusResponse"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12719,7 +13342,7 @@ export interface operations {
                     "application/json": components["schemas"]["SessionState"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12804,7 +13427,7 @@ export interface operations {
                     "application/json": components["schemas"]["GenerativeResultView"];
                 };
             };
-            /** @description Generative task, result, or asset not found */
+            /** @description Generative task, result, mask, or asset not found */
             404: {
                 headers: {
                     [name: string]: unknown;

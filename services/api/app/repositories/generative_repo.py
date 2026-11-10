@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -65,6 +66,16 @@ class DuplicateGeneratedAssetError(ValueError):
 
 class RetryNotAllowedError(RuntimeError):
     pass
+
+
+class MaskInUseError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class MaskDeletionOutcome:
+    removed: bool
+    referenced: bool
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -811,10 +822,101 @@ class SqliteGenerativeRepository:
             connection.close()
         return _to_mask(row) if row is not None else None
 
+    def get_mask_for_owner(self, mask_id: str, owner_id: str) -> GenerativeMaskRecord | None:
+        connection = connect(self._path)
+        try:
+            row = connection.execute(
+                f"SELECT {_MASK_COLUMNS} FROM generative_mask "
+                "WHERE id = ? AND owner_id = ? AND deleted_at IS NULL",
+                (mask_id, owner_id),
+            ).fetchone()
+        finally:
+            connection.close()
+        return _to_mask(row) if row is not None else None
+
+    def list_masks_for_owner(
+        self,
+        owner_id: str,
+        *,
+        image_id: str,
+        base_generated_asset_id: str | None,
+        limit: int,
+        offset: int,
+    ) -> list[GenerativeMaskRecord]:
+        connection = connect(self._path)
+        try:
+            rows = connection.execute(
+                f"SELECT {_MASK_COLUMNS} FROM generative_mask "
+                "WHERE owner_id = ? AND image_id = ? AND base_generated_asset_id IS ? "
+                "AND deleted_at IS NULL "
+                "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (owner_id, image_id, base_generated_asset_id, limit, offset),
+            ).fetchall()
+        finally:
+            connection.close()
+        return [_to_mask(row) for row in rows]
+
+    def has_active_for_mask(self, mask_id: str) -> bool:
+        placeholders = ", ".join("?" for _ in _ACTIVE_STATUSES)
+        connection = connect(self._path)
+        try:
+            row = connection.execute(
+                "SELECT 1 FROM generative_task WHERE mask_id = ? "
+                f"AND status IN ({placeholders}) LIMIT 1",
+                (mask_id, *_ACTIVE_STATUSES),
+            ).fetchone()
+        finally:
+            connection.close()
+        return row is not None
+
+    def soft_delete_mask(self, mask_id: str, owner_id: str) -> MaskDeletionOutcome:
+        connection = connect(self._path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT id FROM generative_mask "
+                    "WHERE id = ? AND owner_id = ? AND deleted_at IS NULL",
+                    (mask_id, owner_id),
+                ).fetchone()
+                if row is None:
+                    connection.rollback()
+                    return MaskDeletionOutcome(removed=False, referenced=False)
+                placeholders = ", ".join("?" for _ in _ACTIVE_STATUSES)
+                active = connection.execute(
+                    "SELECT 1 FROM generative_task WHERE mask_id = ? "
+                    f"AND status IN ({placeholders}) LIMIT 1",
+                    (mask_id, *_ACTIVE_STATUSES),
+                ).fetchone()
+                if active is not None:
+                    connection.rollback()
+                    raise MaskInUseError("the mask is used by an active task")
+                referenced = (
+                    connection.execute(
+                        "SELECT 1 FROM generative_task WHERE mask_id = ? LIMIT 1",
+                        (mask_id,),
+                    ).fetchone()
+                    is not None
+                )
+                connection.execute(
+                    "UPDATE generative_mask SET deleted_at = ? "
+                    "WHERE id = ? AND owner_id = ? AND deleted_at IS NULL",
+                    (utc_now(), mask_id, owner_id),
+                )
+            except BaseException:
+                connection.rollback()
+                raise
+            connection.commit()
+        finally:
+            connection.close()
+        return MaskDeletionOutcome(removed=True, referenced=referenced)
+
 
 __all__ = [
     "DuplicateGeneratedAssetError",
     "DuplicateGenerativeTaskError",
+    "MaskDeletionOutcome",
+    "MaskInUseError",
     "RetryNotAllowedError",
     "SqliteGenerativeRepository",
 ]

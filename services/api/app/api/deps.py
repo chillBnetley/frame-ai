@@ -12,6 +12,7 @@ from app.services.custom_style_service import CustomStyleService
 from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
+from app.services.generative_mask_service import GenerativeMaskService
 from app.services.generative_service import GenerativeTaskService
 from app.services.image_service import ImageService
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
@@ -197,5 +198,16 @@ def get_generative_service(request: Request) -> GenerativeTaskService:
             503,
             "generative_unavailable",
             "The generative pipeline is not available.",
+        )
+    return service
+
+
+def get_generative_mask_service(request: Request) -> GenerativeMaskService:
+    service = getattr(request.app.state, "generative_mask_service", None)
+    if not isinstance(service, GenerativeMaskService):
+        raise AppError(
+            503,
+            "generative_unavailable",
+            "The mask pipeline is not available.",
         )
     return service

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.models.schemas import CamelModel
 
@@ -58,6 +58,82 @@ class GenerativeMaskSource(StrEnum):
     USER = "user"
     SEMANTIC = "semantic"
     AI = "ai"
+
+
+class GenerativeMaskPoint(CamelModel):
+    x: float = Field(ge=0, le=1, allow_inf_nan=False)
+    y: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class GenerativeMaskStroke(CamelModel):
+    points: list[GenerativeMaskPoint] = Field(min_length=1, max_length=2048)
+    radius: float = Field(gt=0, le=0.5, allow_inf_nan=False)
+    hardness: float = Field(default=100, ge=1, le=100, allow_inf_nan=False)
+    mode: Literal["add", "erase"] = "add"
+
+
+class GenerativeMaskRegion(CamelModel):
+    x: float = Field(ge=0, lt=1, allow_inf_nan=False)
+    y: float = Field(ge=0, lt=1, allow_inf_nan=False)
+    width: float = Field(gt=0, le=1, allow_inf_nan=False)
+    height: float = Field(gt=0, le=1, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _inside_base(self) -> Self:
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise ValueError("the mask region must lie inside the base image")
+        return self
+
+
+class GenerativeMaskDefinition(CamelModel):
+    strokes: list[GenerativeMaskStroke] = Field(default_factory=list, max_length=256)
+    region: GenerativeMaskRegion | None = None
+    semantic_class: Literal["person", "sky"] | None = None
+    expand: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _bounded_point_count(self) -> Self:
+        if sum(len(stroke.points) for stroke in self.strokes) > 16384:
+            raise ValueError("a mask may contain at most 16384 stroke points")
+        return self
+
+
+class GenerativeMaskCreate(CamelModel):
+    session_id: UUID
+    kind: Literal["brush", "rect", "ellipse", "semantic"]
+    definition: GenerativeMaskDefinition = Field(default_factory=GenerativeMaskDefinition)
+    feather: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+    inverted: bool = False
+
+
+class GenerativeMaskQuality(CamelModel):
+    coverage: float
+    component_count: int
+    touches_border: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GenerativeMaskView(CamelModel):
+    mask_id: UUID
+    image_id: UUID
+    base_generated_asset_id: UUID | None = None
+    kind: GenerativeMaskKind
+    source: GenerativeMaskSource
+    coordinate_space: Literal["base-normalized"] = "base-normalized"
+    width: int
+    height: int
+    image_url: str
+    sha256: str
+    feather: float
+    inverted: bool
+    definition: GenerativeMaskDefinition
+    quality: GenerativeMaskQuality
+    model_version: str | None = None
+    created_at: datetime
+
+
+class GenerativeMaskListResponse(CamelModel):
+    items: list[GenerativeMaskView]
 
 
 class GenerativeParams(CamelModel):
@@ -254,9 +330,17 @@ __all__ = [
     "GeneratedAssetRecord",
     "GenerativeCapabilitiesResponse",
     "GenerativeErrorInfo",
+    "GenerativeMaskCreate",
+    "GenerativeMaskDefinition",
     "GenerativeMaskKind",
+    "GenerativeMaskListResponse",
+    "GenerativeMaskPoint",
+    "GenerativeMaskQuality",
     "GenerativeMaskRecord",
+    "GenerativeMaskRegion",
     "GenerativeMaskSource",
+    "GenerativeMaskStroke",
+    "GenerativeMaskView",
     "GenerativeParams",
     "GenerativePlan",
     "GenerativeResultRecord",

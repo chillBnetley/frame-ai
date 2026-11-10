@@ -204,7 +204,13 @@ class SqliteDeletionRepository:
             "SELECT storage_key FROM generative_mask WHERE image_id = ?",
             (image_id,),
         ).fetchall()
-        return tuple(str(row["storage_key"]) for row in rows)
+        keys: list[str] = []
+        for row in rows:
+            key = str(row["storage_key"])
+            keys.append(key)
+            if key.endswith(".png"):
+                keys.append(key[: -len(".png")] + ".json")
+        return tuple(keys)
 
     @staticmethod
     def _detach_personal_references(connection: sqlite3.Connection, image_id: str) -> None:

@@ -8284,7 +8284,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -8295,6 +8295,527 @@
           },
           "409": {
             "description": "Task state, mask, or base revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Generative input or output exceeds the configured limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request, unsupported capability, or missing consent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned an invalid or blank image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Generation queue is full or the pipeline is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Generation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generative/masks": {
+      "post": {
+        "tags": [
+          "generative"
+        ],
+        "summary": "Create Mask",
+        "operationId": "create_mask_api_v1_generative_masks_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerativeMaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerativeMaskView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Generative task, result, mask, or asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task state, mask, or base revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Generative input or output exceeds the configured limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request, unsupported capability, or missing consent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned an invalid or blank image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Generation queue is full or the pipeline is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Generation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "generative"
+        ],
+        "summary": "List Masks",
+        "operationId": "list_masks_api_v1_generative_masks_get",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sessionid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerativeMaskListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Generative task, result, mask, or asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task state, mask, or base revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Generative input or output exceeds the configured limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request, unsupported capability, or missing consent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned an invalid or blank image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Generation queue is full or the pipeline is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Generation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generative/masks/{mask_id}": {
+      "get": {
+        "tags": [
+          "generative"
+        ],
+        "summary": "Get Mask",
+        "operationId": "get_mask_api_v1_generative_masks__mask_id__get",
+        "parameters": [
+          {
+            "name": "mask_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mask Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerativeMaskView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Generative task, result, mask, or asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task state, mask, or base revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Generative input or output exceeds the configured limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request, unsupported capability, or missing consent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned an invalid or blank image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Generation queue is full or the pipeline is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Generation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "generative"
+        ],
+        "summary": "Delete Mask",
+        "operationId": "delete_mask_api_v1_generative_masks__mask_id__delete",
+        "parameters": [
+          {
+            "name": "mask_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mask Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Generative task, result, mask, or asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task state, mask, or base revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Generative input or output exceeds the configured limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request, unsupported capability, or missing consent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned an invalid or blank image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Generation queue is full or the pipeline is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Generation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generative/masks/{mask_id}/image": {
+      "get": {
+        "tags": [
+          "generative"
+        ],
+        "summary": "Get Mask Image",
+        "operationId": "get_mask_image_api_v1_generative_masks__mask_id__image_get",
+        "parameters": [
+          {
+            "name": "mask_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mask Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Grayscale mask PNG (255 = editable region)",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "404": {
+            "description": "Mask not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stored mask is damaged",
             "content": {
               "application/json": {
                 "schema": {
@@ -8404,7 +8925,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -8534,7 +9055,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -8636,7 +9157,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -8738,7 +9259,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -8840,7 +9361,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -9040,7 +9561,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -9142,7 +9663,7 @@
             }
           },
           "404": {
-            "description": "Generative task, result, or asset not found",
+            "description": "Generative task, result, mask, or asset not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -12305,6 +12826,366 @@
           "message"
         ],
         "title": "GenerativeErrorInfo"
+      },
+      "GenerativeMaskCreate": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "brush",
+              "rect",
+              "ellipse",
+              "semantic"
+            ],
+            "title": "Kind"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/GenerativeMaskDefinition"
+          },
+          "feather": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Feather",
+            "default": 0
+          },
+          "inverted": {
+            "type": "boolean",
+            "title": "Inverted",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "kind"
+        ],
+        "title": "GenerativeMaskCreate"
+      },
+      "GenerativeMaskDefinition": {
+        "properties": {
+          "strokes": {
+            "items": {
+              "$ref": "#/components/schemas/GenerativeMaskStroke"
+            },
+            "type": "array",
+            "maxItems": 256,
+            "title": "Strokes"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerativeMaskRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "semanticClass": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "person",
+                  "sky"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Semanticclass"
+          },
+          "expand": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Expand",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GenerativeMaskDefinition"
+      },
+      "GenerativeMaskKind": {
+        "type": "string",
+        "enum": [
+          "brush",
+          "rect",
+          "ellipse",
+          "semantic",
+          "ai_proposal"
+        ],
+        "title": "GenerativeMaskKind"
+      },
+      "GenerativeMaskListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GenerativeMaskView"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "GenerativeMaskListResponse"
+      },
+      "GenerativeMaskPoint": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "GenerativeMaskPoint"
+      },
+      "GenerativeMaskQuality": {
+        "properties": {
+          "coverage": {
+            "type": "number",
+            "title": "Coverage"
+          },
+          "componentCount": {
+            "type": "integer",
+            "title": "Componentcount"
+          },
+          "touchesBorder": {
+            "type": "boolean",
+            "title": "Touchesborder"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "coverage",
+          "componentCount",
+          "touchesBorder"
+        ],
+        "title": "GenerativeMaskQuality"
+      },
+      "GenerativeMaskRegion": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y"
+          },
+          "width": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Height"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "GenerativeMaskRegion"
+      },
+      "GenerativeMaskSource": {
+        "type": "string",
+        "enum": [
+          "user",
+          "semantic",
+          "ai"
+        ],
+        "title": "GenerativeMaskSource"
+      },
+      "GenerativeMaskStroke": {
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/GenerativeMaskPoint"
+            },
+            "type": "array",
+            "maxItems": 2048,
+            "minItems": 1,
+            "title": "Points"
+          },
+          "radius": {
+            "type": "number",
+            "maximum": 0.5,
+            "exclusiveMinimum": 0.0,
+            "title": "Radius"
+          },
+          "hardness": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Hardness",
+            "default": 100
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "add",
+              "erase"
+            ],
+            "title": "Mode",
+            "default": "add"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "points",
+          "radius"
+        ],
+        "title": "GenerativeMaskStroke"
+      },
+      "GenerativeMaskView": {
+        "properties": {
+          "maskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Maskid"
+          },
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "baseGeneratedAssetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basegeneratedassetid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GenerativeMaskKind"
+          },
+          "source": {
+            "$ref": "#/components/schemas/GenerativeMaskSource"
+          },
+          "coordinateSpace": {
+            "type": "string",
+            "const": "base-normalized",
+            "title": "Coordinatespace",
+            "default": "base-normalized"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "imageUrl": {
+            "type": "string",
+            "title": "Imageurl"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "feather": {
+            "type": "number",
+            "title": "Feather"
+          },
+          "inverted": {
+            "type": "boolean",
+            "title": "Inverted"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/GenerativeMaskDefinition"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/GenerativeMaskQuality"
+          },
+          "modelVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelversion"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "maskId",
+          "imageId",
+          "kind",
+          "source",
+          "width",
+          "height",
+          "imageUrl",
+          "sha256",
+          "feather",
+          "inverted",
+          "definition",
+          "quality",
+          "createdAt"
+        ],
+        "title": "GenerativeMaskView"
       },
       "GenerativeParams": {
         "properties": {

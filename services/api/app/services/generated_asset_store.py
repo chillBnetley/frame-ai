@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from app.core.config import Settings
@@ -14,6 +16,8 @@ logger = logging.getLogger("frame_ai.generative_store")
 
 _CANDIDATE_EXTENSION = ".png"
 _GENERATED_EXTENSION = ".png"
+_MASKS_PREFIX = "masks"
+_MASK_EXTENSION = ".png"
 
 
 class GeneratedAssetStore:
@@ -67,6 +71,36 @@ class GeneratedAssetStore:
     def save_generated(self, asset_id: str, data: bytes) -> str:
         return self._write(self.slug_for_generated(asset_id), data)
 
+    def slug_for_mask(self, mask_id: str) -> str:
+        return f"{_MASKS_PREFIX}/{mask_id}{_MASK_EXTENSION}"
+
+    def mask_sidecar_key(self, storage_key: str) -> str:
+        if not storage_key.endswith(_MASK_EXTENSION):
+            raise AppError(
+                500,
+                "generative_mask_storage_error",
+                "The mask storage key is invalid.",
+            )
+        return storage_key[: -len(_MASK_EXTENSION)] + ".json"
+
+    def save_mask(self, mask_id: str, data: bytes, metadata: dict[str, Any]) -> str:
+        """Publish the grayscale PNG and its sidecar; the pair is all-or-nothing."""
+
+        key = self.slug_for_mask(mask_id)
+        self._write_mask(key, data)
+        payload = json.dumps(
+            metadata,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        try:
+            self._write_mask(self.mask_sidecar_key(key), payload)
+        except AppError:
+            self.discard(key)
+            raise
+        return key
+
     def read(self, storage_key: str) -> bytes:
         return self.resolve(storage_key).read_bytes()
 
@@ -95,13 +129,45 @@ class GeneratedAssetStore:
         return True
 
     def _write(self, storage_key: str, data: bytes) -> str:
+        return self._write_payload(
+            storage_key,
+            data,
+            empty_code="generative_empty_output",
+            empty_message="The generated file is empty.",
+            too_large_message="The generated file exceeds the configured size limit.",
+            error_code="generative_storage_error",
+            error_message="The generated image could not be stored.",
+        )
+
+    def _write_mask(self, storage_key: str, data: bytes) -> str:
+        return self._write_payload(
+            storage_key,
+            data,
+            empty_code="generative_mask_empty",
+            empty_message="The mask file is empty.",
+            too_large_message="The mask file exceeds the configured size limit.",
+            error_code="generative_mask_storage_error",
+            error_message="The mask could not be stored.",
+        )
+
+    def _write_payload(
+        self,
+        storage_key: str,
+        data: bytes,
+        *,
+        empty_code: str,
+        empty_message: str,
+        too_large_message: str,
+        error_code: str,
+        error_message: str,
+    ) -> str:
         if not data:
-            raise AppError(500, "generative_empty_output", "The generated file is empty.")
+            raise AppError(500, empty_code, empty_message)
         if len(data) > self.max_bytes:
             raise AppError(
                 413,
                 "generative_output_too_large",
-                "The generated file exceeds the configured size limit.",
+                too_large_message,
                 {"bytes": len(data), "maxBytes": self.max_bytes},
             )
         path = self._resolve_key(storage_key)
@@ -114,11 +180,7 @@ class GeneratedAssetStore:
                 os.fsync(handle.fileno())
             os.replace(temporary, path)
         except OSError as exc:
-            raise AppError(
-                500,
-                "generative_storage_error",
-                "The generated image could not be stored.",
-            ) from exc
+            raise AppError(500, error_code, error_message) from exc
         finally:
             with contextlib.suppress(OSError):
                 temporary.unlink()
