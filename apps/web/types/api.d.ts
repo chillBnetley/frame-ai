@@ -2781,12 +2781,40 @@ export interface components {
             createdAt: string;
         };
         /**
+         * GenerativeOutpaintAlignment
+         * @enum {string}
+         */
+        GenerativeOutpaintAlignment: "center" | "top" | "bottom" | "left" | "right";
+        /** GenerativeOutpaintParams */
+        GenerativeOutpaintParams: {
+            /**
+             * Top
+             * @default 0
+             */
+            top: number;
+            /**
+             * Bottom
+             * @default 0
+             */
+            bottom: number;
+            /**
+             * Left
+             * @default 0
+             */
+            left: number;
+            /**
+             * Right
+             * @default 0
+             */
+            right: number;
+            /** Aspectratio */
+            aspectRatio?: string | null;
+            /** @default center */
+            alignment: components["schemas"]["GenerativeOutpaintAlignment"];
+        };
+        /**
          * GenerativeParams
          * @description Execution parameters shared by the current task types.
-         *
-         *     Batch 1 only exposes candidates=1 through the mock provider. Task-specific
-         *     canvas and mask parameters join this model in their own batches, after the
-         *     Provider capability that supports them is declared.
          */
         GenerativeParams: {
             /**
@@ -2794,6 +2822,7 @@ export interface components {
              * @default 1
              */
             candidates: number;
+            outpaint?: components["schemas"]["GenerativeOutpaintParams"] | null;
         };
         /**
          * GenerativeResultStatus

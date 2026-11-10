@@ -38,7 +38,10 @@ class MockGenerativeProvider:
 
     def capabilities(self) -> GenerativeCapabilities:
         return GenerativeCapabilities(
-            supported_task_types=(GenerativeTaskType.LOCAL_EDIT,),
+            supported_task_types=(
+                GenerativeTaskType.LOCAL_EDIT,
+                GenerativeTaskType.OUTPAINT,
+            ),
             supports_mask=True,
             supports_multiple_outputs=False,
             supports_async=False,
@@ -58,6 +61,11 @@ class MockGenerativeProvider:
             raise GenerativeProviderError(
                 "generative_invalid_input",
                 "The input image is empty.",
+            )
+        if request.task_type == GenerativeTaskType.OUTPAINT and request.image.mask is None:
+            raise GenerativeProviderError(
+                "generative_invalid_input",
+                "Outpainting requests require a mask for canvas extension.",
             )
         raw_candidates = request.params.get("candidates", 1)
         candidates = (

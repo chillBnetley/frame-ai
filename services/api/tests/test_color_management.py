@@ -639,6 +639,7 @@ def test_only_the_documented_sites_quantise_to_uint8() -> None:
         "analyzer.py",
         "semantic_models.py",
         "generative_masks.py",
+        "generative_outpaint.py",
     }
 
     found = {

@@ -136,15 +136,28 @@ class GenerativeMaskListResponse(CamelModel):
     items: list[GenerativeMaskView]
 
 
-class GenerativeParams(CamelModel):
-    """Execution parameters shared by the current task types.
+class GenerativeOutpaintAlignment(StrEnum):
+    CENTER = "center"
+    TOP = "top"
+    BOTTOM = "bottom"
+    LEFT = "left"
+    RIGHT = "right"
 
-    Batch 1 only exposes candidates=1 through the mock provider. Task-specific
-    canvas and mask parameters join this model in their own batches, after the
-    Provider capability that supports them is declared.
-    """
+
+class GenerativeOutpaintParams(CamelModel):
+    top: int = Field(default=0, ge=0, le=8192)
+    bottom: int = Field(default=0, ge=0, le=8192)
+    left: int = Field(default=0, ge=0, le=8192)
+    right: int = Field(default=0, ge=0, le=8192)
+    aspect_ratio: str | None = Field(default=None, max_length=16)
+    alignment: GenerativeOutpaintAlignment = GenerativeOutpaintAlignment.CENTER
+
+
+class GenerativeParams(CamelModel):
+    """Execution parameters shared by the current task types."""
 
     candidates: int = Field(default=1, ge=1, le=2)
+    outpaint: GenerativeOutpaintParams | None = None
 
 
 class GenerativeTaskRequest(CamelModel):
@@ -162,7 +175,7 @@ class GenerativePlan(CamelModel):
 
     task_type: GenerativeTaskType
     instruction: str
-    target: Literal["full-image", "mask"] = "full-image"
+    target: Literal["full-image", "mask", "expanded-canvas"] = "full-image"
     mask_id: UUID | None = None
     preserve: list[str] = Field(default_factory=list)
     candidates: int = 1

@@ -48,10 +48,28 @@ class GenerativeRequestSpec:
     candidates: int
     input_width: int
     input_height: int
+    target_width: int | None = None
+    target_height: int | None = None
 
     @property
     def input_pixels(self) -> int:
         return self.input_width * self.input_height
+
+    @property
+    def output_width(self) -> int:
+        return self.target_width if self.target_width is not None else self.input_width
+
+    @property
+    def output_height(self) -> int:
+        return self.target_height if self.target_height is not None else self.input_height
+
+    @property
+    def output_pixels(self) -> int:
+        return self.output_width * self.output_height
+
+    @property
+    def output_long_edge(self) -> int:
+        return max(self.output_width, self.output_height)
 
 
 def validate_spec(
@@ -84,21 +102,26 @@ def validate_spec(
             "generative_invalid_input",
             "The input image has invalid dimensions.",
         )
-    if spec.input_pixels > capabilities.max_output_pixels:
+    if spec.output_width <= 0 or spec.output_height <= 0:
+        raise GenerativeProviderError(
+            "generative_invalid_input",
+            "The target canvas has invalid dimensions.",
+        )
+    if spec.output_pixels > capabilities.max_output_pixels:
         raise GenerativeProviderError(
             "generative_input_too_large",
-            "The input image is larger than the provider accepts.",
+            "The image or target canvas is larger than the provider accepts.",
             details={
-                "pixels": spec.input_pixels,
+                "pixels": spec.output_pixels,
                 "maxPixels": capabilities.max_output_pixels,
             },
         )
-    if max(spec.input_width, spec.input_height) > capabilities.max_long_edge:
+    if spec.output_long_edge > capabilities.max_long_edge:
         raise GenerativeProviderError(
             "generative_input_too_large",
-            "The input image is longer than the provider accepts.",
+            "The image or target canvas is longer than the provider accepts.",
             details={
-                "longEdge": max(spec.input_width, spec.input_height),
+                "longEdge": spec.output_long_edge,
                 "maxLongEdge": capabilities.max_long_edge,
             },
         )

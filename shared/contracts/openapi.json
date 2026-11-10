@@ -13187,6 +13187,68 @@
         ],
         "title": "GenerativeMaskView"
       },
+      "GenerativeOutpaintAlignment": {
+        "type": "string",
+        "enum": [
+          "center",
+          "top",
+          "bottom",
+          "left",
+          "right"
+        ],
+        "title": "GenerativeOutpaintAlignment"
+      },
+      "GenerativeOutpaintParams": {
+        "properties": {
+          "top": {
+            "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 0.0,
+            "title": "Top",
+            "default": 0
+          },
+          "bottom": {
+            "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 0.0,
+            "title": "Bottom",
+            "default": 0
+          },
+          "left": {
+            "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 0.0,
+            "title": "Left",
+            "default": 0
+          },
+          "right": {
+            "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 0.0,
+            "title": "Right",
+            "default": 0
+          },
+          "aspectRatio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aspectratio"
+          },
+          "alignment": {
+            "$ref": "#/components/schemas/GenerativeOutpaintAlignment",
+            "default": "center"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GenerativeOutpaintParams"
+      },
       "GenerativeParams": {
         "properties": {
           "candidates": {
@@ -13195,12 +13257,22 @@
             "minimum": 1.0,
             "title": "Candidates",
             "default": 1
+          },
+          "outpaint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerativeOutpaintParams"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "GenerativeParams",
-        "description": "Execution parameters shared by the current task types.\n\nBatch 1 only exposes candidates=1 through the mock provider. Task-specific\ncanvas and mask parameters join this model in their own batches, after the\nProvider capability that supports them is declared."
+        "description": "Execution parameters shared by the current task types."
       },
       "GenerativeResultStatus": {
         "type": "string",

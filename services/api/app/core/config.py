@@ -124,6 +124,7 @@ class Settings(BaseSettings):
     generative_provider_timeout_seconds: float = Field(default=120.0, gt=0, le=1800)
     generative_provider_max_retries: int = Field(default=1, ge=0, le=5)
     generative_max_download_bytes: int = Field(default=96 * 1024 * 1024, gt=0)
+    generative_max_outpaint_scale: float = Field(default=4.0, ge=1.0, le=16.0)
 
     @field_validator("data_dir")
     @classmethod

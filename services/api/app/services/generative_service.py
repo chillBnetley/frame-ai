@@ -7,7 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -26,12 +26,19 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.identity import OwnerScope
 from app.imaging.generative_masks import encode_mask
+from app.imaging.generative_outpaint import (
+    OutpaintGeometry,
+    build_outpaint_canvas,
+    compute_outpaint_geometry,
+    restore_outpaint_protected_region,
+)
 from app.imaging.loader import load_image
 from app.imaging.output import encode_image, to_uint8
 from app.models.generative import (
     GeneratedAssetRecord,
     GenerativeCapabilitiesResponse,
     GenerativeErrorInfo,
+    GenerativeOutpaintParams,
     GenerativePlan,
     GenerativeResultRecord,
     GenerativeResultStatus,
@@ -151,15 +158,46 @@ class GenerativeTaskService:
             self._validate_mask(mask_id, image_id, base_generated_asset_id, owner)
 
         base = self.assets.resolve(image_id, base_generated_asset_id)
+        target_width: int | None = None
+        target_height: int | None = None
+        if request.task_type == GenerativeTaskType.OUTPAINT:
+            if request.params.outpaint is None:
+                raise AppError(
+                    422,
+                    "generative_outpaint_params_required",
+                    "Outpainting requires outpaint geometry parameters.",
+                )
+            try:
+                outpaint_geo = compute_outpaint_geometry(
+                    base.width,
+                    base.height,
+                    request.params.outpaint,
+                    max_scale=self.settings.generative_max_outpaint_scale,
+                )
+            except ValueError as exc:
+                raise AppError(
+                    422,
+                    "generative_outpaint_invalid",
+                    str(exc),
+                ) from exc
+            target_width = outpaint_geo.target_width
+            target_height = outpaint_geo.target_height
+
         try:
+            has_mask = (
+                mask_id is not None
+                or request.task_type == GenerativeTaskType.OUTPAINT
+            )
             self.provider.validate_spec(
                 GenerativeRequestSpec(
                     task_type=request.task_type,
                     instruction=request.instruction.strip(),
-                    has_mask=mask_id is not None,
+                    has_mask=has_mask,
                     candidates=request.params.candidates,
                     input_width=base.width,
                     input_height=base.height,
+                    target_width=target_width,
+                    target_height=target_height,
                 )
             )
         except GenerativeProviderError as exc:
@@ -173,12 +211,23 @@ class GenerativeTaskService:
                 "Confirm that the image may be sent to the selected provider.",
             )
 
+        plan_target: Literal["full-image", "mask", "expanded-canvas"]
+        if request.task_type == GenerativeTaskType.OUTPAINT:
+            plan_target = "expanded-canvas"
+            plan_preserve = ["original photo region"]
+        elif mask_id is not None:
+            plan_target = "mask"
+            plan_preserve = ["pixels outside the editable region"]
+        else:
+            plan_target = "full-image"
+            plan_preserve = []
+
         plan = GenerativePlan(
             task_type=request.task_type,
             instruction=request.instruction.strip(),
-            target="mask" if mask_id is not None else "full-image",
+            target=plan_target,
             mask_id=request.mask_id,
-            preserve=["pixels outside the editable region"],
+            preserve=plan_preserve,
             candidates=request.params.candidates,
         )
         params_payload = request.params.model_dump(mode="json")
@@ -501,9 +550,48 @@ class GenerativeTaskService:
             base,
             capabilities.max_output_pixels,
         )
-        mask = self._load_mask(task, width, height)
-        mask_bytes = None if mask is None else encode_mask(mask)
+        inner_mask = self._load_mask(task, width, height)
         self._raise_if_cancelled(task.id)
+
+        outpaint_geo: OutpaintGeometry | None = None
+        submission_data: bytes
+        submission_mask: bytes | None
+        sub_w: int
+        sub_h: int
+        if task.task_type == GenerativeTaskType.OUTPAINT:
+            params_dict = json.loads(task.params_json)
+            raw_outpaint = params_dict.get("outpaint")
+            if not isinstance(raw_outpaint, dict):
+                raise AppError(
+                    422,
+                    "generative_outpaint_params_required",
+                    "Outpaint parameters missing from task.",
+                )
+            try:
+                outpaint_params = GenerativeOutpaintParams.model_validate(raw_outpaint)
+                outpaint_geo = compute_outpaint_geometry(
+                    width,
+                    height,
+                    outpaint_params,
+                    max_scale=self.settings.generative_max_outpaint_scale,
+                )
+            except ValueError as exc:
+                raise AppError(422, "generative_outpaint_invalid", str(exc)) from exc
+
+            canvas_pixels, canvas_mask = build_outpaint_canvas(
+                input_pixels,
+                outpaint_geo,
+                inner_mask=inner_mask,
+            )
+            submission_data = encode_image(canvas_pixels, image_format="png")
+            submission_mask = encode_mask(canvas_mask)
+            sub_w = outpaint_geo.target_width
+            sub_h = outpaint_geo.target_height
+        else:
+            submission_data = input_bytes
+            submission_mask = None if inner_mask is None else encode_mask(inner_mask)
+            sub_w = width
+            sub_h = height
 
         self.repository.set_stage(task.id, GenerativeTaskStage.SUBMITTING.value)
         request = GenerativeRequest(
@@ -511,12 +599,12 @@ class GenerativeTaskService:
             task_type=task.task_type,
             instruction=task.instruction,
             image=GenerativeImageInput(
-                data=input_bytes,
+                data=submission_data,
                 mime_type="image/png",
-                width=width,
-                height=height,
-                mask=mask_bytes,
-                mask_mime_type="image/png" if mask_bytes is not None else None,
+                width=sub_w,
+                height=sub_h,
+                mask=submission_mask,
+                mask_mime_type="image/png" if submission_mask is not None else None,
             ),
             params=json.loads(task.params_json),
             prompt_version=task.prompt_version,
@@ -535,7 +623,8 @@ class GenerativeTaskService:
             input_pixels=input_pixels,
             width=width,
             height=height,
-            mask=mask,
+            mask=inner_mask,
+            outpaint_geo=outpaint_geo,
         )
         self._raise_if_cancelled(task.id)
 
@@ -552,8 +641,8 @@ class GenerativeTaskService:
             result_index=0,
             storage_key=storage_key,
             sha256=hashlib.sha256(data).hexdigest(),
-            width=width,
-            height=height,
+            width=sub_w,
+            height=sub_h,
             bytes=len(data),
             mime_type="image/png",
             status=GenerativeResultStatus.CANDIDATE,
@@ -640,6 +729,7 @@ class GenerativeTaskService:
         width: int,
         height: int,
         mask: NDArray[np.uint8] | None,
+        outpaint_geo: OutpaintGeometry | None = None,
     ) -> tuple[bytes, list[str]]:
         if not generated.data:
             raise AppError(502, "generative_invalid_output", "The provider returned no image.")
@@ -663,12 +753,15 @@ class GenerativeTaskService:
                 "The provider returned an unreadable image.",
                 {"reason": exc.code},
             ) from exc
-        if (loaded.width, loaded.height) != (width, height):
+
+        expected_w = outpaint_geo.target_width if outpaint_geo is not None else width
+        expected_h = outpaint_geo.target_height if outpaint_geo is not None else height
+        if (loaded.width, loaded.height) != (expected_w, expected_h):
             raise AppError(
                 502,
                 "generative_invalid_output_size",
                 "The provider returned an image with unexpected dimensions.",
-                {"expected": [width, height], "actual": [loaded.width, loaded.height]},
+                {"expected": [expected_w, expected_h], "actual": [loaded.width, loaded.height]},
             )
         pixels = to_uint8(loaded.rgb)
         if float(np.std(pixels.astype(np.float32))) < _BLANK_STD_THRESHOLD:
@@ -680,15 +773,28 @@ class GenerativeTaskService:
         warnings: list[str] = []
         if task.is_mock:
             warnings.append(_MOCK_WARNING)
-        if mask is not None:
-            pixels = composite_protected_region(input_pixels, pixels, mask)
-            warnings.append(_MASK_WARNING)
-        if np.array_equal(pixels, input_pixels):
-            raise AppError(
-                502,
-                "generative_no_visible_change",
-                "The provider returned an image identical to the input.",
-            )
+
+        if outpaint_geo is not None:
+            try:
+                pixels, outpaint_warnings = restore_outpaint_protected_region(
+                    input_pixels,
+                    pixels,
+                    outpaint_geo,
+                    inner_mask=mask,
+                )
+            except ValueError as exc:
+                raise AppError(502, "generative_invalid_output", str(exc)) from exc
+            warnings.extend(outpaint_warnings)
+        else:
+            if mask is not None:
+                pixels = composite_protected_region(input_pixels, pixels, mask)
+                warnings.append(_MASK_WARNING)
+            if np.array_equal(pixels, input_pixels):
+                raise AppError(
+                    502,
+                    "generative_no_visible_change",
+                    "The provider returned an image identical to the input.",
+                )
         data = encode_image(pixels, image_format="png")
         if len(data) > self.settings.generative_max_output_bytes:
             raise AppError(
