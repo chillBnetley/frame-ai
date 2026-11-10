@@ -9,8 +9,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai.factory import ProviderBundle
+from app.ai.generative_factory import build_generative_provider
 from app.api.errors import register_exception_handlers
 from app.api.routes import analysis, config, exports, health, images, previews, sessions
+from app.api.routes import generative as generative_routes
 from app.api.routes import personal_styles as personal_style_routes
 from app.api.routes import photographer as photographer_routes
 from app.api.routes import settings as settings_routes
@@ -31,6 +33,7 @@ from app.imaging.local_masks import configure_mask_cache, configure_semantic_mat
 from app.imaging.semantic_models import SemanticModelRegistry
 from app.photographer.service import PhotographerService
 from app.repositories.analysis_repo import SqliteAnalysisRepository
+from app.repositories.generative_repo import SqliteGenerativeRepository
 from app.repositories.personal_style_repo import SqlitePersonalStyleRepository
 from app.repositories.photographer_repo import (
     SqlitePhotographerFeedbackRepository,
@@ -39,10 +42,13 @@ from app.repositories.photographer_repo import (
 from app.repositories.style_evolution_repo import SqliteStyleEvolutionRepository
 from app.repositories.style_repo import SqliteStyleProfileRepository
 from app.services.analysis_task_service import AnalysisTaskService
+from app.services.asset_resolver import ImageAssetResolver
 from app.services.custom_style_service import CustomStyleService
 from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
+from app.services.generated_asset_store import GeneratedAssetStore
+from app.services.generative_service import GenerativeTaskService
 from app.services.image_service import ImageService
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
@@ -83,6 +89,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service = ImageService(resolved_settings)
         service.ensure_ready()
         service.scan_consistency()
+        generated_store = GeneratedAssetStore(resolved_settings)
+        generated_store.ensure_ready()
+        generative_repo = SqliteGenerativeRepository(resolved_settings.database_path)
+        asset_resolver = ImageAssetResolver(service, generative_repo, generated_store)
         style_profiles = SqliteStyleProfileRepository(resolved_settings.database_path)
         seeded = seed_style_library(style_profiles)
         if seeded.created:
@@ -95,7 +105,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         app.state.semantic_mask_service = semantic_mask_service
         session_service = SessionService(resolved_settings, service)
-        render_service = RenderService(resolved_settings, service, session_service)
+        render_service = RenderService(
+            resolved_settings,
+            service,
+            session_service,
+            assets=asset_resolver,
+        )
         render_service.previews.ensure_ready()
         await asyncio.to_thread(render_service.previews.cleanup)
         app.state.settings = resolved_settings
@@ -106,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resolved_settings,
             service,
             session_service,
+            assets=asset_resolver,
         )
         app.state.export_service = export_service
         export_jobs = ExportJobManager(
@@ -175,6 +191,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             SqliteStyleEvolutionRepository(resolved_settings.database_path),
             personal_style_service,
         )
+        generative_service = GenerativeTaskService(
+            resolved_settings,
+            session_service,
+            build_generative_provider(resolved_settings),
+            generative_repo,
+            generated_store,
+            asset_resolver,
+        )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -184,6 +208,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.provider_settings_service = providers
         analysis_tasks.recover()
         app.state.analysis_task_service = analysis_tasks
+        app.state.generative_service = generative_service
+        generative_service.recover()
         app.state.deletion_service = DeletionService(
             resolved_settings,
             images=service,
@@ -192,6 +218,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             previews=render_service.previews,
             proxy_cache=render_service.proxy_cache,
             export_jobs=export_jobs,
+            generated=generated_store,
+            generative_repository=generative_repo,
         )
         app.state.photographer_service = photographer_service
         app.state.style_library_service = style_library_service
@@ -215,6 +243,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             with suppress(asyncio.CancelledError):
                 await cleanup_task
             export_jobs.shutdown()
+            await asyncio.to_thread(generative_service.shutdown)
             await asyncio.to_thread(analysis_tasks.shutdown)
 
     app = FastAPI(
@@ -287,6 +316,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(style_routes.router, prefix=API_PREFIX)
     app.include_router(personal_style_routes.router, prefix=API_PREFIX)
     app.include_router(style_mix_routes.router, prefix=API_PREFIX)
+    app.include_router(generative_routes.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict[str, str]:

@@ -20,6 +20,7 @@ from app.imaging.params_map import DRAFT_MAX_EDGE, ENGINE_VERSION
 from app.imaging.pipeline import render as render_image
 from app.models.recipe import Adjustments, EditRecipe, recipe_hash, render_key
 from app.models.render import CompareResponse, CompareSide, RenderRequest, RenderTier
+from app.services.asset_resolver import ImageAssetResolver, ResolvedImage
 from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
 from app.services.proxy_cache import DecodedProxyCache
@@ -51,6 +52,7 @@ class RenderService:
         images: ImageService,
         sessions: SessionService,
         *,
+        assets: ImageAssetResolver,
         previews: PreviewStore | None = None,
         proxy_cache: DecodedProxyCache | None = None,
         max_concurrent_renders: int = 2,
@@ -58,6 +60,7 @@ class RenderService:
         self.settings = settings
         self.images = images
         self.sessions = sessions
+        self.assets = assets
         self.previews = previews or PreviewStore(
             settings.preview_dir,
             ttl_seconds=settings.preview_ttl_seconds,
@@ -105,14 +108,20 @@ class RenderService:
         request: RenderRequest,
         *,
         render_seq: int | None = None,
+        base: ResolvedImage | None = None,
     ) -> RenderResult:
         self._note_seq(session_id, render_seq)
         state = self.sessions.get(session_id)
-        record, path = self.images.get_original(str(state.image_id))
+        active_base_id = (
+            None
+            if state.revision.base_generated_asset_id is None
+            else str(state.revision.base_generated_asset_id)
+        )
+        resolved = base or self.assets.resolve(str(state.image_id), active_base_id)
         edge = self._resolve_edge(request.quality, request.max_edge)
-        edge = max(1, min(edge, max(record.width, record.height)))
+        edge = max(1, min(edge, max(resolved.width, resolved.height)))
         preview_id = render_key(
-            record.sha256,
+            resolved.sha256,
             request.recipe,
             edge=edge,
             quality=request.quality,
@@ -120,7 +129,7 @@ class RenderService:
         )
         self.previews.remember(
             preview_id,
-            image_sha256=record.sha256,
+            image_sha256=resolved.sha256,
             recipe_hash=recipe_hash(request.recipe),
             edge=edge,
             quality=request.quality,
@@ -156,15 +165,15 @@ class RenderService:
                 )
 
             proxy_key = self.proxy_cache.key_for(
-                record.sha256,
+                resolved.sha256,
                 edge,
-                bit_depth=probe_bit_depth(path),
+                bit_depth=probe_bit_depth(resolved.path),
             )
             proxy = self.proxy_cache.get(proxy_key)
             if proxy is None:
                 proxy = load_proxy(
-                    path,
-                    original_sha256=record.sha256,
+                    resolved.path,
+                    original_sha256=resolved.sha256,
                     max_edge=edge,
                     cache_dir=proxy_cache_directory(self.previews.directory),
                     max_pixels=self.settings.max_image_pixels,
@@ -182,7 +191,7 @@ class RenderService:
             rendered = render_image(
                 proxy,
                 request.recipe.adjustments,
-                image_sha256=record.sha256,
+                image_sha256=resolved.sha256,
                 curve=request.recipe.curve,
                 hsl=request.recipe.hsl,
                 color_grading=request.recipe.color_grading,
@@ -227,9 +236,16 @@ class RenderService:
             if revision_id is None
             else self.sessions.get_revision(session_id, revision_id)
         )
-        record, _ = self.images.get_original(str(state.image_id))
+        base = self.assets.resolve(
+            str(state.image_id),
+            (
+                None
+                if revision.base_generated_asset_id is None
+                else str(revision.base_generated_asset_id)
+            ),
+        )
         edge = max(1, min(max_edge, self.settings.render_max_edge_limit))
-        edge = min(edge, max(record.width, record.height))
+        edge = min(edge, max(base.width, base.height))
 
         adjustments = revision.recipe.adjustments
         geometry_only = Adjustments(rotation_deg=adjustments.rotation_deg, crop=adjustments.crop)
@@ -240,10 +256,12 @@ class RenderService:
                 max_edge=edge,
                 quality="final",
             ),
+            base=base,
         )
         rendered = self.render(
             session_id,
             RenderRequest(recipe=revision.recipe, max_edge=edge, quality="final"),
+            base=base,
         )
         return CompareResponse(
             original=CompareSide(

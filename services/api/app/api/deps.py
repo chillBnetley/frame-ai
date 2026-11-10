@@ -12,6 +12,7 @@ from app.services.custom_style_service import CustomStyleService
 from app.services.deletion_service import DeletionService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
+from app.services.generative_service import GenerativeTaskService
 from app.services.image_service import ImageService
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
@@ -186,4 +187,15 @@ def get_deletion_service(request: Request) -> DeletionService:
     service = getattr(request.app.state, "deletion_service", None)
     if not isinstance(service, DeletionService):
         raise AppError(503, "service_unavailable", "The service is not ready.")
+    return service
+
+
+def get_generative_service(request: Request) -> GenerativeTaskService:
+    service = getattr(request.app.state, "generative_service", None)
+    if not isinstance(service, GenerativeTaskService):
+        raise AppError(
+            503,
+            "generative_unavailable",
+            "The generative pipeline is not available.",
+        )
     return service

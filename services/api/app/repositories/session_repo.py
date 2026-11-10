@@ -43,12 +43,14 @@ class SessionRecord:
 
 @dataclass(frozen=True)
 class RevisionCreation:
-    plan_id: str
-    style_id: str | None
-    style_version: str | None
-    conversion_mode: str | None
-    style_strength: float | None
-    render_key: str | None
+    plan_id: str | None = None
+    style_id: str | None = None
+    style_version: str | None = None
+    conversion_mode: str | None = None
+    style_strength: float | None = None
+    render_key: str | None = None
+    generative_task_id: str | None = None
+    base_generated_asset_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,8 @@ class RevisionRecord:
     conversion_mode: str | None = None
     style_strength: float | None = None
     render_key: str | None = None
+    base_generated_asset_id: str | None = None
+    generative_task_id: str | None = None
 
 
 _SESSION_COLUMNS = (
@@ -76,7 +80,8 @@ _SESSION_COLUMNS = (
 _REVISION_COLUMNS = (
     "id, session_id, parent_id, revision_no, recipe_json, recipe_hash, "
     "source, idempotency_key, created_at, plan_id, style_id, style_version, "
-    "conversion_mode, style_strength, render_key"
+    "conversion_mode, style_strength, render_key, base_generated_asset_id, "
+    "generative_task_id"
 )
 _REDO_QUERY = """
 WITH RECURSIVE ancestors(id, parent_id) AS (
@@ -144,6 +149,12 @@ def _to_revision(row: sqlite3.Row) -> RevisionRecord:
         conversion_mode=(None if row["conversion_mode"] is None else str(row["conversion_mode"])),
         style_strength=(None if row["style_strength"] is None else float(row["style_strength"])),
         render_key=None if row["render_key"] is None else str(row["render_key"]),
+        base_generated_asset_id=(
+            None if row["base_generated_asset_id"] is None else str(row["base_generated_asset_id"])
+        ),
+        generative_task_id=(
+            None if row["generative_task_id"] is None else str(row["generative_task_id"])
+        ),
     )
 
 
@@ -277,6 +288,18 @@ class SqliteSessionRepository:
                 if parent_id.lower() != session.active_revision_id:
                     raise RevisionConflictError(session.active_revision_id)
 
+                active_row = self._revision_row(connection, session.active_revision_id)
+                inherited_base = (
+                    None
+                    if active_row["base_generated_asset_id"] is None
+                    else str(active_row["base_generated_asset_id"])
+                )
+                base_asset = (
+                    creation.base_generated_asset_id
+                    if creation is not None and creation.base_generated_asset_id is not None
+                    else inherited_base
+                )
+
                 revision_id = str(uuid4())
                 now = utc_now()
                 next_number = int(
@@ -290,8 +313,9 @@ class SqliteSessionRepository:
                     "INSERT INTO edit_revision "
                     "(id, session_id, parent_id, revision_no, recipe_json, recipe_hash, "
                     " source, idempotency_key, created_at, plan_id, style_id, style_version, "
-                    " conversion_mode, style_strength, render_key) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " conversion_mode, style_strength, render_key, base_generated_asset_id, "
+                    " generative_task_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         revision_id,
                         normalized_session,
@@ -302,12 +326,18 @@ class SqliteSessionRepository:
                         source,
                         idempotency_key,
                         now,
-                        None if creation is None else creation.plan_id.lower(),
+                        (
+                            None
+                            if creation is None or creation.plan_id is None
+                            else creation.plan_id.lower()
+                        ),
                         None if creation is None else creation.style_id,
                         None if creation is None else creation.style_version,
                         None if creation is None else creation.conversion_mode,
                         None if creation is None else creation.style_strength,
                         None if creation is None else creation.render_key,
+                        base_asset,
+                        None if creation is None else creation.generative_task_id,
                     ),
                 )
                 connection.execute(
@@ -440,8 +470,8 @@ class SqliteSessionRepository:
                 connection.execute(
                     "INSERT INTO edit_revision "
                     "(id, session_id, parent_id, revision_no, recipe_json, recipe_hash, "
-                    " source, idempotency_key, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, 'reset', NULL, ?)",
+                    " source, idempotency_key, created_at, base_generated_asset_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'reset', NULL, ?, ?)",
                     (
                         revision_id,
                         normalized_session,
@@ -450,6 +480,7 @@ class SqliteSessionRepository:
                         default_recipe_json,
                         default_recipe_hash,
                         now,
+                        active["base_generated_asset_id"],
                     ),
                 )
                 connection.execute(

@@ -17,12 +17,16 @@ class ImageDeletionRecord:
     storage_key: str | None = None
     sha256: str | None = None
     session_ids: tuple[str, ...] = ()
+    generated_storage_keys: tuple[str, ...] = ()
+    result_storage_keys: tuple[str, ...] = ()
+    mask_storage_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class SessionDeletionRecord:
     status: DeletionStatus
     image_id: str | None = None
+    result_storage_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -68,6 +72,9 @@ class SqliteDeletionRepository:
                         (normalized,),
                     ).fetchall()
                 )
+                generated_keys = self._generated_keys(connection, normalized)
+                result_keys = self._result_keys_for_image(connection, normalized)
+                mask_keys = self._mask_keys(connection, normalized)
                 connection.execute(
                     "DELETE FROM edit_session WHERE image_id = ?",
                     (normalized,),
@@ -86,6 +93,9 @@ class SqliteDeletionRepository:
             storage_key=str(row["storage_key"]),
             sha256=str(row["sha256"]),
             session_ids=session_ids,
+            generated_storage_keys=generated_keys,
+            result_storage_keys=result_keys,
+            mask_storage_keys=mask_keys,
         )
 
     def delete_session(self, session_id: str) -> SessionDeletionRecord:
@@ -102,6 +112,16 @@ class SqliteDeletionRepository:
                     tombstoned = self._tombstoned(connection, "session", normalized)
                     connection.rollback()
                     return SessionDeletionRecord(status="tombstoned" if tombstoned else "missing")
+                result_keys = tuple(
+                    str(item["storage_key"])
+                    for item in connection.execute(
+                        "SELECT generative_result.storage_key AS storage_key "
+                        "FROM generative_result "
+                        "JOIN generative_task ON generative_task.id = generative_result.task_id "
+                        "WHERE generative_task.session_id = ?",
+                        (normalized,),
+                    ).fetchall()
+                )
                 connection.execute("DELETE FROM edit_session WHERE id = ?", (normalized,))
                 self._remember(connection, "session", normalized)
             except BaseException:
@@ -110,7 +130,11 @@ class SqliteDeletionRepository:
             connection.commit()
         finally:
             connection.close()
-        return SessionDeletionRecord(status="deleted", image_id=str(row["image_id"]))
+        return SessionDeletionRecord(
+            status="deleted",
+            image_id=str(row["image_id"]),
+            result_storage_keys=result_keys,
+        )
 
     def sha_is_shared(self, sha256: str) -> bool:
         """True when another image still references the same content digest."""
@@ -151,6 +175,36 @@ class SqliteDeletionRepository:
             )
             for row in rows
         ]
+
+    @staticmethod
+    def _generated_keys(connection: sqlite3.Connection, image_id: str) -> tuple[str, ...]:
+        rows = connection.execute(
+            "SELECT storage_key FROM generated_asset WHERE image_id = ?",
+            (image_id,),
+        ).fetchall()
+        return tuple(str(row["storage_key"]) for row in rows)
+
+    @staticmethod
+    def _result_keys_for_image(
+        connection: sqlite3.Connection,
+        image_id: str,
+    ) -> tuple[str, ...]:
+        rows = connection.execute(
+            "SELECT generative_result.storage_key AS storage_key "
+            "FROM generative_result "
+            "JOIN generative_task ON generative_task.id = generative_result.task_id "
+            "WHERE generative_task.image_id = ?",
+            (image_id,),
+        ).fetchall()
+        return tuple(str(row["storage_key"]) for row in rows)
+
+    @staticmethod
+    def _mask_keys(connection: sqlite3.Connection, image_id: str) -> tuple[str, ...]:
+        rows = connection.execute(
+            "SELECT storage_key FROM generative_mask WHERE image_id = ?",
+            (image_id,),
+        ).fetchall()
+        return tuple(str(row["storage_key"]) for row in rows)
 
     @staticmethod
     def _detach_personal_references(connection: sqlite3.Connection, image_id: str) -> None:

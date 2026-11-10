@@ -45,7 +45,7 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
     finally:
         connection.close()
 
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     assert {
         "image_asset",
         "edit_session",
@@ -65,12 +65,22 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
         "personal_style_feedback",
         "personal_style_evolution",
         "personal_style_tombstone",
+        "generated_asset",
+        "generative_mask",
+        "generative_task",
+        "generative_result",
     } <= tables
     assert "conversion_mode" in plan_columns
     assert "base_revision_id" in plan_columns
-    assert {"plan_id", "style_id", "conversion_mode", "style_strength", "render_key"} <= (
-        revision_columns
-    )
+    assert {
+        "plan_id",
+        "style_id",
+        "conversion_mode",
+        "style_strength",
+        "render_key",
+        "base_generated_asset_id",
+        "generative_task_id",
+    } <= revision_columns
     assert foreign_key_issues == []
     assert journal_mode == "wal"
 
@@ -137,6 +147,78 @@ def test_modified_migration_is_rejected(tmp_path: Path):
 
     with pytest.raises(MigrationError, match="modified"):
         initialize_database(path, directory)
+
+
+def test_generative_migration_upgrades_an_existing_database(tmp_path: Path):
+    directory = tmp_path / "migrations"
+    directory.mkdir()
+    for source in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if source.name.startswith("0012_"):
+            continue
+        shutil.copyfile(source, directory / source.name)
+    path = tmp_path / "frame.db"
+    initialize_database(path, directory)
+
+    digest = "a" * 64
+    connection = connect(path)
+    try:
+        connection.execute(
+            "INSERT INTO image_asset "
+            "(id, original_name, storage_key, mime_type, width, height, exif_orientation, "
+            " bytes, sha256, created_at) "
+            "VALUES ('image', 'a.png', 'originals/image.png', 'image/png', 10, 10, 1, "
+            "        1, ?, 'now')",
+            (digest,),
+        )
+        connection.execute(
+            "INSERT INTO edit_session "
+            "(id, image_id, status, created_at, updated_at) "
+            "VALUES ('session', 'image', 'active', 'now', 'now')"
+        )
+        connection.execute(
+            "INSERT INTO edit_revision "
+            "(id, session_id, parent_id, revision_no, recipe_json, recipe_hash, source, "
+            " idempotency_key, created_at) "
+            "VALUES ('revision', 'session', NULL, 1, '{}', 'hash', 'initial', NULL, 'now')"
+        )
+        connection.execute(
+            "UPDATE edit_session SET active_revision_id = 'revision', "
+            "head_revision_id = 'revision' WHERE id = 'session'"
+        )
+    finally:
+        connection.close()
+
+    shutil.copyfile(
+        MIGRATIONS_DIR / "0012_generative_core.sql",
+        directory / "0012_generative_core.sql",
+    )
+    initialize_database(path, directory)
+    initialize_database(path, directory)
+
+    connection = connect(path)
+    try:
+        versions = [
+            int(row["version"])
+            for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version")
+        ]
+        revision = connection.execute(
+            "SELECT base_generated_asset_id, generative_task_id FROM edit_revision "
+            "WHERE id = 'revision'"
+        ).fetchone()
+        tables = {
+            str(row["name"])
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        foreign_key_issues = connection.execute("PRAGMA foreign_key_check").fetchall()
+    finally:
+        connection.close()
+
+    assert versions == list(range(1, 13))
+    assert revision is not None
+    assert revision["base_generated_asset_id"] is None
+    assert revision["generative_task_id"] is None
+    assert {"generated_asset", "generative_mask", "generative_task", "generative_result"} <= tables
+    assert foreign_key_issues == []
 
 
 def test_foreign_keys_are_enforced(tmp_path: Path):

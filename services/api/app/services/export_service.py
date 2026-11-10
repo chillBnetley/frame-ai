@@ -28,6 +28,7 @@ from app.imaging.pipeline import render as render_image
 from app.models.export import ExportBitDepth, ExportRequest
 from app.models.recipe import EditRecipe
 from app.models.sessions import SessionState
+from app.services.asset_resolver import ImageAssetResolver
 from app.services.export_admission import ExportAdmission
 from app.services.image_service import ImageService
 from app.services.session_service import SessionService
@@ -103,11 +104,13 @@ class ExportService:
         images: ImageService,
         sessions: SessionService,
         *,
+        assets: ImageAssetResolver,
         admission: ExportAdmission | None = None,
     ) -> None:
         self.settings = settings
         self.images = images
         self.sessions = sessions
+        self.assets = assets
         self.admission = admission or ExportAdmission(
             max_concurrency=settings.export_max_concurrency,
             max_total_mb=settings.export_max_rss_mb,
@@ -162,7 +165,14 @@ class ExportService:
         raise_if_cancelled(cancel)
         session_id = str(state.session_id)
         revision = self.sessions.get_revision(session_id, request.revision_id)
-        record, path = self.images.get_original(str(state.image_id))
+        base = self.assets.resolve(
+            str(state.image_id),
+            (
+                None
+                if revision.base_generated_asset_id is None
+                else str(revision.base_generated_asset_id)
+            ),
+        )
         adjustments = revision.recipe.adjustments
         if request.bit_depth == 16 and request.format == "jpeg":
             # The request model already rejects this; keep the service honest
@@ -173,24 +183,24 @@ class ExportService:
                 "JPEG does not support 16-bit output.",
                 {"format": request.format, "bitDepth": request.bit_depth},
             )
-        source_bit_depth = probe_bit_depth(path)
+        source_bit_depth = probe_bit_depth(base.path)
         # Sizing happens before decoding so the memory estimate describes the
         # pixels this export will actually touch, not the original's.
         target_width, target_height, source_scale = export_target_size(
-            record.width,
-            record.height,
+            base.width,
+            base.height,
             adjustments.rotation_deg,
             adjustments.crop,
             request.max_edge,
         )
-        source_pixels = max(1, round(record.width * source_scale)) * max(
-            1, round(record.height * source_scale)
+        source_pixels = max(1, round(base.width * source_scale)) * max(
+            1, round(base.height * source_scale)
         )
         estimate_mb = estimate_export_peak_mb(
             source_pixels,
             revision.recipe,
-            decode_pixels=record.width * record.height,
-            alpha_candidate=record.mime_type in ALPHA_CAPABLE_MIME_TYPES,
+            decode_pixels=base.width * base.height,
+            alpha_candidate=base.mime_type in ALPHA_CAPABLE_MIME_TYPES,
             source_bit_depth=source_bit_depth,
             output_bit_depth=request.bit_depth,
         )
@@ -216,10 +226,10 @@ class ExportService:
         started = time.perf_counter()
         try:
             raise_if_cancelled(cancel)
-            image = load_image(path, max_pixels=self.settings.max_image_pixels)
+            image = load_image(base.path, max_pixels=self.settings.max_image_pixels)
             raise_if_cancelled(cancel)
             image_width, image_height = image.width, image.height
-            if (image_width, image_height) != (record.width, record.height):
+            if (image_width, image_height) != (base.width, base.height):
                 # Orientation-normalised decoding can differ from the stored
                 # dimensions; re-derive the plan instead of trusting it.
                 target_width, target_height, source_scale = export_target_size(
@@ -255,7 +265,7 @@ class ExportService:
             rendered = render_image(
                 image,
                 revision.recipe.adjustments,
-                image_sha256=record.sha256,
+                image_sha256=base.sha256,
                 curve=revision.recipe.curve,
                 hsl=revision.recipe.hsl,
                 color_grading=revision.recipe.color_grading,

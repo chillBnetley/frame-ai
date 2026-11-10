@@ -236,6 +236,14 @@ def _view(record: RevisionRecord) -> RevisionView:
         source=cast(RevisionSource, record.source),
         recipe=EditRecipe.model_validate_json(record.recipe_json),
         creation=_creation(record),
+        base_generated_asset_id=(
+            None
+            if record.base_generated_asset_id is None
+            else UUID(record.base_generated_asset_id)
+        ),
+        generative_task_id=(
+            None if record.generative_task_id is None else UUID(record.generative_task_id)
+        ),
         created_at=record.created_at,
     )
 
@@ -248,6 +256,14 @@ def _summary(record: RevisionRecord) -> RevisionSummary:
         source=cast(RevisionSource, record.source),
         recipe_hash=record.recipe_hash,
         creation=_creation(record),
+        base_generated_asset_id=(
+            None
+            if record.base_generated_asset_id is None
+            else UUID(record.base_generated_asset_id)
+        ),
+        generative_task_id=(
+            None if record.generative_task_id is None else UUID(record.generative_task_id)
+        ),
         created_at=record.created_at,
     )
 

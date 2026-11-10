@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     database_filename: str = "frame.db"
     preview_dirname: str = "tmp/previews"
     export_dirname: str = "tmp/exports"
+    generated_dirname: str = "generated"
+    generative_results_dirname: str = "generative/results"
+    generative_tmp_dirname: str = "generative/tmp"
     export_job_ttl_seconds: int = Field(default=3600, gt=0)
     export_queue_max: int = Field(default=8, ge=1)
     preview_ttl_seconds: int = Field(default=3600, gt=0)
@@ -105,6 +108,19 @@ class Settings(BaseSettings):
     analysis_queue_max: int = Field(default=16, ge=1)
 
     photographer_max_concurrency: int = Field(default=2, ge=1, le=8)
+
+    # V6.3 generative pipeline. Batch 1 only ships the mock provider; real
+    # adapters extend this literal in Batch 2 after the vendor is chosen.
+    generative_provider: Literal["mock"] = "mock"
+    generative_max_concurrency: int = Field(default=1, ge=1, le=2)
+    generative_queue_max: int = Field(default=4, ge=1)
+    generative_task_timeout_seconds: float = Field(default=300.0, gt=0, le=1800)
+    generative_max_attempts: int = Field(default=2, ge=1, le=5)
+    generative_task_ttl_seconds: int = Field(default=86_400, gt=0)
+    generative_result_ttl_seconds: int = Field(default=604_800, gt=0)
+    generative_max_input_pixels: int = Field(default=24_000_000, gt=0)
+    generative_max_output_pixels: int = Field(default=24_000_000, gt=0)
+    generative_max_output_bytes: int = Field(default=64 * 1024 * 1024, gt=0)
 
     @field_validator("data_dir")
     @classmethod
@@ -198,6 +214,18 @@ class Settings(BaseSettings):
     @property
     def export_dir(self) -> Path:
         return self.data_dir / self.export_dirname
+
+    @property
+    def generated_dir(self) -> Path:
+        return self.data_dir / self.generated_dirname
+
+    @property
+    def generative_results_dir(self) -> Path:
+        return self.data_dir / self.generative_results_dirname
+
+    @property
+    def generative_tmp_dir(self) -> Path:
+        return self.data_dir / self.generative_tmp_dirname
 
 
 @lru_cache

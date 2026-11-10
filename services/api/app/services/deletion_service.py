@@ -8,9 +8,11 @@ from app.core.errors import AppError
 from app.imaging.loader import PROXY_EDGE_STEP, proxy_cache_directory, proxy_cache_path
 from app.imaging.semantic_mattes import purge_mattes_for_image
 from app.repositories.deletion_repo import ImageDeletionRecord, SqliteDeletionRepository
+from app.repositories.generative_repo import SqliteGenerativeRepository
 from app.services.analysis_task_service import AnalysisTaskService
 from app.services.export_jobs import ExportJobManager
 from app.services.export_service import ExportService
+from app.services.generated_asset_store import GeneratedAssetStore
 from app.services.image_service import ImageService
 from app.services.preview_store import PreviewStore
 from app.services.proxy_cache import DecodedProxyCache
@@ -41,6 +43,8 @@ class DeletionService:
         proxy_cache: DecodedProxyCache | None = None,
         repository: SqliteDeletionRepository | None = None,
         export_jobs: ExportJobManager | None = None,
+        generated: GeneratedAssetStore | None = None,
+        generative_repository: SqliteGenerativeRepository | None = None,
     ) -> None:
         self.settings = settings
         self.images = images
@@ -50,6 +54,10 @@ class DeletionService:
         self.proxy_cache = proxy_cache
         self.repository = repository or SqliteDeletionRepository(settings.database_path)
         self.export_jobs = export_jobs
+        self.generated = generated or GeneratedAssetStore(settings)
+        self.generative_repository = generative_repository or SqliteGenerativeRepository(
+            settings.database_path
+        )
 
     def _exporting_sessions(self) -> frozenset[str]:
         active = set(self.exports.active_sessions())
@@ -63,6 +71,8 @@ class DeletionService:
         reasons: list[str] = []
         if self.analysis.repository.has_active_for_image(normalized):
             reasons.append("analysis")
+        if self.generative_repository.has_active_for_image(normalized):
+            reasons.append("generative")
         if session_ids and self._exporting_sessions().intersection(session_ids):
             reasons.append("export")
         if reasons:
@@ -94,6 +104,13 @@ class DeletionService:
                 RESOURCE_BUSY,
                 {"reasons": ["export"]},
             )
+        if self.generative_repository.has_active_for_session(normalized):
+            raise AppError(
+                409,
+                "resource_busy",
+                RESOURCE_BUSY,
+                {"reasons": ["generative"]},
+            )
         outcome = self.repository.delete_session(normalized)
         if outcome.status == "missing":
             raise AppError(404, "session_not_found", SESSION_NOT_FOUND)
@@ -101,6 +118,8 @@ class DeletionService:
             self._retry_export_cleanup()
             return
         self._purge_export_jobs((normalized,))
+        for storage_key in outcome.result_storage_keys:
+            self.generated.discard(storage_key)
         # The original image stays; its content-addressed caches are still valid.
         logger.info(
             "session_deleted session_id=%s image_id=%s",
@@ -121,6 +140,18 @@ class DeletionService:
         original_removed = False
         if outcome.storage_key:
             original_removed = self.images.store.discard(outcome.storage_key)
+
+        generated_removed = sum(
+            1
+            for storage_key in outcome.generated_storage_keys
+            if self.generated.discard(storage_key)
+        )
+        results_removed = sum(
+            1 for storage_key in outcome.result_storage_keys if self.generated.discard(storage_key)
+        )
+        masks_removed = sum(
+            1 for storage_key in outcome.mask_storage_keys if self.generated.discard(storage_key)
+        )
 
         proxies_removed = 0
         proxies_skipped = 0
@@ -150,7 +181,8 @@ class DeletionService:
         logger.info(
             "image_files_deleted image_id=%s original_removed=%s proxies_removed=%s "
             "proxies_skipped=%s previews_removed=%s previews_skipped=%s "
-            "proxy_cache_dropped=%s mattes_removed=%s",
+            "proxy_cache_dropped=%s mattes_removed=%s generated_removed=%s "
+            "results_removed=%s masks_removed=%s",
             image_id,
             original_removed,
             proxies_removed,
@@ -159,6 +191,9 @@ class DeletionService:
             purged.skipped,
             cache_dropped,
             mattes_removed,
+            generated_removed,
+            results_removed,
+            masks_removed,
         )
 
 

@@ -46,6 +46,8 @@ class RevisionView(CamelModel):
     source: RevisionSource
     recipe: EditRecipe
     creation: RevisionCreationSummary | None = None
+    base_generated_asset_id: UUID | None = None
+    generative_task_id: UUID | None = None
     created_at: datetime
 
 
@@ -66,6 +68,8 @@ class RevisionSummary(CamelModel):
     source: RevisionSource
     recipe_hash: str
     creation: RevisionCreationSummary | None = None
+    base_generated_asset_id: UUID | None = None
+    generative_task_id: UUID | None = None
     created_at: datetime
 
 
