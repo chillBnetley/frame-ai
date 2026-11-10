@@ -19,6 +19,7 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
+from app.services.style_evolution_service import StyleEvolutionService
 from app.services.style_fusion_service import StyleFusionService
 from app.services.style_library_service import StyleLibraryService
 from app.services.style_matching_service import StyleMatchingService
@@ -160,6 +161,17 @@ def get_style_mix_service(request: Request) -> StyleMixService:
     service = getattr(request.app.state, "style_mix_service", None)
     if not isinstance(service, StyleMixService):
         raise AppError(503, "style_mix_unavailable", "The style mix service is not available.")
+    return service
+
+
+def get_style_evolution_service(request: Request) -> StyleEvolutionService:
+    service = getattr(request.app.state, "style_evolution_service", None)
+    if not isinstance(service, StyleEvolutionService):
+        raise AppError(
+            503,
+            "style_evolution_unavailable",
+            "The style evolution service is not available.",
+        )
     return service
 
 

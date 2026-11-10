@@ -180,6 +180,64 @@ test("creates and refines a style from natural language", async ({ page }, testI
   await expect(page.getByText(/v1\.1/).first()).toBeVisible();
 });
 
+test("evolves a style from confirmed feedback and restores the previous version", async ({
+  page,
+}, testInfo) => {
+  const styleName = `Evolve ${testInfo.project.name}`;
+  const parsed = await page.request.post("/api/v1/personal-styles/custom/parse", {
+    data: {
+      name: styleName,
+      description: "低饱和、偏冷的环境色，保留暗部层次，人物肤色自然。",
+      avoid: "不要过饱和，高光不要溢出",
+    },
+  });
+  expect(parsed.ok()).toBeTruthy();
+  const draft = (await parsed.json()).draft;
+  const saved = await page.request.post("/api/v1/personal-styles/custom", {
+    data: { draft },
+  });
+  expect(saved.ok()).toBeTruthy();
+  const styleId = (await saved.json()).style.id;
+  const detailUrl = new RegExp(`/visual-dna/${styleId}$`);
+
+  await page.goto(`/visual-dna/${styleId}/evolve`);
+  await expect(
+    page.getByRole("heading", { name: new RegExp(`「${styleName}」反馈演变`) }),
+  ).toBeVisible();
+
+  // Single-edit feedback is recorded but must not enable a profile evolution.
+  await expect(page.getByRole("button", { name: "生成演变候选" })).toBeDisabled();
+  await page.getByRole("button", { name: "记录反馈" }).click();
+  await expect(page.getByText(/已记录本次调整反馈/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "生成演变候选" })).toBeDisabled();
+
+  // Profile feedback drives a bounded candidate that is previewed, not written.
+  await page.getByRole("button", { name: "色彩太浓" }).click();
+  await page.getByRole("button", { name: "加入个人风格" }).click();
+  await page.getByRole("button", { name: "记录反馈" }).click();
+  await expect(page.getByText(/已作为个人风格反馈记录/)).toBeVisible();
+  await page.getByRole("button", { name: "生成演变候选" }).click();
+  await expect(
+    page.getByRole("heading", { name: "演变候选" }),
+  ).toBeVisible();
+  await expect(page.getByRole("cell", { name: "饱和度", exact: true })).toBeVisible();
+  await expect(page.getByText(/基于 \d+ 条反馈 · 当前 v1\.0/)).toBeVisible();
+
+  await page.getByRole("button", { name: "确认并应用为新版本" }).click();
+  await page.waitForURL(detailUrl, { timeout: 60_000 });
+  await expect(page.getByText(/v1\.1/).first()).toBeVisible();
+
+  // A historical version can be restored as a new version after evolution.
+  await page.getByRole("link", { name: "版本历史" }).click();
+  await expect(
+    page.getByRole("heading", { name: new RegExp(`「${styleName}」版本历史`) }),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "恢复为新版本" }).last().click();
+  await page.waitForURL(detailUrl, { timeout: 60_000 });
+  await expect(page.getByText(/v1\.2/).first()).toBeVisible();
+});
+
 test("creates, analyses, fuses, edits, and reviews a personal style", async ({
   page,
 }, testInfo) => {

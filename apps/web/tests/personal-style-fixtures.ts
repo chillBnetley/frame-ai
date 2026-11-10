@@ -14,12 +14,19 @@ import type {
   StyleAuthoringDraft,
 } from "@/types/personal-style";
 import type { StyleMixPreviewResponse } from "@/types/style-mix";
+import type {
+  StyleEvolutionPreviewResponse,
+  StyleEvolutionRecord,
+  StyleFeedbackRecord,
+} from "@/types/style-evolution";
 
 export const PERSONAL_STYLE_ID = "personal_abcdef123456";
 export const PERSONAL_IMAGE_ID = "11111111-1111-4111-8111-111111111111";
 export const PERSONAL_REFERENCE_ID = "22222222-2222-4222-8222-222222222222";
 export const PERSONAL_IMAGE_ID_2 = "33333333-3333-4333-8333-333333333333";
 export const PERSONAL_REFERENCE_ID_2 = "44444444-4444-4444-8444-444444444444";
+export const STYLE_FEEDBACK_ID = "66666666-6666-4666-8666-666666666666";
+export const STYLE_EVOLUTION_ID = "77777777-7777-4777-8777-777777777777";
 
 const CREATED_AT = "2026-11-09T10:00:00Z";
 const UPDATED_AT = "2026-11-10T08:00:00Z";
@@ -603,6 +610,69 @@ export function styleMixPreview(
       combinationRules: ["保护约束取并集。"],
       userOverrides: {},
     },
+    ...overrides,
+  };
+}
+
+export function styleFeedbackRecord(
+  overrides: Partial<StyleFeedbackRecord> = {},
+): StyleFeedbackRecord {
+  return {
+    id: STYLE_FEEDBACK_ID,
+    styleId: PERSONAL_STYLE_ID,
+    styleVersion: "1.1",
+    feedbackType: "color_too_strong",
+    note: null,
+    scope: "profile",
+    appliedVersion: null,
+    createdAt: UPDATED_AT,
+    ...overrides,
+  };
+}
+
+export function styleEvolutionRecord(
+  overrides: Partial<StyleEvolutionRecord> = {},
+): StyleEvolutionRecord {
+  return {
+    schemaVersion: "style-evolution/1",
+    id: STYLE_EVOLUTION_ID,
+    styleId: PERSONAL_STYLE_ID,
+    baseVersion: "1.1",
+    newVersion: null,
+    feedbackIds: [STYLE_FEEDBACK_ID],
+    reason: "色彩太浓×1：降低饱和度并避免极端饱和",
+    summary: "基于 1 条个人风格反馈生成候选版本。\n降低饱和度并避免极端饱和。",
+    candidate: personalStyleProfile({ version: "1.2" }),
+    definition: {
+      schemaVersion: "personal-definition/1",
+      userOverrides: {},
+      note: null,
+    },
+    status: "proposed",
+    createdAt: UPDATED_AT,
+    confirmedAt: null,
+    ...overrides,
+  };
+}
+
+export function styleEvolutionPreview(
+  overrides: Partial<StyleEvolutionPreviewResponse> = {},
+): StyleEvolutionPreviewResponse {
+  return {
+    evolution: styleEvolutionRecord(),
+    changes: [
+      { path: "profile.personal.targets.saturation", before: -9.6, after: -13.6 },
+    ],
+    adjustments: [
+      {
+        field: "personal.targets.saturation",
+        label: "饱和度",
+        before: -9.6,
+        after: -13.6,
+      },
+    ],
+    limitations: ["候选仅为有界建议，确认前不会修改风格。"],
+    feedbackCount: 1,
     ...overrides,
   };
 }

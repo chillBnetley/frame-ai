@@ -1108,6 +1108,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/personal-styles/{style_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Personal Style Feedback */
+        get: operations["list_personal_style_feedback_api_v1_personal_styles__style_id__feedback_get"];
+        put?: never;
+        /** Add Personal Style Feedback */
+        post: operations["add_personal_style_feedback_api_v1_personal_styles__style_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal-styles/{style_id}/feedback/{feedback_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Personal Style Feedback */
+        delete: operations["delete_personal_style_feedback_api_v1_personal_styles__style_id__feedback__feedback_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal-styles/{style_id}/evolve/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Personal Style Evolution */
+        post: operations["preview_personal_style_evolution_api_v1_personal_styles__style_id__evolve_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal-styles/{style_id}/evolve/{evolution_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Personal Style Evolution */
+        post: operations["apply_personal_style_evolution_api_v1_personal_styles__style_id__evolve__evolution_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal-styles/{style_id}/evolve/{evolution_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard Personal Style Evolution */
+        post: operations["discard_personal_style_evolution_api_v1_personal_styles__style_id__evolve__evolution_id__discard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal-styles/{style_id}/evolutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Personal Style Evolutions */
+        get: operations["list_personal_style_evolutions_api_v1_personal_styles__style_id__evolutions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/style-mixes/preview": {
         parameters: {
             query?: never;
@@ -4406,6 +4509,116 @@ export interface components {
              */
             grain: number;
         };
+        /**
+         * StyleEvolutionAdjustment
+         * @description One bounded, human-readable change produced by the evolution engine.
+         */
+        StyleEvolutionAdjustment: {
+            /** Field */
+            field: string;
+            /** Label */
+            label: string;
+            /** Before */
+            before?: unknown;
+            /** After */
+            after?: unknown;
+        };
+        /** StyleEvolutionApplyRequest */
+        StyleEvolutionApplyRequest: {
+            /** Confirm */
+            confirm: boolean;
+            /** Note */
+            note?: string | null;
+        };
+        /** StyleEvolutionListResponse */
+        StyleEvolutionListResponse: {
+            /** Styleid */
+            styleId: string;
+            /**
+             * Evolutions
+             * @default []
+             */
+            evolutions: components["schemas"]["StyleEvolutionRecord"][];
+        };
+        /** StyleEvolutionPreviewRequest */
+        StyleEvolutionPreviewRequest: {
+            /** Feedbackids */
+            feedbackIds?: string[] | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** StyleEvolutionPreviewResponse */
+        StyleEvolutionPreviewResponse: {
+            evolution: components["schemas"]["StyleEvolutionRecord"];
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["PersonalStyleFieldChange"][];
+            /**
+             * Adjustments
+             * @default []
+             */
+            adjustments: components["schemas"]["StyleEvolutionAdjustment"][];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /** Feedbackcount */
+            feedbackCount: number;
+        };
+        /**
+         * StyleEvolutionRecord
+         * @description An immutable proposal snapshot plus its confirmation outcome.
+         *
+         *     The candidate profile is frozen at preview time so the user confirms exactly
+         *     what was shown; ``new_version`` and ``confirmed_at`` stay empty until the
+         *     user actively applies the proposal.
+         */
+        StyleEvolutionRecord: {
+            /**
+             * Schemaversion
+             * @default style-evolution/1
+             * @constant
+             */
+            schemaVersion: "style-evolution/1";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Styleid */
+            styleId: string;
+            /** Baseversion */
+            baseVersion: string;
+            /** Newversion */
+            newVersion?: string | null;
+            /**
+             * Feedbackids
+             * @default []
+             */
+            feedbackIds: string[];
+            /** Reason */
+            reason: string;
+            /** Summary */
+            summary: string;
+            candidate: components["schemas"]["PersonalStyleProfile"];
+            definition: components["schemas"]["PersonalStyleDefinition"];
+            status: components["schemas"]["StyleEvolutionStatus"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Confirmedat */
+            confirmedAt?: string | null;
+        };
+        /**
+         * StyleEvolutionStatus
+         * @enum {string}
+         */
+        StyleEvolutionStatus: "proposed" | "confirmed" | "discarded";
         /** StyleFavoriteResponse */
         StyleFavoriteResponse: {
             /** Styleid */
@@ -4413,6 +4626,59 @@ export interface components {
             /** Favorite */
             favorite: boolean;
         };
+        /** StyleFeedbackCreateRequest */
+        StyleFeedbackCreateRequest: {
+            feedbackType: components["schemas"]["StyleFeedbackType"];
+            /** Note */
+            note?: string | null;
+            /** @default single_edit */
+            scope: components["schemas"]["StyleFeedbackScope"];
+            /** Styleversion */
+            styleVersion?: string | null;
+        };
+        /** StyleFeedbackListResponse */
+        StyleFeedbackListResponse: {
+            /** Styleid */
+            styleId: string;
+            /**
+             * Feedbacks
+             * @default []
+             */
+            feedbacks: components["schemas"]["StyleFeedbackRecord"][];
+        };
+        /** StyleFeedbackRecord */
+        StyleFeedbackRecord: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Styleid */
+            styleId: string;
+            /** Styleversion */
+            styleVersion: string;
+            feedbackType: components["schemas"]["StyleFeedbackType"];
+            /** Note */
+            note?: string | null;
+            scope: components["schemas"]["StyleFeedbackScope"];
+            /** Appliedversion */
+            appliedVersion?: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
+        /**
+         * StyleFeedbackScope
+         * @enum {string}
+         */
+        StyleFeedbackScope: "single_edit" | "profile";
+        /**
+         * StyleFeedbackType
+         * @enum {string}
+         */
+        StyleFeedbackType: "like_result" | "dislike_result" | "color_too_strong" | "contrast_too_strong" | "shadows_too_dark" | "skin_unnatural" | "style_subtle" | "style_overdone" | "keep_original";
         /** StyleFitAlternative */
         StyleFitAlternative: {
             /** Styleid */
@@ -10679,6 +10945,625 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonalStyleCompareResponse"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring daily model budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_personal_style_feedback_api_v1_personal_styles__style_id__feedback_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by single_edit or profile scope. */
+                scope?: components["schemas"]["StyleFeedbackScope"] | null;
+            };
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleFeedbackListResponse"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring daily model budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_personal_style_feedback_api_v1_personal_styles__style_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StyleFeedbackCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleFeedbackRecord"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring daily model budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_personal_style_feedback_api_v1_personal_styles__style_id__feedback__feedback_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+                /** @description Feedback identifier. */
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring daily model budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_personal_style_evolution_api_v1_personal_styles__style_id__evolve_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StyleEvolutionPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleEvolutionPreviewResponse"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring daily model budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_personal_style_evolution_api_v1_personal_styles__style_id__evolve__evolution_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+                /** @description Evolution proposal identifier. */
+                evolution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StyleEvolutionApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalStyleDetailResponse"];
+                };
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring daily model budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discard_personal_style_evolution_api_v1_personal_styles__style_id__evolve__evolution_id__discard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+                /** @description Evolution proposal identifier. */
+                evolution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Personal style, version, or reference photo not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Name/version conflict, missing confirmation, or publish prerequisite */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request payload */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring daily model budget exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider returned invalid output */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Personal style service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Style authoring provider timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_personal_style_evolutions_api_v1_personal_styles__style_id__evolutions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Personal style identifier. */
+                style_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleEvolutionListResponse"];
                 };
             };
             /** @description Personal style, version, or reference photo not found */

@@ -7320,6 +7320,809 @@
         }
       }
     },
+    "/api/v1/personal-styles/{style_id}/feedback": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Add Personal Style Feedback",
+        "operationId": "add_personal_style_feedback_api_v1_personal_styles__style_id__feedback_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleFeedbackCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleFeedbackRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "List Personal Style Feedback",
+        "operationId": "list_personal_style_feedback_api_v1_personal_styles__style_id__feedback_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StyleFeedbackScope"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by single_edit or profile scope.",
+              "title": "Scope"
+            },
+            "description": "Filter by single_edit or profile scope."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleFeedbackListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/feedback/{feedback_id}": {
+      "delete": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Delete Personal Style Feedback",
+        "operationId": "delete_personal_style_feedback_api_v1_personal_styles__style_id__feedback__feedback_id__delete",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Feedback identifier.",
+              "title": "Feedback Id"
+            },
+            "description": "Feedback identifier."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/evolve/preview": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Preview Personal Style Evolution",
+        "operationId": "preview_personal_style_evolution_api_v1_personal_styles__style_id__evolve_preview_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleEvolutionPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleEvolutionPreviewResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/evolve/{evolution_id}/apply": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Apply Personal Style Evolution",
+        "operationId": "apply_personal_style_evolution_api_v1_personal_styles__style_id__evolve__evolution_id__apply_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "evolution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Evolution proposal identifier.",
+              "title": "Evolution Id"
+            },
+            "description": "Evolution proposal identifier."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleEvolutionApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalStyleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/evolve/{evolution_id}/discard": {
+      "post": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "Discard Personal Style Evolution",
+        "operationId": "discard_personal_style_evolution_api_v1_personal_styles__style_id__evolve__evolution_id__discard_post",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          },
+          {
+            "name": "evolution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Evolution proposal identifier.",
+              "title": "Evolution Id"
+            },
+            "description": "Evolution proposal identifier."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/personal-styles/{style_id}/evolutions": {
+      "get": {
+        "tags": [
+          "personal-styles"
+        ],
+        "summary": "List Personal Style Evolutions",
+        "operationId": "list_personal_style_evolutions_api_v1_personal_styles__style_id__evolutions_get",
+        "parameters": [
+          {
+            "name": "style_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^personal_[a-z0-9]{6,32}$",
+              "description": "Personal style identifier.",
+              "title": "Style Id"
+            },
+            "description": "Personal style identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleEvolutionListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal style, version, or reference photo not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name/version conflict, missing confirmation, or publish prerequisite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Style authoring daily model budget exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Style authoring provider returned invalid output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Personal style service not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Style authoring provider timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/style-mixes/preview": {
       "post": {
         "tags": [
@@ -15848,6 +16651,280 @@
         "title": "StyleEnvelope",
         "description": "Per-parameter magnitude limits used when a style is realized as parameters."
       },
+      "StyleEvolutionAdjustment": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Field"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "after": {
+            "title": "After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "label"
+        ],
+        "title": "StyleEvolutionAdjustment",
+        "description": "One bounded, human-readable change produced by the evolution engine."
+      },
+      "StyleEvolutionApplyRequest": {
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "StyleEvolutionApplyRequest"
+      },
+      "StyleEvolutionListResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "evolutions": {
+            "items": {
+              "$ref": "#/components/schemas/StyleEvolutionRecord"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Evolutions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId"
+        ],
+        "title": "StyleEvolutionListResponse"
+      },
+      "StyleEvolutionPreviewRequest": {
+        "properties": {
+          "feedbackIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedbackids"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StyleEvolutionPreviewRequest"
+      },
+      "StyleEvolutionPreviewResponse": {
+        "properties": {
+          "evolution": {
+            "$ref": "#/components/schemas/StyleEvolutionRecord"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalStyleFieldChange"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Changes",
+            "default": []
+          },
+          "adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/StyleEvolutionAdjustment"
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "Adjustments",
+            "default": []
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Limitations",
+            "default": []
+          },
+          "feedbackCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Feedbackcount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "evolution",
+          "feedbackCount"
+        ],
+        "title": "StyleEvolutionPreviewResponse"
+      },
+      "StyleEvolutionRecord": {
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "style-evolution/1",
+            "title": "Schemaversion",
+            "default": "style-evolution/1"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "baseVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Baseversion"
+          },
+          "newVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newversion"
+          },
+          "feedbackIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Feedbackids",
+            "default": []
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/PersonalStyleProfile"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PersonalStyleDefinition"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StyleEvolutionStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "confirmedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "styleId",
+          "baseVersion",
+          "reason",
+          "summary",
+          "candidate",
+          "definition",
+          "status",
+          "createdAt"
+        ],
+        "title": "StyleEvolutionRecord",
+        "description": "An immutable proposal snapshot plus its confirmation outcome.\n\nThe candidate profile is frozen at preview time so the user confirms exactly\nwhat was shown; ``new_version`` and ``confirmed_at`` stay empty until the\nuser actively applies the proposal."
+      },
+      "StyleEvolutionStatus": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "confirmed",
+          "discarded"
+        ],
+        "title": "StyleEvolutionStatus"
+      },
       "StyleFavoriteResponse": {
         "properties": {
           "styleId": {
@@ -15867,6 +16944,161 @@
           "favorite"
         ],
         "title": "StyleFavoriteResponse"
+      },
+      "StyleFeedbackCreateRequest": {
+        "properties": {
+          "feedbackType": {
+            "$ref": "#/components/schemas/StyleFeedbackType"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/StyleFeedbackScope",
+            "default": "single_edit"
+          },
+          "styleVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleversion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "feedbackType"
+        ],
+        "title": "StyleFeedbackCreateRequest"
+      },
+      "StyleFeedbackListResponse": {
+        "properties": {
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "feedbacks": {
+            "items": {
+              "$ref": "#/components/schemas/StyleFeedbackRecord"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Feedbacks",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "styleId"
+        ],
+        "title": "StyleFeedbackListResponse"
+      },
+      "StyleFeedbackRecord": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "styleId": {
+            "type": "string",
+            "pattern": "^personal_[a-z0-9]{6,32}$",
+            "title": "Styleid"
+          },
+          "styleVersion": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "title": "Styleversion"
+          },
+          "feedbackType": {
+            "$ref": "#/components/schemas/StyleFeedbackType"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/StyleFeedbackScope"
+          },
+          "appliedVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appliedversion"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "styleId",
+          "styleVersion",
+          "feedbackType",
+          "scope",
+          "createdAt"
+        ],
+        "title": "StyleFeedbackRecord"
+      },
+      "StyleFeedbackScope": {
+        "type": "string",
+        "enum": [
+          "single_edit",
+          "profile"
+        ],
+        "title": "StyleFeedbackScope"
+      },
+      "StyleFeedbackType": {
+        "type": "string",
+        "enum": [
+          "like_result",
+          "dislike_result",
+          "color_too_strong",
+          "contrast_too_strong",
+          "shadows_too_dark",
+          "skin_unnatural",
+          "style_subtle",
+          "style_overdone",
+          "keep_original"
+        ],
+        "title": "StyleFeedbackType"
       },
       "StyleFitAlternative": {
         "properties": {

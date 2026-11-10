@@ -36,6 +36,7 @@ from app.repositories.photographer_repo import (
     SqlitePhotographerFeedbackRepository,
     SqlitePhotographerPlanRepository,
 )
+from app.repositories.style_evolution_repo import SqliteStyleEvolutionRepository
 from app.repositories.style_repo import SqliteStyleProfileRepository
 from app.services.analysis_task_service import AnalysisTaskService
 from app.services.custom_style_service import CustomStyleService
@@ -50,6 +51,7 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
+from app.services.style_evolution_service import StyleEvolutionService
 from app.services.style_fusion_service import StyleFusionService
 from app.services.style_library_service import StyleLibraryService
 from app.services.style_matching_service import StyleMatchingService
@@ -169,6 +171,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             personal_styles,
             personal_style_service,
         )
+        style_evolution_service = StyleEvolutionService(
+            SqliteStyleEvolutionRepository(resolved_settings.database_path),
+            personal_style_service,
+        )
 
         def on_providers_changed(bundle: ProviderBundle) -> None:
             analysis_tasks.update_providers(bundle)
@@ -195,6 +201,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.style_fusion_service = style_fusion_service
         app.state.custom_style_service = custom_style_service
         app.state.style_mix_service = style_mix_service
+        app.state.style_evolution_service = style_evolution_service
         cleanup_task = asyncio.create_task(
             _cleanup_previews(
                 render_service.previews,

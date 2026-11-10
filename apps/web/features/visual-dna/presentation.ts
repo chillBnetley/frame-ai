@@ -7,6 +7,11 @@ import type {
   PersonalStyleStatus,
   PhotoVisualFeatures,
 } from "@/types/personal-style";
+import type {
+  StyleEvolutionStatus,
+  StyleFeedbackScope,
+  StyleFeedbackType,
+} from "@/types/style-evolution";
 
 export const STYLE_STATUS_LABELS: Record<PersonalStyleStatus, string> = {
   draft: "草稿",
@@ -37,6 +42,46 @@ export const CHANGE_SOURCE_LABELS: Record<PersonalStyleChangeSource, string> = {
   mix: "风格混合",
   evolution: "反馈演变",
   restore: "版本恢复",
+};
+
+export const FEEDBACK_TYPE_LABELS: Record<StyleFeedbackType, string> = {
+  like_result: "喜欢当前结果",
+  dislike_result: "不喜欢当前结果",
+  color_too_strong: "色彩太浓",
+  contrast_too_strong: "对比度太强",
+  shadows_too_dark: "暗部太黑",
+  skin_unnatural: "肤色不自然",
+  style_subtle: "风格不明显",
+  style_overdone: "风格过度",
+  keep_original: "希望保留更多原始质感",
+};
+
+export const FEEDBACK_TYPES: StyleFeedbackType[] = [
+  "like_result",
+  "dislike_result",
+  "color_too_strong",
+  "contrast_too_strong",
+  "shadows_too_dark",
+  "skin_unnatural",
+  "style_subtle",
+  "style_overdone",
+  "keep_original",
+];
+
+export const FEEDBACK_SCOPE_LABELS: Record<StyleFeedbackScope, string> = {
+  single_edit: "仅本次调整",
+  profile: "加入个人风格",
+};
+
+export const FEEDBACK_SCOPE_HINTS: Record<StyleFeedbackScope, string> = {
+  single_edit: "只记录本次结果，不改变个人风格。",
+  profile: "确认后会参与个人风格演变，生成新版本候选。",
+};
+
+export const EVOLUTION_STATUS_LABELS: Record<StyleEvolutionStatus, string> = {
+  proposed: "待确认",
+  confirmed: "已确认",
+  discarded: "已放弃",
 };
 
 export const AVOID_LABELS: Record<PersonalAvoidEffect, string> = {

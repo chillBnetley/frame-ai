@@ -125,9 +125,10 @@ def test_migration_creates_personal_style_tables(database: Path) -> None:
         "personal_style_reference",
         "personal_style_photo_feature",
         "personal_style_feedback",
+        "personal_style_evolution",
         "personal_style_tombstone",
     } <= tables
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     assert issues == []
 
 

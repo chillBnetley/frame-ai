@@ -10,6 +10,7 @@ from app.api.deps import (
     get_owner_scope,
     get_personal_style_analysis_service,
     get_personal_style_service,
+    get_style_evolution_service,
     get_style_fusion_service,
 )
 from app.core.identity import OwnerScope
@@ -38,6 +39,16 @@ from app.models.style_authoring import (
     CustomStyleRefineResponse,
     CustomStyleSaveRequest,
 )
+from app.models.style_evolution import (
+    StyleEvolutionApplyRequest,
+    StyleEvolutionListResponse,
+    StyleEvolutionPreviewRequest,
+    StyleEvolutionPreviewResponse,
+    StyleFeedbackCreateRequest,
+    StyleFeedbackListResponse,
+    StyleFeedbackRecord,
+    StyleFeedbackScope,
+)
 from app.models.style_fusion import (
     PersonalStyleFusionRequest,
     PersonalStyleFusionResponse,
@@ -51,6 +62,7 @@ from app.models.visual_dna import (
 from app.services.custom_style_service import CustomStyleService
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
+from app.services.style_evolution_service import StyleEvolutionService
 from app.services.style_fusion_service import StyleFusionService
 
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -75,6 +87,8 @@ router = APIRouter(
 _StylePath = Annotated[PersonalStyleId, Path(description="Personal style identifier.")]
 _VersionPath = Annotated[StyleProfileVersion, Path(description="Archived version.")]
 _ReferencePath = Annotated[UUID, Path(description="Reference photo identifier.")]
+_FeedbackPath = Annotated[UUID, Path(description="Feedback identifier.")]
+_EvolutionPath = Annotated[UUID, Path(description="Evolution proposal identifier.")]
 
 
 @router.post("/custom/parse", response_model=CustomStyleParseResponse)
@@ -344,3 +358,81 @@ def compare_personal_style_versions(
         to_version,
         owner_id=owner.owner_id,
     )
+
+
+@router.post("/{style_id}/feedback", response_model=StyleFeedbackRecord, status_code=201)
+def add_personal_style_feedback(
+    style_id: _StylePath,
+    payload: StyleFeedbackCreateRequest,
+    service: Annotated[StyleEvolutionService, Depends(get_style_evolution_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> StyleFeedbackRecord:
+    return service.add_feedback(style_id, payload, owner_id=owner.owner_id)
+
+
+@router.get("/{style_id}/feedback", response_model=StyleFeedbackListResponse)
+def list_personal_style_feedback(
+    style_id: _StylePath,
+    service: Annotated[StyleEvolutionService, Depends(get_style_evolution_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+    scope: Annotated[
+        StyleFeedbackScope | None,
+        Query(description="Filter by single_edit or profile scope."),
+    ] = None,
+) -> StyleFeedbackListResponse:
+    return service.list_feedback(style_id, owner_id=owner.owner_id, scope=scope)
+
+
+@router.delete("/{style_id}/feedback/{feedback_id}", status_code=204)
+def delete_personal_style_feedback(
+    style_id: _StylePath,
+    feedback_id: _FeedbackPath,
+    service: Annotated[StyleEvolutionService, Depends(get_style_evolution_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> Response:
+    service.delete_feedback(style_id, str(feedback_id), owner_id=owner.owner_id)
+    return Response(status_code=204)
+
+
+@router.post("/{style_id}/evolve/preview", response_model=StyleEvolutionPreviewResponse)
+def preview_personal_style_evolution(
+    style_id: _StylePath,
+    payload: StyleEvolutionPreviewRequest,
+    service: Annotated[StyleEvolutionService, Depends(get_style_evolution_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> StyleEvolutionPreviewResponse:
+    return service.preview(style_id, payload, owner_id=owner.owner_id)
+
+
+@router.post(
+    "/{style_id}/evolve/{evolution_id}/apply",
+    response_model=PersonalStyleDetailResponse,
+)
+def apply_personal_style_evolution(
+    style_id: _StylePath,
+    evolution_id: _EvolutionPath,
+    payload: StyleEvolutionApplyRequest,
+    service: Annotated[StyleEvolutionService, Depends(get_style_evolution_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> PersonalStyleDetailResponse:
+    return service.apply(style_id, str(evolution_id), payload, owner_id=owner.owner_id)
+
+
+@router.post("/{style_id}/evolve/{evolution_id}/discard", status_code=204)
+def discard_personal_style_evolution(
+    style_id: _StylePath,
+    evolution_id: _EvolutionPath,
+    service: Annotated[StyleEvolutionService, Depends(get_style_evolution_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> Response:
+    service.discard(style_id, str(evolution_id), owner_id=owner.owner_id)
+    return Response(status_code=204)
+
+
+@router.get("/{style_id}/evolutions", response_model=StyleEvolutionListResponse)
+def list_personal_style_evolutions(
+    style_id: _StylePath,
+    service: Annotated[StyleEvolutionService, Depends(get_style_evolution_service)],
+    owner: Annotated[OwnerScope, Depends(get_owner_scope)],
+) -> StyleEvolutionListResponse:
+    return service.list_evolutions(style_id, owner_id=owner.owner_id)

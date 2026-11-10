@@ -376,6 +376,12 @@ export function VisualDnaDetail({
               继续调整
             </Link>
             <Link
+              href={`/visual-dna/${encodeURIComponent(styleId)}/evolve`}
+              className="inline-flex min-h-10 items-center rounded-xl border border-[#d7dfda] bg-white px-3.5 text-xs font-medium text-[#415049] hover:bg-[#f7faf8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              反馈演变
+            </Link>
+            <Link
               href={`/visual-dna/${encodeURIComponent(styleId)}/versions`}
               className="inline-flex min-h-10 items-center rounded-xl border border-[#d7dfda] bg-white px-3.5 text-xs font-medium text-[#415049] hover:bg-[#f7faf8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
