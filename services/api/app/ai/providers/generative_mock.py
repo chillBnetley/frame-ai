@@ -17,6 +17,7 @@ from app.ai.generative import (
 from app.ai.generative import (
     validate_spec as validate_capability_spec,
 )
+from app.imaging.generative_removal import simulate_object_removal
 from app.imaging.output import encode_image
 from app.models.generative import GenerativeTaskType
 
@@ -41,6 +42,7 @@ class MockGenerativeProvider:
             supported_task_types=(
                 GenerativeTaskType.LOCAL_EDIT,
                 GenerativeTaskType.OUTPAINT,
+                GenerativeTaskType.REMOVE,
             ),
             supports_mask=True,
             supports_multiple_outputs=False,
@@ -62,10 +64,13 @@ class MockGenerativeProvider:
                 "generative_invalid_input",
                 "The input image is empty.",
             )
-        if request.task_type == GenerativeTaskType.OUTPAINT and request.image.mask is None:
+        if (
+            request.task_type in (GenerativeTaskType.OUTPAINT, GenerativeTaskType.REMOVE)
+            and request.image.mask is None
+        ):
             raise GenerativeProviderError(
                 "generative_invalid_input",
-                "Outpainting requests require a mask for canvas extension.",
+                f"{request.task_type.value} requests require a mask.",
             )
         raw_candidates = request.params.get("candidates", 1)
         candidates = (
@@ -114,6 +119,25 @@ class MockGenerativeProvider:
         with Image.open(BytesIO(request.image.data)) as opened:
             image = ImageOps.exif_transpose(opened).convert("RGB")
         width, height = image.size
+
+        if request.task_type == GenerativeTaskType.REMOVE and request.image.mask is not None:
+            with Image.open(BytesIO(request.image.mask)) as opened_mask:
+                mask_obj = opened_mask.convert("L")
+                if mask_obj.size != (width, height):
+                    mask_obj = mask_obj.resize((width, height), Image.Resampling.NEAREST)
+                mask_array = np.asarray(mask_obj, dtype=np.uint8)
+            source_u8 = np.asarray(image, dtype=np.uint8)
+            pixels = simulate_object_removal(source_u8, mask_array)
+            data = encode_image(pixels, image_format="png")
+            return GeneratedImage(
+                data=data,
+                mime_type="image/png",
+                width=width,
+                height=height,
+                provider_job_id=f"mock-{request.task_id}",
+                metadata={"mock": True},
+            )
+
         source = np.asarray(image, dtype=np.float32)
 
         seed = hashlib.sha256(f"{request.task_id}|{request.instruction}".encode()).digest()

@@ -42,6 +42,7 @@ def test_mock_capabilities_are_explicit():
     assert capabilities.supported_task_types == (
         GenerativeTaskType.LOCAL_EDIT,
         GenerativeTaskType.OUTPAINT,
+        GenerativeTaskType.REMOVE,
     )
     assert capabilities.supports_mask is True
     assert capabilities.supports_multiple_outputs is False
@@ -55,9 +56,9 @@ def test_mock_capabilities_are_explicit():
 def test_validate_spec_rejects_unsupported_capabilities():
     provider = MockGenerativeProvider()
     with pytest.raises(GenerativeProviderError) as excinfo:
-        provider.validate_spec(_spec(task_type=GenerativeTaskType.REMOVE))
+        provider.validate_spec(_spec(task_type=GenerativeTaskType.INPAINT))
     assert excinfo.value.code == "generative_capability_unsupported"
-    assert excinfo.value.details["taskType"] == "remove"
+    assert excinfo.value.details["taskType"] == "inpaint"
 
     with pytest.raises(GenerativeProviderError) as candidates:
         provider.validate_spec(_spec(candidates=2))

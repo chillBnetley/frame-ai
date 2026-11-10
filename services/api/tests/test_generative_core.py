@@ -67,7 +67,7 @@ def test_capabilities_describe_the_mock_provider(client: TestClient):
     payload = response.json()
     assert payload["provider"] == "mock"
     assert payload["isMock"] is True
-    assert payload["supportedTaskTypes"] == ["local_edit", "outpaint"]
+    assert payload["supportedTaskTypes"] == ["local_edit", "outpaint", "remove"]
     assert payload["supportsMask"] is True
     assert "Mock" in payload["declaredRetention"]
 
@@ -288,8 +288,8 @@ def test_generative_task_rejects_unsupported_types(client: TestClient):
         "/api/v1/generative/tasks",
         json={
             "sessionId": session["sessionId"],
-            "taskType": "remove",
-            "instruction": "remove the object",
+            "taskType": "inpaint",
+            "instruction": "inpaint the object",
         },
     )
     assert response.status_code == 422
