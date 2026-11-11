@@ -19,7 +19,7 @@ const APPLY_LABELS: Record<string, string> = {
 };
 
 const BUTTON_CLASS =
-  "self-start rounded-lg border border-neutral-700 bg-neutral-800/80 px-2.5 py-1 text-[11px] text-neutral-200 transition-colors hover:border-neutral-600 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50";
+  "self-start rounded-lg border border-[#d7dcd8] bg-[#ffffff] px-2.5 py-1 text-[11px] text-[#3d4541] transition-colors hover:border-[#277a68]/60 hover:bg-[#eef1ef] hover:text-[#1f6252] disabled:cursor-not-allowed disabled:opacity-50";
 
 export function StudioSuggestions({
   suggestions,
@@ -58,13 +58,13 @@ export function StudioSuggestions({
   return (
     <section
       aria-labelledby={headingId}
-      className="flex flex-col gap-2.5 rounded-lg border border-neutral-800 bg-neutral-950/60 p-3"
+      className="flex flex-col gap-2.5 rounded-lg border border-[#e4e8e5] bg-[#ffffff] p-3"
     >
       <div>
-        <h3 id={headingId} className="text-xs font-medium text-neutral-300">
+        <h3 id={headingId} className="text-xs font-medium text-[#202522]">
           分析建议
         </h3>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-neutral-500">
+        <p className="mt-0.5 text-[11px] leading-relaxed text-[#8a938e]">
           点击只填入参数，不会自动提交生成任务。
         </p>
       </div>
@@ -74,17 +74,17 @@ export function StudioSuggestions({
           {generative.map((item) => (
             <li
               key={item.id}
-              className="flex flex-col gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 p-2.5"
+              className="flex flex-col gap-1.5 rounded-lg border border-[#e4e8e5] bg-[#f6f7f6] p-2.5"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-neutral-100">{item.label}</span>
-                <span className="shrink-0 text-[10px] text-neutral-500">
+                <span className="text-xs text-[#202522]">{item.label}</span>
+                <span className="shrink-0 text-[10px] text-[#8a938e]">
                   严重度 {SEVERITY_LABELS[item.severity]}
                 </span>
               </div>
-              <p className="text-[11px] leading-relaxed text-neutral-400">{item.evidence}</p>
+              <p className="text-[11px] leading-relaxed text-[#69716c]">{item.evidence}</p>
               {item.subjectLabel && item.subjectBbox && (
-                <p className="text-[11px] leading-relaxed text-neutral-500">
+                <p className="text-[11px] leading-relaxed text-[#8a938e]">
                   关联主体：{item.subjectLabel}，可据此绘制矩形蒙版。
                 </p>
               )}
@@ -114,18 +114,18 @@ export function StudioSuggestions({
       )}
 
       {maskError && (
-        <p role="alert" className="text-[11px] leading-relaxed text-amber-300">
+        <p role="alert" className="text-[11px] leading-relaxed text-[#b42318]">
           {maskError}
         </p>
       )}
 
       {adjustment.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <h4 className="text-[11px] font-medium text-neutral-400">建议在参数精修中处理</h4>
+          <h4 className="text-[11px] font-medium text-[#69716c]">建议在参数精修中处理</h4>
           <ul className="flex flex-col gap-1">
             {adjustment.map((item) => (
-              <li key={item.id} className="text-[11px] leading-relaxed text-neutral-500">
-                <span className="text-neutral-300">{item.label}</span>
+              <li key={item.id} className="text-[11px] leading-relaxed text-[#8a938e]">
+                <span className="text-[#3d4541]">{item.label}</span>
                 {` · ${item.advice ?? item.evidence}`}
               </li>
             ))}

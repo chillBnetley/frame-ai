@@ -260,6 +260,8 @@ class GenerativeCapabilitiesResponse(CamelModel):
     allowed_output_formats: list[str]
     declared_retention: str
     notes: list[str] = Field(default_factory=list)
+    min_edge: int = 0
+    max_outpaint_scale: float | None = None
 
 
 class GenerativeStorageResponse(CamelModel):

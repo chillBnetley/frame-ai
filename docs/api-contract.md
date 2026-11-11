@@ -588,8 +588,8 @@ B5b 把同一规则扩展到 16-bit 与 TIFF：16-bit PNG 用 OpenCV 按 `IMREAD
 
 | 方法与路径 | 请求 | 响应 | 主要错误 |
 | --- | --- | --- | --- |
-| `GET /api/v1/settings/providers` | — | 脱敏配置视图（`vision`/`decision`/`planner` 三组），不含 API Key | 503 `provider_settings_unavailable` |
-| `POST /api/v1/settings/providers` | `{vision?, decision?, planner?}` | 保存并热替换后的脱敏配置视图 | 422 `invalid_provider_settings`；500 `provider_settings_write_failed`；500 `secret_store_error`；503 |
+| `GET /api/v1/settings/providers` | — | 脱敏配置视图（`vision`/`decision`/`planner`/`generative` 四组），不含 API Key | 503 `provider_settings_unavailable` |
+| `POST /api/v1/settings/providers` | `{vision?, decision?, planner?, generative?}` | 保存并热替换后的脱敏配置视图 | 422 `invalid_provider_settings`；500 `provider_settings_write_failed`；500 `secret_store_error`；503 |
 | `POST /api/v1/settings/providers/test` | `{vision?, decision?, planner?}`，用“当前配置 + 临时修改”测试 | `{vision, decision, planner}` 三项独立结果；不持久化 | 422；503 |
 | `POST /api/v1/settings/providers/reset` | — | 删除本机覆盖文件后按环境变量重建的视图（含 planner 回退） | 500；503 |
 
@@ -687,6 +687,10 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 
 - **存储配额约束（OD-3）**：由配置 `FRAME_GENERATIVE_DISK_BUDGET_MB`（默认 2048 MB）控制软上限。创建生成任务时，若当前生成资产、临时候选与蒙版总占用达到上限，系统优先主动清理超期的过期候选结果；若清理后仍超过上限，返回 HTTP 413 `generative_storage_budget_exceeded`，`details` 给出 `usedBytes` 与 `limitBytes`。
 - **删除前告知（Batch 10）**：`GET /api/v1/images/{imageId}/deletion-preview` 在用户点击删除照片时异步拉取关联的会话、版本、分析任务、生成任务、临时候选、生成资产与蒙版计数；前端弹窗细项展示将要清理的内容，避免意外丢失。
+- **真实生成模型（Batch 11，OD-1）**：生成式 Provider 现支持 `mock`（默认）与 `dashscope`（通义万相 `wanx2.1-imageedit`）。密钥通过 `POST /api/v1/settings/providers` 的 `generative` 分组保存（AES-256-GCM，可回填 `dailyImageLimit`），保存后热替换无需重启。
+  - `GenerativeCapabilitiesResponse` 新增 `minEdge`（`dashscope` 为 512，`mock` 为 0）与 `maxOutpaintScale`（`dashscope` 为 2.0，`mock` 为 `null`）；前端据此禁用超限画幅比例并提示最小边长。
+  - 新增错误码：`generative_input_too_small`（422，图片短边小于模型下限）、`generative_outpaint_scale_exceeded`（422，单轴扩图超过 `maxOutpaintScale`）、`generative_daily_limit_reached`（429，达到 `dailyImageLimit`）、`generative_provider_not_configured`、`generative_provider_rejected_content`、`generative_provider_cancelled`（任务错误码）。
+  - 所有任务类型均以 `description_edit_with_mask` 提交（服务端已生成同尺寸画布与白=可编辑蒙版），以保证返回尺寸与保护区几何一致；图片以 base64 内联上传，不经过第三方图床，超过 7 MB 时自动转 JPEG 以留在 10 MB 限制内。
 
 ## 5. 相对任务书 §7 的契约扩展
 

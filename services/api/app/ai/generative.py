@@ -36,6 +36,10 @@ class GenerativeCapabilities:
     allowed_output_formats: tuple[str, ...]
     declared_retention: str
     notes: tuple[str, ...] = ()
+    # Real adapters can refuse small inputs or large expansions before a task is
+    # queued; the mock leaves both open so existing tests are unaffected.
+    min_edge: int = 0
+    max_outpaint_scale: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +129,23 @@ def validate_spec(
                 "maxLongEdge": capabilities.max_long_edge,
             },
         )
+    if capabilities.min_edge > 0:
+        short_edge = min(spec.input_width, spec.input_height)
+        if short_edge < capabilities.min_edge:
+            raise GenerativeProviderError(
+                "generative_input_too_small",
+                "The input image is smaller than the provider accepts.",
+                details={"shortEdge": short_edge, "minEdge": capabilities.min_edge},
+            )
+        if min(spec.output_width, spec.output_height) < capabilities.min_edge:
+            raise GenerativeProviderError(
+                "generative_input_too_small",
+                "The target canvas is smaller than the provider accepts.",
+                details={
+                    "shortEdge": min(spec.output_width, spec.output_height),
+                    "minEdge": capabilities.min_edge,
+                },
+            )
 
 
 @dataclass(frozen=True, slots=True)

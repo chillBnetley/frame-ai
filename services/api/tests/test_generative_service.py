@@ -830,3 +830,36 @@ def test_expired_cleanup_is_throttled_but_can_be_forced(
         assert service.maybe_cleanup_expired_results() == 0
     finally:
         service.shutdown()
+
+
+def test_daily_image_limit_blocks_extra_tasks(client: TestClient):
+    session = _new_session(client)
+    service = client.app.state.generative_service
+    service.set_daily_image_limit(1)
+    try:
+        first = client.post(
+            "/api/v1/generative/tasks",
+            json={
+                "sessionId": session["sessionId"],
+                "taskType": "local_edit",
+                "instruction": "把天空换成晚霞",
+                "maskId": session["maskId"],
+                "params": {"candidates": 1},
+            },
+        )
+        assert first.status_code == 201, first.text
+
+        second = client.post(
+            "/api/v1/generative/tasks",
+            json={
+                "sessionId": session["sessionId"],
+                "taskType": "local_edit",
+                "instruction": "换成清晨的雾气",
+                "maskId": session["maskId"],
+                "params": {"candidates": 1},
+            },
+        )
+        assert second.status_code == 429, second.text
+        assert second.json()["error"]["code"] == "generative_daily_limit_reached"
+    finally:
+        service.set_daily_image_limit(0)

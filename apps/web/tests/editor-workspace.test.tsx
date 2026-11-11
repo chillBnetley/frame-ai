@@ -1065,6 +1065,20 @@ describe("EditorWorkspace creative studio", () => {
       .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
   }
 
+  it("leaves the layout when studio mode is open and exits it for the analysis panel", async () => {
+    await openStudio();
+
+    const previewColumn = screen.getByText("编辑预览").closest(".editor-preview-column");
+    expect(previewColumn).not.toBeNull();
+    expect(previewColumn).toHaveClass("hidden");
+
+    fireEvent.click(screen.getByRole("button", { name: /AI 摄影分析/ }));
+
+    expect(screen.queryByRole("heading", { name: "AI 创意工作台" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI 摄影分析" })).toBeInTheDocument();
+    expect(previewColumn).not.toHaveClass("hidden");
+  });
+
   it("sizes the outpaint frame from the base asset, not the downscaled preview", async () => {
     const fetchMock = await openStudio({
       baseWidth: 4000,

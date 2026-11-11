@@ -141,14 +141,14 @@ function StudioShell({
     <section
       id="creative-studio"
       aria-labelledby={headingId}
-      className="flex flex-col gap-4 rounded-[28px] border border-white/10 bg-black/20 p-3 sm:p-4"
+      className="flex flex-col gap-4 rounded-[28px] border border-[#e4e8e5] bg-[#ffffff] p-3 text-[#202522] shadow-[0_18px_50px_-32px_rgba(24,50,38,0.22)] sm:p-4"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id={headingId} className="text-sm font-medium text-white">
+          <h2 id={headingId} className="text-sm font-medium text-[#202522]">
             AI 创意工作台
           </h2>
-          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#8a938e]">
             Session {sessionId.slice(0, 8)} · 生成结果采纳后写入同一条版本线
           </p>
         </div>
@@ -156,7 +156,7 @@ function StudioShell({
           <button
             type="button"
             onClick={onExit}
-            className="min-h-11 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="min-h-11 rounded-xl border border-[#dfe4e0] bg-[#f6f7f6] px-3 text-xs text-[#3d4541] transition-colors hover:border-[#c9d2cd] hover:bg-[#eef1ef] hover:text-[#202522] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#277a68]"
           >
             返回参数精修
           </button>

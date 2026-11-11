@@ -141,6 +141,28 @@ class GenerativeHttpClient:
         )
         return _decode_json(response.body)
 
+    def submit_json(
+        self,
+        url: str,
+        payload: Mapping[str, Any],
+        headers: Mapping[str, str],
+        *,
+        timeout: float,
+        max_retries: int = 1,
+    ) -> dict[str, Any]:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request_headers = {**headers, "Content-Type": "application/json"}
+        response = self._request(
+            "POST",
+            url,
+            body,
+            request_headers,
+            timeout,
+            self._json_max_bytes,
+            max_retries,
+        )
+        return _decode_json(response.body)
+
     def poll_json(
         self,
         url: str,

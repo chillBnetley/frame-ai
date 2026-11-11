@@ -109,9 +109,13 @@ class Settings(BaseSettings):
 
     photographer_max_concurrency: int = Field(default=2, ge=1, le=8)
 
-    # V6.3 generative pipeline. Batch 1 only ships the mock provider; real
-    # adapters extend this literal in Batch 2 after the vendor is chosen.
-    generative_provider: Literal["mock"] = "mock"
+    # V6.3 generative pipeline. The mock provider stays the default; DashScope
+    # (wanx2.1-imageedit) is opt-in from the provider settings UI.
+    generative_provider: Literal["mock", "dashscope"] = "mock"
+    generative_dashscope_model: str = "wanx2.1-imageedit"
+    generative_dashscope_base_url: str = "https://dashscope.aliyuncs.com"
+    generative_dashscope_api_key: SecretStr | None = None
+    generative_daily_image_limit: int = Field(default=0, ge=0)
     generative_max_concurrency: int = Field(default=1, ge=1, le=2)
     generative_queue_max: int = Field(default=4, ge=1)
     generative_task_timeout_seconds: float = Field(default=300.0, gt=0, le=1800)

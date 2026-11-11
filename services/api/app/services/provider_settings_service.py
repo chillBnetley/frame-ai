@@ -23,6 +23,9 @@ from app.core.config import Settings
 from app.core.errors import AppError, FieldIssue, field_error_details, field_names
 from app.models.provider_settings import (
     ApiKeySource,
+    GenerativeProviderKind,
+    GenerativeProviderSettingsUpdate,
+    GenerativeProviderSettingsView,
     PlannerProviderSettingsView,
     ProviderEntryUpdate,
     ProviderEntryView,
@@ -32,6 +35,8 @@ from app.models.provider_settings import (
     ProviderTestResponse,
     ProviderTestResult,
     SecretKind,
+    StoredGenerativeEntry,
+    StoredGenerativeEntryV2,
     StoredProviderEntry,
     StoredProviderEntryV2,
     StoredProviderSettings,
@@ -57,6 +62,9 @@ _DECRYPTED_KEY_MESSAGE = (
 )
 _KINDS: tuple[SecretKind, ...] = ("vision", "decision", "planner")
 _FALLBACK_KINDS = {"planner": "decision"}
+_GENERATIVE_SECRET_KIND: SecretKind = "generative"
+_DEFAULT_GENERATIVE_MODEL = "wanx2.1-imageedit"
+_DEFAULT_GENERATIVE_BASE_URL = "https://dashscope.aliyuncs.com"
 _MOCK_MODELS: dict[str, str] = {
     "vision": "mock-vision",
     "decision": "mock-decision",
@@ -77,6 +85,25 @@ class _ResolvedEntry:
     api_key_source: ApiKeySource
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedGenerative:
+    """Effective generative image model configuration."""
+
+    provider: GenerativeProviderKind
+    model: str
+    base_url: str
+    api_key: str
+    api_key_source: ApiKeySource
+    daily_image_limit: int
+
+    @property
+    def ready(self) -> bool:
+        return self.provider == "mock" or bool(self.api_key)
+
+
+GenerativeChangeCallback = Callable[[ResolvedGenerative], None]
+
+
 class ProviderSettingsService:
     def __init__(
         self,
@@ -92,6 +119,7 @@ class ProviderSettingsService:
         self._path = base_settings.data_dir / SETTINGS_FILENAME
         self._lock = threading.RLock()
         self._on_change: Callable[[ProviderBundle], None] | None = None
+        self._on_generative_change: GenerativeChangeCallback | None = None
         self._encryption = base_settings.provider_settings_encryption
         self._secret_box = secret_box
         # Read and parse once: deciding whether a key may be created and loading
@@ -166,6 +194,13 @@ class ProviderSettingsService:
     def set_on_change(self, callback: Callable[[ProviderBundle], None]) -> None:
         self._on_change = callback
 
+    def set_on_generative_change(self, callback: GenerativeChangeCallback) -> None:
+        self._on_generative_change = callback
+
+    def generative_config(self) -> ResolvedGenerative:
+        with self._lock:
+            return self._resolve_generative(self._stored)
+
     def view(self) -> ProviderSettingsView:
         with self._lock:
             return self._view(self._stored)
@@ -181,6 +216,8 @@ class ProviderSettingsService:
             self._bundle = bundle
             if self._on_change is not None:
                 self._on_change(bundle)
+            if self._on_generative_change is not None:
+                self._on_generative_change(self._resolve_generative(candidate))
             logger.info(
                 "provider_settings_applied vision=%s decision=%s planner=%s saved=%s",
                 effective.vision_provider,
@@ -213,6 +250,8 @@ class ProviderSettingsService:
             self._bundle = bundle
             if self._on_change is not None:
                 self._on_change(bundle)
+            if self._on_generative_change is not None:
+                self._on_generative_change(self._resolve_generative(empty))
             logger.info("provider_settings_reset")
             return self._view(empty)
 
@@ -365,8 +404,9 @@ class ProviderSettingsService:
                     type(exc).__name__,
                 )
                 raise ProviderConfigurationError(_DECRYPTED_KEY_MESSAGE) from None
+        generative = self._load_generative_v2(parsed)
         try:
-            return StoredProviderSettings.model_validate(entries)
+            return StoredProviderSettings.model_validate({**entries, "generative": generative})
         except ValidationError as exc:
             logger.error(
                 "provider_settings_load_failed error_type=%s",
@@ -375,6 +415,43 @@ class ProviderSettingsService:
             raise ProviderConfigurationError(
                 "The saved provider settings could not be loaded."
             ) from None
+
+    def _load_generative_v2(
+        self,
+        parsed: StoredProviderSettingsV2,
+    ) -> StoredGenerativeEntry | None:
+        entry = parsed.generative
+        record = parsed.secrets.get(_GENERATIVE_SECRET_KIND)
+        try:
+            api_key: str | None = None
+            if record is not None:
+                blob = blob_from_record(record.alg, record.nonce, record.ciphertext)
+                api_key = self._secrets.decrypt(
+                    blob,
+                    provider_settings_aad(_GENERATIVE_SECRET_KIND),
+                )
+            if entry is None and api_key is None:
+                return None
+            return StoredGenerativeEntry(
+                provider=entry.provider if entry is not None else None,
+                model=entry.model if entry is not None else None,
+                base_url=entry.base_url if entry is not None else None,
+                daily_image_limit=entry.daily_image_limit if entry is not None else None,
+                api_key=api_key,
+            )
+        except SecretStoreError as exc:
+            logger.error(
+                "provider_settings_decrypt_failed kind=%s error_type=%s",
+                _GENERATIVE_SECRET_KIND,
+                type(exc).__name__,
+            )
+            raise ProviderConfigurationError(str(exc)) from None
+        except ValidationError:
+            logger.error(
+                "provider_settings_decrypt_failed kind=%s error_type=ValidationError",
+                _GENERATIVE_SECRET_KIND,
+            )
+            raise ProviderConfigurationError(_DECRYPTED_KEY_MESSAGE) from None
 
     def _persist(self, stored: StoredProviderSettings, *, startup: bool = False) -> None:
         try:
@@ -419,10 +496,28 @@ class ProviderSettingsService:
             if entry.api_key:
                 blob = self._secrets.encrypt(entry.api_key, provider_settings_aad(kind))
                 secrets[kind] = StoredSecret.model_validate(blob_to_record(blob))
+        generative_entry: StoredGenerativeEntryV2 | None = None
+        saved_generative = stored.generative
+        if saved_generative is not None:
+            generative_entry = StoredGenerativeEntryV2(
+                provider=saved_generative.provider,
+                model=saved_generative.model,
+                base_url=saved_generative.base_url,
+                daily_image_limit=saved_generative.daily_image_limit,
+            )
+            if saved_generative.api_key:
+                blob = self._secrets.encrypt(
+                    saved_generative.api_key,
+                    provider_settings_aad(_GENERATIVE_SECRET_KIND),
+                )
+                secrets[_GENERATIVE_SECRET_KIND] = StoredSecret.model_validate(
+                    blob_to_record(blob)
+                )
         document = StoredProviderSettingsV2(
             vision=entries["vision"],
             decision=entries["decision"],
             planner=entries["planner"],
+            generative=generative_entry,
             secrets=secrets,
         )
         return document.model_dump_json(exclude_none=True, indent=2).encode("utf-8")
@@ -441,6 +536,10 @@ class ProviderSettingsService:
             entry = (getattr(candidate, kind) or StoredProviderEntry()).model_copy(deep=True)
             issues.extend(_apply_entry_patch(kind, entry, patch, self._policy()))
             setattr(candidate, kind, entry)
+        if update.generative is not None:
+            generative = (candidate.generative or StoredGenerativeEntry()).model_copy(deep=True)
+            issues.extend(_apply_generative_patch(generative, update.generative, self._policy()))
+            candidate.generative = generative
         if issues:
             raise AppError(
                 422,
@@ -469,12 +568,61 @@ class ProviderSettingsService:
                 if value is None and kind in _FALLBACK_KINDS:
                     value = getattr(self._base, f"{_FALLBACK_KINDS[kind]}_{attribute}")
                 updates[f"{kind}_{attribute}"] = value
+        generative = self._resolve_generative(stored)
+        updates["generative_provider"] = generative.provider
+        updates["generative_dashscope_model"] = generative.model
+        updates["generative_dashscope_base_url"] = generative.base_url
+        updates["generative_dashscope_api_key"] = (
+            SecretStr(generative.api_key) if generative.api_key else None
+        )
+        updates["generative_daily_image_limit"] = generative.daily_image_limit
         return self._base.model_copy(update=updates)
 
     def _resolve(self, kind: str, stored: StoredProviderSettings) -> _ResolvedEntry:
         if kind == "planner":
             return self._resolve_planner(stored)
         return self._resolve_kind(kind, stored)
+
+    def _resolve_generative(self, stored: StoredProviderSettings) -> ResolvedGenerative:
+        saved = stored.generative
+        provider: GenerativeProviderKind = (
+            saved.provider
+            if saved is not None and saved.provider is not None
+            else self._base.generative_provider
+        )
+        model = (
+            saved.model
+            if saved is not None and saved.model
+            else self._base.generative_dashscope_model or _DEFAULT_GENERATIVE_MODEL
+        )
+        base_url = (
+            saved.base_url
+            if saved is not None and saved.base_url
+            else self._base.generative_dashscope_base_url or _DEFAULT_GENERATIVE_BASE_URL
+        )
+        environment_key = _secret_value(self._base.generative_dashscope_api_key)
+        if saved is not None and saved.api_key:
+            api_key = saved.api_key
+            source: ApiKeySource = "saved"
+        elif environment_key:
+            api_key = environment_key
+            source = "environment"
+        else:
+            api_key = ""
+            source = "none"
+        limit = (
+            saved.daily_image_limit
+            if saved is not None and saved.daily_image_limit is not None
+            else self._base.generative_daily_image_limit
+        )
+        return ResolvedGenerative(
+            provider=provider,
+            model=model,
+            base_url=base_url.rstrip("/"),
+            api_key=api_key,
+            api_key_source=source,
+            daily_image_limit=limit,
+        )
 
     def _resolve_kind(self, kind: str, stored: StoredProviderSettings) -> _ResolvedEntry:
         saved = getattr(stored, kind)
@@ -575,6 +723,30 @@ class ProviderSettingsService:
                 issues.append(
                     (f"{kind}.apiKey", "invalid_characters", "Must not contain newlines.")
                 )
+        generative = self._resolve_generative(stored)
+        if generative.provider == "dashscope" and not generative.api_key:
+            issues.append(
+                (
+                    "generative.apiKey",
+                    "missing",
+                    "A DashScope API key is required for the generative model.",
+                )
+            )
+        if any(character in generative.model for character in "\r\n"):
+            issues.append(
+                ("generative.model", "invalid_characters", "Must not contain newlines.")
+            )
+        if generative.base_url:
+            try:
+                validate_for_save(parse_endpoint(generative.base_url), self._policy())
+            except EndpointPolicyError:
+                issues.append(
+                    (
+                        "generative.baseUrl",
+                        "invalid_url",
+                        "Must be an allowed http(s) URL.",
+                    )
+                )
         if not issues:
             return
         if raising is AppError:
@@ -621,6 +793,7 @@ class ProviderSettingsService:
                 api_key_source=entry.api_key_source,
             )
         planner_entry = entries["planner"]
+        generative = self._resolve_generative(stored)
         is_mock = self._bundle.is_mock
         return ProviderSettingsView(
             vision=entries["vision"],
@@ -632,6 +805,15 @@ class ProviderSettingsService:
                 has_api_key=planner_entry.has_api_key,
                 api_key_source=planner_entry.api_key_source,
             ),
+            generative=GenerativeProviderSettingsView(
+                provider=generative.provider,
+                model=generative.model,
+                base_url=generative.base_url,
+                has_api_key=bool(generative.api_key),
+                api_key_source=generative.api_key_source,
+                daily_image_limit=generative.daily_image_limit,
+                ready=generative.ready,
+            ),
             is_mock=is_mock,
             has_saved_overrides=self._has_saved(stored),
         )
@@ -639,8 +821,47 @@ class ProviderSettingsService:
     @staticmethod
     def _has_saved(stored: StoredProviderSettings) -> bool:
         return (
-            stored.vision is not None or stored.decision is not None or stored.planner is not None
+            stored.vision is not None
+            or stored.decision is not None
+            or stored.planner is not None
+            or stored.generative is not None
         )
+
+
+def _apply_generative_patch(
+    entry: StoredGenerativeEntry,
+    patch: GenerativeProviderSettingsUpdate,
+    policy: ProviderEndpointPolicy,
+) -> list[FieldIssue]:
+    issues: list[FieldIssue] = []
+    if patch.provider is not None:
+        entry.provider = patch.provider
+    if patch.model is not None:
+        entry.model = patch.model.strip()
+    if patch.base_url is not None:
+        entry.base_url = patch.base_url.strip().rstrip("/")
+    if patch.daily_image_limit is not None:
+        entry.daily_image_limit = patch.daily_image_limit
+    if patch.clear_api_key:
+        entry.api_key = None
+    elif patch.api_key is not None:
+        secret = patch.api_key.get_secret_value()
+        if secret:
+            entry.api_key = secret
+    if entry.model and any(character in entry.model for character in "\r\n"):
+        issues.append(("generative.model", "invalid_characters", "Must not contain newlines."))
+    if entry.base_url:
+        try:
+            endpoint = parse_endpoint(entry.base_url)
+            validate_for_save(endpoint, policy)
+            validate_host_for_save(endpoint.host)
+        except EndpointPolicyError:
+            issues.append(
+                ("generative.baseUrl", "invalid_url", "Must be an allowed http(s) URL.")
+            )
+    if entry.api_key and any(character in entry.api_key for character in "\r\n"):
+        issues.append(("generative.apiKey", "invalid_characters", "Must not contain newlines."))
+    return issues
 
 
 def _apply_entry_patch(

@@ -17,6 +17,8 @@ export interface OutpaintParamsFormProps {
   baseWidth: number;
   baseHeight: number;
   disabled?: boolean;
+  /** Real providers cap how far a single side may expand; mock leaves it null. */
+  maxOutpaintScale?: number | null;
 }
 
 const PRESET_RATIOS: { label: string; value: string | null }[] = [
@@ -52,6 +54,7 @@ export function OutpaintParamsForm({
   baseWidth,
   baseHeight,
   disabled = false,
+  maxOutpaintScale = null,
 }: OutpaintParamsFormProps) {
   const formId = useId();
   const geometry = computeOutpaintGeometry({
@@ -61,6 +64,23 @@ export function OutpaintParamsForm({
     aspectRatio: values.aspectRatio,
     alignment: values.alignment,
   });
+
+  const scaleFor = (aspectRatio: string | null): number => {
+    const preset = computeOutpaintGeometry({
+      baseWidth,
+      baseHeight,
+      margins: values.margins,
+      aspectRatio,
+      alignment: values.alignment,
+    });
+    return Math.max(preset.targetWidth / baseWidth, preset.targetHeight / baseHeight);
+  };
+
+  const exceedsLimit = (aspectRatio: string | null): boolean =>
+    maxOutpaintScale !== null && scaleFor(aspectRatio) > maxOutpaintScale + 1e-6;
+
+  const currentScale = Math.max(geometry.targetWidth / baseWidth, geometry.targetHeight / baseHeight);
+  const currentExceeds = maxOutpaintScale !== null && currentScale > maxOutpaintScale + 1e-6;
 
   const setMargin = (key: keyof OutpaintMargins, raw: string): void => {
     onChange({
@@ -72,7 +92,7 @@ export function OutpaintParamsForm({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2.5">
-        <label id={`${formId}-ratio-label`} className="text-xs font-medium text-neutral-300">
+        <label id={`${formId}-ratio-label`} className="text-xs font-medium text-[#3d4541]">
           目标画幅比例
         </label>
         <div
@@ -82,18 +102,20 @@ export function OutpaintParamsForm({
         >
           {PRESET_RATIOS.map((item) => {
             const isSelected = values.aspectRatio === item.value;
+            const blocked = exceedsLimit(item.value);
             return (
               <button
                 key={item.label}
                 type="button"
                 role="radio"
                 aria-checked={isSelected}
-                disabled={disabled}
+                disabled={disabled || blocked}
+                title={blocked ? `当前模型每边最多扩 ${maxOutpaintScale}×` : undefined}
                 onClick={() => onChange({ ...values, aspectRatio: item.value })}
                 className={`py-1.5 px-3 text-xs rounded-lg border transition-all disabled:opacity-50 ${
                   isSelected
-                    ? "bg-sky-600 border-sky-400 text-white shadow-sm font-semibold"
-                    : "bg-neutral-800/80 border-neutral-700/80 text-neutral-300 hover:bg-neutral-800 hover:border-neutral-600"
+                    ? "bg-[#277a68] border-[#277a68] text-[#ffffff] shadow-sm font-semibold"
+                    : "bg-[#ffffff] border-[#dfe4e0] text-[#3d4541] hover:border-[#c3cec8] hover:bg-[#eef1ef]"
                 }`}
               >
                 {item.label}
@@ -101,11 +123,16 @@ export function OutpaintParamsForm({
             );
           })}
         </div>
+        {maxOutpaintScale !== null && (
+          <p className="text-[11px] text-[#8a938e]">
+            当前模型每边最多扩 {maxOutpaintScale}×，超出倍数的比例已禁用。
+          </p>
+        )}
       </div>
 
       {values.aspectRatio && (
         <div className="flex flex-col gap-2">
-          <label id={`${formId}-align-label`} className="text-xs font-medium text-neutral-300">
+          <label id={`${formId}-align-label`} className="text-xs font-medium text-[#3d4541]">
             画面对齐定位
           </label>
           <div
@@ -125,8 +152,8 @@ export function OutpaintParamsForm({
                   onClick={() => onChange({ ...values, alignment: item.value })}
                   className={`py-1 px-3 text-xs rounded-md border transition-colors disabled:opacity-50 ${
                     isSelected
-                      ? "bg-neutral-200 border-white text-neutral-900 font-semibold"
-                      : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                      ? "bg-[#277a68] border-[#277a68] text-[#ffffff] font-semibold"
+                      : "bg-[#ffffff] border-[#dfe4e0] text-[#3d4541] hover:bg-[#eef1ef]"
                   }`}
                 >
                   {item.label}
@@ -139,13 +166,13 @@ export function OutpaintParamsForm({
 
       {!values.aspectRatio && (
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium text-neutral-300">自定义各向扩展像素 (px)</span>
+          <span className="text-xs font-medium text-[#3d4541]">自定义各向扩展像素 (px)</span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {MARGIN_FIELDS.map((field) => (
               <div key={field.key}>
                 <label
                   htmlFor={`${formId}-${field.key}`}
-                  className="text-[11px] text-neutral-400 block mb-1"
+                  className="text-[11px] text-[#69716c] block mb-1"
                 >
                   {field.label}
                 </label>
@@ -157,32 +184,37 @@ export function OutpaintParamsForm({
                   disabled={disabled}
                   value={values.margins[field.key]}
                   onChange={(event) => setMargin(field.key, event.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-2.5 py-1 text-xs text-neutral-200 focus:outline-none focus:border-sky-500 disabled:opacity-50"
+                  className="w-full bg-[#ffffff] border border-[#d7dcd8] rounded px-2.5 py-1 text-xs text-[#202522] focus:outline-none focus:border-[#277a68] focus:ring-1 focus:ring-[#277a68]/30 disabled:opacity-50"
                 />
               </div>
             ))}
           </div>
+          {currentExceeds && (
+            <p className="text-[11px] text-[#b42318]">
+              当前边距超过模型每边 {maxOutpaintScale}× 的上限，提交会被拒绝。
+            </p>
+          )}
         </div>
       )}
 
-      <div className="bg-neutral-950/70 border border-neutral-800 rounded-lg p-3 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-[#ffffff] border border-[#e4e8e5] rounded-lg p-3 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-xs space-y-1">
-          <div className="text-neutral-400">
+          <div className="text-[#69716c]">
             原画尺寸:{" "}
-            <span className="text-neutral-200 font-mono">
+            <span className="text-[#202522] font-mono">
               {baseWidth} × {baseHeight}
             </span>
           </div>
-          <div className="text-neutral-400">
+          <div className="text-[#69716c]">
             目标尺寸:{" "}
-            <span className="text-sky-400 font-mono font-medium">
+            <span className="text-[#1f6252] font-mono font-medium">
               {geometry.targetWidth} × {geometry.targetHeight}
             </span>{" "}
-            <span className="text-[11px] text-neutral-500">
+            <span className="text-[11px] text-[#8a938e]">
               (+{geometry.targetWidth - baseWidth}px 宽, +{geometry.targetHeight - baseHeight}px 高)
             </span>
           </div>
-          <div className="text-[11px] text-neutral-500">
+          <div className="text-[11px] text-[#8a938e]">
             边距: 上 {geometry.top}px · 下 {geometry.bottom}px · 左 {geometry.left}px · 右{" "}
             {geometry.right}px
           </div>
@@ -190,10 +222,10 @@ export function OutpaintParamsForm({
 
         <div
           aria-hidden="true"
-          className="relative w-28 h-20 bg-sky-950/40 border border-dashed border-sky-600/40 rounded flex items-center justify-center p-1"
+          className="relative w-28 h-20 bg-[#e7f1ed] border border-dashed border-[#277a68]/45 rounded flex items-center justify-center p-1"
         >
           <div
-            className="bg-neutral-700 border border-neutral-500 text-[9px] text-neutral-200 flex items-center justify-center rounded-sm transition-all"
+            className="bg-[#ffffff] border border-[#c3cec8] text-[9px] text-[#3d4541] flex items-center justify-center rounded-sm transition-all"
             style={{
               width: `${Math.max(20, Math.min(100, (baseWidth / geometry.targetWidth) * 100))}%`,
               height: `${Math.max(20, Math.min(100, (baseHeight / geometry.targetHeight) * 100))}%`,

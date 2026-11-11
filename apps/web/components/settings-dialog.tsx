@@ -13,6 +13,8 @@ import {
 import { validationFields } from "@/lib/error-messages";
 import type {
   ApiKeySource,
+  GenerativeProviderKind,
+  GenerativeProviderSettingsUpdate,
   ProviderEntryUpdate,
   ProviderKind,
   ProviderSettingsUpdate,
@@ -36,6 +38,14 @@ interface EntryForm {
 }
 
 type FormState = Record<ProviderSection, EntryForm>;
+
+interface GenerativeForm {
+  provider: GenerativeProviderKind;
+  model: string;
+  apiKey: string;
+  clearApiKey: boolean;
+  dailyImageLimit: string;
+}
 
 interface Feedback {
   tone: "success" | "error" | "info";
@@ -63,6 +73,43 @@ function toForm(view: ProviderSettingsView): FormState {
     clearApiKey: false,
   });
   return { vision: entry("vision"), decision: entry("decision"), planner: entry("planner") };
+}
+
+function toGenerativeForm(view: ProviderSettingsView): GenerativeForm {
+  return {
+    provider: view.generative.provider,
+    model: view.generative.model,
+    apiKey: "",
+    clearApiKey: false,
+    dailyImageLimit: String(view.generative.dailyImageLimit),
+  };
+}
+
+function toGenerativeUpdate(
+  form: GenerativeForm,
+  view: ProviderSettingsView,
+): GenerativeProviderSettingsUpdate {
+  const current = view.generative;
+  const patch: GenerativeProviderSettingsUpdate = {};
+  if (form.provider !== current.provider) {
+    patch.provider = form.provider;
+  }
+  if (form.provider === "dashscope") {
+    const model = form.model.trim();
+    if (model && model !== current.model) {
+      patch.model = model;
+    }
+    const limit = Number.parseInt(form.dailyImageLimit.trim() || "0", 10);
+    if (Number.isFinite(limit) && limit >= 0 && limit !== current.dailyImageLimit) {
+      patch.dailyImageLimit = limit;
+    }
+  }
+  if (form.clearApiKey && current.apiKeySource === "saved") {
+    patch.clearApiKey = true;
+  } else if (form.apiKey !== "") {
+    patch.apiKey = form.apiKey;
+  }
+  return patch;
 }
 
 function toUpdate(form: FormState, view: ProviderSettingsView): ProviderSettingsUpdate {
@@ -132,6 +179,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
   const [view, setView] = useState<ProviderSettingsView | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
+  const [generative, setGenerative] = useState<GenerativeForm | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "test" | "reset" | null>(null);
@@ -157,6 +205,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       const next = await fetchProviderSettings(signal);
       setView(next);
       setForm(toForm(next));
+      setGenerative(toGenerativeForm(next));
     } catch (error) {
       if (signal?.aborted) {
         return;
@@ -241,10 +290,14 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   };
 
   const handleSave = async () => {
-    if (!form || !view) {
+    if (!form || !view || !generative) {
       return;
     }
     const update = toUpdate(form, view);
+    const generativePatch = toGenerativeUpdate(generative, view);
+    if (Object.keys(generativePatch).length > 0) {
+      update.generative = generativePatch;
+    }
     if (Object.keys(update).length === 0) {
       setFeedback({ tone: "info", message: "没有需要保存的更改。" });
       return;
@@ -255,6 +308,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       const next = await saveProviderSettings(update);
       setView(next);
       setForm(toForm(next));
+      setGenerative(toGenerativeForm(next));
       setTestResults(null);
       setConfirmReset(false);
       setFeedback({
@@ -296,6 +350,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       const next = await resetProviderSettings();
       setView(next);
       setForm(toForm(next));
+      setGenerative(toGenerativeForm(next));
       setTestResults(null);
       setConfirmReset(false);
       setFeedback({ tone: "success", message: "已恢复环境变量配置。" });
@@ -493,6 +548,135 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   </fieldset>
                 );
               })}
+              {generative && (
+                <fieldset className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                  <legend className="px-1 text-xs text-white/60">生成式图像模型</legend>
+                  <p className="mt-1 text-[10px] leading-relaxed text-white/35">
+                    扩图、智能消除与局部生成使用这一模型。选「通义万相」后画面会上传到阿里云百炼；
+                    结果链接 24 小时有效，任务数据 24 小时后清理。当前：
+                    {view.generative.ready ? "已就绪" : "缺少 API Key"}
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label
+                      className="grid gap-1 text-[11px] text-white/55"
+                      htmlFor="generative-provider"
+                    >
+                      Provider
+                      <select
+                        id="generative-provider"
+                        value={generative.provider}
+                        disabled={disabled}
+                        onChange={(event) => {
+                          const provider = event.target.value as GenerativeProviderKind;
+                          setGenerative((current) =>
+                            current
+                              ? { ...current, provider, apiKey: "", clearApiKey: false }
+                              : current,
+                          );
+                        }}
+                        className="min-h-11 rounded-lg border border-white/12 bg-black/35 px-2.5 text-xs text-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      >
+                        <option value="mock">Mock（模拟，不上传）</option>
+                        <option value="dashscope">通义万相 wanx2.1-imageedit</option>
+                      </select>
+                    </label>
+
+                    <label
+                      className="grid gap-1 text-[11px] text-white/55"
+                      htmlFor="generative-model"
+                    >
+                      模型名
+                      <input
+                        id="generative-model"
+                        type="text"
+                        value={generative.model}
+                        maxLength={200}
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={disabled || generative.provider === "mock"}
+                        onChange={(event) =>
+                          setGenerative((current) =>
+                            current ? { ...current, model: event.target.value } : current,
+                          )
+                        }
+                        className="min-h-11 rounded-lg border border-white/12 bg-black/35 px-2.5 font-mono text-xs text-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                      />
+                    </label>
+
+                    <label
+                      className="grid gap-1 text-[11px] text-white/55"
+                      htmlFor="generative-api-key"
+                    >
+                      API Key（百炼）
+                      <input
+                        id="generative-api-key"
+                        type="password"
+                        value={generative.apiKey}
+                        maxLength={8192}
+                        autoComplete="new-password"
+                        spellCheck={false}
+                        placeholder={keyPlaceholder(view.generative.apiKeySource)}
+                        disabled={disabled || generative.provider === "mock"}
+                        onChange={(event) =>
+                          setGenerative((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  apiKey: event.target.value,
+                                  clearApiKey: false,
+                                }
+                              : current,
+                          )
+                        }
+                        className="min-h-11 rounded-lg border border-white/12 bg-black/35 px-2.5 font-mono text-xs text-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                      />
+                    </label>
+
+                    <label
+                      className="grid gap-1 text-[11px] text-white/55"
+                      htmlFor="generative-daily-limit"
+                    >
+                      每日最多生成（张，0 为不限）
+                      <input
+                        id="generative-daily-limit"
+                        type="number"
+                        min={0}
+                        max={1000}
+                        value={generative.dailyImageLimit}
+                        disabled={disabled || generative.provider === "mock"}
+                        onChange={(event) =>
+                          setGenerative((current) =>
+                            current ? { ...current, dailyImageLimit: event.target.value } : current,
+                          )
+                        }
+                        className="min-h-11 rounded-lg border border-white/12 bg-black/35 px-2.5 font-mono text-xs text-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                      />
+                    </label>
+                  </div>
+                  {view.generative.apiKeySource === "saved" && (
+                    <label className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-white/50">
+                      <input
+                        type="checkbox"
+                        checked={generative.clearApiKey}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          setGenerative((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  clearApiKey: event.target.checked,
+                                  apiKey: event.target.checked ? "" : current.apiKey,
+                                }
+                              : current,
+                          )
+                        }
+                        className="accent-[#d8ff5f]"
+                      />
+                      清除已保存的生成式密钥
+                    </label>
+                  )}
+                </fieldset>
+              )}
             </div>
 
             <p className="mt-3 text-[10px] text-white/35">

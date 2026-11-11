@@ -134,6 +134,42 @@ class GenerativeTaskService:
         self._closed = False
         self._last_cleanup_at: float = 0.0
         self._cleanup_lock = threading.Lock()
+        self._daily_image_limit = max(0, settings.generative_daily_image_limit)
+
+    def set_provider(self, provider: GenerativeProvider) -> None:
+        """Swap the provider after the settings page changes the model.
+
+        A running task keeps the provider it captured when it started, so a
+        half-swapped pipeline can never mix two vendors inside one job.
+        """
+
+        self.provider = provider
+        logger.info(
+            "generative_provider_switched provider=%s model=%s mock=%s",
+            provider.name,
+            provider.model,
+            provider.is_mock,
+        )
+
+    def set_daily_image_limit(self, limit: int) -> None:
+        self._daily_image_limit = max(0, limit)
+
+    def _enforce_daily_limit(self) -> None:
+        if self._daily_image_limit <= 0:
+            return
+        start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        used = self.repository.count_created_since(start.isoformat())
+        if used >= self._daily_image_limit:
+            raise AppError(
+                429,
+                "generative_daily_limit_reached",
+                (
+                    f"The daily generation limit of {self._daily_image_limit} images "
+                    "has been reached."
+                ),
+                {"limit": self._daily_image_limit, "used": used},
+                headers={"Retry-After": "3600"},
+            )
 
     # ----------------------------------------------------------------- public
 
@@ -151,6 +187,8 @@ class GenerativeTaskService:
             allowed_output_formats=list(capabilities.allowed_output_formats),
             declared_retention=capabilities.declared_retention,
             notes=list(capabilities.notes),
+            min_edge=capabilities.min_edge,
+            max_outpaint_scale=capabilities.max_outpaint_scale,
         )
 
     def storage_usage(self) -> GenerativeStorageResponse:
@@ -262,6 +300,34 @@ class GenerativeTaskService:
             status_code = 413 if exc.code == "generative_input_too_large" else 422
             raise AppError(status_code, exc.code, exc.message, exc.details) from exc
 
+        max_scale = capabilities.max_outpaint_scale
+        if (
+            max_scale is not None
+            and request.task_type is GenerativeTaskType.OUTPAINT
+            and request.params.outpaint is not None
+        ):
+            for axis, target, sides in (
+                ("width", target_width, ("left", "right")),
+                ("height", target_height, ("top", "bottom")),
+            ):
+                if target is None:
+                    continue
+                margins = [getattr(request.params.outpaint, side) for side in sides]
+                base_span = target - sum(margins)
+                if base_span <= 0:
+                    continue
+                scale = target / base_span
+                if scale > max_scale + 1e-6:
+                    raise AppError(
+                        422,
+                        "generative_outpaint_scale_exceeded",
+                        (
+                            f"Expanding along {axis} beyond {max_scale:.1f}x is not "
+                            "supported by the selected provider."
+                        ),
+                        {"axis": axis, "scale": round(scale, 3), "max": max_scale},
+                    )
+
         if not self.provider.is_mock and not request.consent:
             raise AppError(
                 422,
@@ -351,6 +417,8 @@ class GenerativeTaskService:
                 {"queueMax": self.settings.generative_queue_max},
                 headers={"Retry-After": "5"},
             )
+
+        self._enforce_daily_limit()
 
         now = datetime.now(UTC)
         task = GenerativeTaskRecord(
@@ -647,7 +715,8 @@ class GenerativeTaskService:
             logger.exception("generative_terminal_persist_failed task_id=%s", task_id)
 
     def _execute(self, task: GenerativeTaskRecord) -> None:
-        capabilities = self.provider.capabilities()
+        provider = self.provider
+        capabilities = provider.capabilities()
         base = self.assets.resolve(task.image_id, task.base_generated_asset_id)
         self.repository.set_stage(task.id, GenerativeTaskStage.PREPARING_INPUT.value)
         recipe = self._graded_input_recipe(task)
@@ -736,14 +805,14 @@ class GenerativeTaskService:
             params=json.loads(task.params_json),
             prompt_version=task.prompt_version,
         )
-        self.provider.validate_request(request)
-        job = self.provider.submit(request)
+        provider.validate_request(request)
+        job = provider.submit(request)
         self.repository.set_provider_job_id(task.id, job.provider_job_id)
         self.repository.set_stage(task.id, GenerativeTaskStage.GENERATING.value)
-        job = self._wait_for_job(task, job)
+        job = self._wait_for_job(task, job, provider)
 
         self.repository.set_stage(task.id, GenerativeTaskStage.VALIDATING.value)
-        generated = self.provider.fetch(job)
+        generated = provider.fetch(job)
         data, warnings = self._validate_output(
             task,
             generated,
@@ -752,6 +821,7 @@ class GenerativeTaskService:
             height=height,
             mask=inner_mask,
             outpaint_geo=outpaint_geo,
+            provider=provider,
         )
         self._raise_if_cancelled(task.id)
 
@@ -792,22 +862,24 @@ class GenerativeTaskService:
         self,
         task: GenerativeTaskRecord,
         job: GenerativeProviderJob,
+        provider: GenerativeProvider | None = None,
     ) -> GenerativeProviderJob:
+        active = provider or self.provider
         deadline = time.monotonic() + self.settings.generative_task_timeout_seconds
         while job.status in ("queued", "processing"):
             if self.repository.is_cancel_requested(task.id):
-                self._safe_cancel(job)
+                self._safe_cancel(job, active)
                 raise _TaskCancelled
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                self._safe_cancel(job)
+                self._safe_cancel(job, active)
                 raise AppError(
                     504,
                     "generative_timeout",
                     "The generation did not finish in time.",
                 )
             time.sleep(min(0.2, remaining))
-            job = self.provider.poll(job)
+            job = active.poll(job)
         if job.status == "failed":
             raise GenerativeProviderError(
                 job.error_code or "generative_provider_failed",
@@ -815,9 +887,13 @@ class GenerativeTaskService:
             )
         return job
 
-    def _safe_cancel(self, job: GenerativeProviderJob) -> None:
+    def _safe_cancel(
+        self,
+        job: GenerativeProviderJob,
+        provider: GenerativeProvider | None = None,
+    ) -> None:
         try:
-            self.provider.cancel(job)
+            (provider or self.provider).cancel(job)
         except Exception:
             logger.warning("generative_provider_cancel_failed job_id=%s", job.provider_job_id)
 
@@ -890,6 +966,7 @@ class GenerativeTaskService:
         height: int,
         mask: NDArray[np.uint8] | None,
         outpaint_geo: OutpaintGeometry | None = None,
+        provider: GenerativeProvider | None = None,
     ) -> tuple[bytes, list[str]]:
         if not generated.data:
             raise AppError(502, "generative_invalid_output", "The provider returned no image.")
@@ -902,7 +979,7 @@ class GenerativeTaskService:
             )
         limit = min(
             self.settings.generative_max_output_pixels,
-            self.provider.capabilities().max_output_pixels,
+            (provider or self.provider).capabilities().max_output_pixels,
         )
         try:
             loaded = load_image(generated.data, max_pixels=limit, preserve_alpha=False)

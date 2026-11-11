@@ -12,6 +12,16 @@ import type {
 
 const BASE = "/api/v1/settings/providers";
 
+const GENERATIVE_MOCK: ProviderSettingsView["generative"] = {
+  provider: "mock",
+  model: "wanx2.1-imageedit",
+  baseUrl: "https://dashscope.aliyuncs.com",
+  hasApiKey: false,
+  apiKeySource: "none",
+  dailyImageLimit: 0,
+  ready: true,
+};
+
 const VIEW: ProviderSettingsView = {
   vision: {
     provider: "openai",
@@ -34,12 +44,12 @@ const VIEW: ProviderSettingsView = {
     hasApiKey: false,
     apiKeySource: "none",
   },
+  generative: GENERATIVE_MOCK,
   isMock: true,
   hasSavedOverrides: true,
 };
 
-const RESET_VIEW: ProviderSettingsView = {
-  vision: {
+const RESET_VIEW: ProviderSettingsView = {  vision: {
     provider: "mock",
     model: "mock-vision",
     baseUrl: "",
@@ -60,6 +70,7 @@ const RESET_VIEW: ProviderSettingsView = {
     hasApiKey: false,
     apiKeySource: "none",
   },
+  generative: GENERATIVE_MOCK,
   isMock: true,
   hasSavedOverrides: false,
 };
@@ -235,6 +246,29 @@ describe("SettingsDialog", () => {
     const payload = JSON.parse(String(postCalls[0][1]?.body));
     expect(payload).toEqual({ vision: { model: "gpt-4o-mini" } });
     expect(within(vision).getByLabelText("模型名")).toHaveValue("gpt-4o-mini");
+  });
+
+  it("saves the dashscope generative key and daily limit", async () => {
+    const fetchMock = stubApi();
+    renderDialog();
+
+    await visionGroup();
+    const generative = screen.getByRole("group", { name: "生成式图像模型" });
+    await userEvent.selectOptions(within(generative).getByLabelText("Provider"), "dashscope");
+    await userEvent.type(within(generative).getByLabelText("API Key（百炼）"), "sk-wanx");
+    await userEvent.clear(within(generative).getByLabelText(/每日最多生成/));
+    await userEvent.type(within(generative).getByLabelText(/每日最多生成/), "20");
+    await userEvent.click(screen.getByRole("button", { name: "保存并应用" }));
+
+    expect(await screen.findByText(/已保存并应用/)).toBeInTheDocument();
+    const postCalls = saveCalls(fetchMock);
+    expect(postCalls).toHaveLength(1);
+    const payload = JSON.parse(String(postCalls[0][1]?.body));
+    expect(payload.generative).toEqual({
+      provider: "dashscope",
+      apiKey: "sk-wanx",
+      dailyImageLimit: 20,
+    });
   });
 
   it("saves planner-only overrides without touching the decision section", async () => {

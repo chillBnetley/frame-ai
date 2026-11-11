@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic.alias_generators import to_camel
 
 ProviderKind = Literal["mock", "openai"]
+GenerativeProviderKind = Literal["mock", "dashscope"]
 ApiKeySource = Literal["saved", "environment", "none"]
 
 
@@ -36,10 +37,29 @@ class PlannerProviderSettingsUpdate(ProviderEntryUpdate):
     """Optional planner overrides; omitted or empty fields follow the decision provider."""
 
 
+class GenerativeProviderSettingsUpdate(ProviderSettingsModel):
+    """Generative image model; ``dashscope`` requires an API key to become ready."""
+
+    provider: GenerativeProviderKind | None = None
+    model: str | None = Field(default=None, max_length=200)
+    base_url: str | None = Field(default=None, max_length=1000)
+    api_key: SecretStr | None = Field(default=None, max_length=8192)
+    clear_api_key: bool = False
+    daily_image_limit: int | None = Field(default=None, ge=0, le=1000)
+
+    @model_validator(mode="after")
+    def _reject_conflicting_key_actions(self) -> GenerativeProviderSettingsUpdate:
+        if self.clear_api_key and self.api_key is not None:
+            if self.api_key.get_secret_value():
+                raise ValueError("apiKey and clearApiKey cannot be used together")
+        return self
+
+
 class ProviderSettingsUpdate(ProviderSettingsModel):
     vision: ProviderEntryUpdate | None = None
     decision: ProviderEntryUpdate | None = None
     planner: PlannerProviderSettingsUpdate | None = None
+    generative: GenerativeProviderSettingsUpdate | None = None
 
 
 class ProviderEntryView(ProviderSettingsModel):
@@ -54,10 +74,21 @@ class PlannerProviderSettingsView(ProviderEntryView):
     """Effective planner configuration after per-field decision fallback."""
 
 
+class GenerativeProviderSettingsView(ProviderSettingsModel):
+    provider: GenerativeProviderKind
+    model: str
+    base_url: str
+    has_api_key: bool
+    api_key_source: ApiKeySource
+    daily_image_limit: int
+    ready: bool
+
+
 class ProviderSettingsView(ProviderSettingsModel):
     vision: ProviderEntryView
     decision: ProviderEntryView
     planner: PlannerProviderSettingsView
+    generative: GenerativeProviderSettingsView
     is_mock: bool
     has_saved_overrides: bool
 
@@ -111,8 +142,24 @@ class StoredProviderEntry(BaseModel):
     api_key: str | None = Field(default=None, max_length=8192)
 
 
+class StoredGenerativeEntry(BaseModel):
+    """In-memory generative entry; the plaintext key only lives while the process runs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: GenerativeProviderKind | None = None
+    model: str | None = Field(default=None, max_length=200)
+    base_url: str | None = Field(default=None, max_length=1000)
+    api_key: str | None = Field(default=None, max_length=8192)
+    daily_image_limit: int | None = Field(default=None, ge=0, le=1000)
+
+
 class StoredProviderSettings(BaseModel):
-    """Legacy v1 document, kept for reading and migrating older installs."""
+    """Legacy v1 document shape. Also used as the in-memory domain.
+
+    The in-memory copy may hold a plaintext key while the process runs, but it
+    is only serialized to disk when encryption is explicitly turned off.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -120,9 +167,10 @@ class StoredProviderSettings(BaseModel):
     vision: StoredProviderEntry | None = None
     decision: StoredProviderEntry | None = None
     planner: StoredProviderEntry | None = None
+    generative: StoredGenerativeEntry | None = None
 
 
-SecretKind = Literal["vision", "decision", "planner"]
+SecretKind = Literal["vision", "decision", "planner", "generative"]
 
 
 class StoredProviderEntryV2(BaseModel):
@@ -149,6 +197,17 @@ class StoredSecret(BaseModel):
     ciphertext: str = Field(min_length=1, max_length=65536)
 
 
+class StoredGenerativeEntryV2(BaseModel):
+    """Generative configuration only; key material lives in ``secrets``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: GenerativeProviderKind | None = None
+    model: str | None = Field(default=None, max_length=200)
+    base_url: str | None = Field(default=None, max_length=1000)
+    daily_image_limit: int | None = Field(default=None, ge=0, le=1000)
+
+
 class StoredProviderSettingsV2(BaseModel):
     """Encrypted document; ``secrets`` only covers providers with a saved key."""
 
@@ -158,11 +217,15 @@ class StoredProviderSettingsV2(BaseModel):
     vision: StoredProviderEntryV2 | None = None
     decision: StoredProviderEntryV2 | None = None
     planner: StoredProviderEntryV2 | None = None
+    generative: StoredGenerativeEntryV2 | None = None
     secrets: dict[SecretKind, StoredSecret] = Field(default_factory=dict)
 
 
 __all__ = [
     "ApiKeySource",
+    "GenerativeProviderKind",
+    "GenerativeProviderSettingsUpdate",
+    "GenerativeProviderSettingsView",
     "PlannerProviderSettingsUpdate",
     "PlannerProviderSettingsView",
     "ProviderEntryUpdate",
@@ -175,6 +238,8 @@ __all__ = [
     "ProviderUsageEntry",
     "ProviderUsageView",
     "SecretKind",
+    "StoredGenerativeEntry",
+    "StoredGenerativeEntryV2",
     "StoredProviderEntry",
     "StoredProviderEntryV2",
     "StoredProviderSettings",

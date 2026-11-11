@@ -52,20 +52,20 @@ export function GenerativeMaskSelect({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <label id={`${groupId}-label`} className="text-xs font-medium text-neutral-300">
+        <label id={`${groupId}-label`} className="text-xs font-medium text-[#3d4541]">
           {label}
         </label>
         <button
           type="button"
           onClick={() => setShowEditor((prev) => !prev)}
-          className="text-xs px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-sky-400 border border-neutral-700 transition-colors"
+          className="text-xs px-2.5 py-1 rounded bg-[#e7f1ed] hover:bg-[#dceae4] text-[#1f6252] border border-[#c9ded6] transition-colors"
         >
           {showEditor ? "关闭蒙版画板" : "绘制新蒙版"}
         </button>
       </div>
 
       {showEditor && (
-        <div className="border border-neutral-800 rounded-lg p-3 bg-neutral-950">
+        <div className="border border-[#e4e8e5] rounded-lg p-3 bg-[#ffffff]">
           <GenerativeMaskEditor
             sessionId={sessionId}
             imageUrl={imageUrl}
@@ -97,8 +97,8 @@ export function GenerativeMaskSelect({
                 onClick={() => onSelect(mask.maskId)}
                 className={`flex items-center gap-3 p-2.5 rounded-lg border text-left transition-all ${
                   isSelected
-                    ? "bg-sky-950/60 border-sky-500/80 text-white shadow-sm ring-1 ring-sky-500/50"
-                    : "bg-neutral-950/40 border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                    ? "bg-[#e7f1ed] border-[#277a68] text-[#163f34] shadow-sm"
+                    : "bg-[#ffffff] border-[#dfe4e0] text-[#3d4541] hover:border-[#c3cec8]"
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- the API streams the mask PNG */}
@@ -106,11 +106,11 @@ export function GenerativeMaskSelect({
                   src={generativeMaskImageUrl(mask.maskId)}
                   alt=""
                   aria-hidden="true"
-                  className="w-12 h-12 object-contain bg-neutral-900 border border-neutral-700 rounded"
+                  className="w-12 h-12 object-contain bg-[#eceeec] border border-[#dfe4e0] rounded"
                 />
                 <div className="flex-1 min-w-0 text-xs">
                   <div className="font-medium truncate">{kindLabel(mask.kind)}</div>
-                  <div className="text-[11px] text-neutral-400 mt-0.5">
+                  <div className="text-[11px] text-[#69716c] mt-0.5">
                     {coverageLabel}: {(mask.quality.coverage * 100).toFixed(1)}%
                   </div>
                 </div>
@@ -120,16 +120,16 @@ export function GenerativeMaskSelect({
         </div>
       ) : (
         !showEditor && (
-          <div className="p-4 text-center rounded-lg border border-dashed border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs">
+          <div className="p-4 text-center rounded-lg border border-dashed border-[#d7dcd8] bg-[#ffffff] text-[#69716c] text-xs">
             <span>{emptyHint}</span>
           </div>
         )
       )}
 
       {selectedMaskId && (
-        <div className="text-[11px] text-neutral-400 bg-neutral-950/60 px-3 py-2 rounded border border-neutral-800 flex items-center justify-between">
+        <div className="text-[11px] text-[#69716c] bg-[#ffffff] px-3 py-2 rounded border border-[#e4e8e5] flex items-center justify-between">
           <span>当前已选蒙版: {selectedMaskId.slice(0, 8)}...</span>
-          <span className="text-emerald-400">已就绪</span>
+          <span className="text-[#1f7a52]">已就绪</span>
         </div>
       )}
     </div>

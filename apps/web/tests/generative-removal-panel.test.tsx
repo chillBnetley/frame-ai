@@ -45,6 +45,7 @@ const MOCK_CAPABILITIES: GenerativeCapabilitiesResponse = {
   maxLongEdge: 8192,
   allowedOutputFormats: ["png"],
   declaredRetention: "Mock provider",
+  minEdge: 0,
   notes: [],
 };
 

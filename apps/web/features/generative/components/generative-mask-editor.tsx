@@ -394,7 +394,7 @@ export function GenerativeMaskEditor({
             disabled={disabled}
             className={`rounded px-2.5 py-1 text-xs font-medium transition ${
               tool === "brush"
-                ? "bg-rose-500 text-white"
+                ? "bg-rose-500 text-[#ffffff]"
                 : "bg-white/5 text-white/70 hover:bg-white/10"
             }`}
           >
@@ -408,7 +408,7 @@ export function GenerativeMaskEditor({
             disabled={disabled}
             className={`rounded px-2.5 py-1 text-xs font-medium transition ${
               tool === "eraser"
-                ? "bg-rose-500 text-white"
+                ? "bg-rose-500 text-[#ffffff]"
                 : "bg-white/5 text-white/70 hover:bg-white/10"
             }`}
           >
@@ -422,7 +422,7 @@ export function GenerativeMaskEditor({
             disabled={disabled}
             className={`rounded px-2.5 py-1 text-xs font-medium transition ${
               tool === "rect"
-                ? "bg-rose-500 text-white"
+                ? "bg-rose-500 text-[#ffffff]"
                 : "bg-white/5 text-white/70 hover:bg-white/10"
             }`}
           >
@@ -436,7 +436,7 @@ export function GenerativeMaskEditor({
             disabled={disabled}
             className={`rounded px-2.5 py-1 text-xs font-medium transition ${
               tool === "ellipse"
-                ? "bg-rose-500 text-white"
+                ? "bg-rose-500 text-[#ffffff]"
                 : "bg-white/5 text-white/70 hover:bg-white/10"
             }`}
           >
@@ -656,7 +656,7 @@ export function GenerativeMaskEditor({
           aria-label="保存蒙版"
           onClick={handleSubmit}
           disabled={disabled || submitting || !hasContent}
-          className="ml-auto rounded-lg bg-rose-500 px-4 py-1.5 text-xs font-medium text-white shadow transition hover:bg-rose-600 disabled:opacity-50"
+          className="ml-auto rounded-lg bg-rose-500 px-4 py-1.5 text-xs font-medium text-[#ffffff] shadow transition hover:bg-rose-600 disabled:opacity-50"
         >
           {submitting ? "正在保存…" : "保存蒙版"}
         </button>

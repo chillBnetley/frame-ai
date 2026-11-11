@@ -1,4 +1,5 @@
 export type ProviderKind = "mock" | "openai";
+export type GenerativeProviderKind = "mock" | "dashscope";
 export type ApiKeySource = "saved" | "environment" | "none";
 
 export interface ProviderEntryView {
@@ -11,10 +12,21 @@ export interface ProviderEntryView {
 
 export type PlannerProviderSettingsView = ProviderEntryView;
 
+export interface GenerativeProviderSettingsView {
+  provider: GenerativeProviderKind;
+  model: string;
+  baseUrl: string;
+  hasApiKey: boolean;
+  apiKeySource: ApiKeySource;
+  dailyImageLimit: number;
+  ready: boolean;
+}
+
 export interface ProviderSettingsView {
   vision: ProviderEntryView;
   decision: ProviderEntryView;
   planner: PlannerProviderSettingsView;
+  generative: GenerativeProviderSettingsView;
   isMock: boolean;
   hasSavedOverrides: boolean;
 }
@@ -29,10 +41,20 @@ export interface ProviderEntryUpdate {
 
 export type PlannerProviderSettingsUpdate = ProviderEntryUpdate;
 
+export interface GenerativeProviderSettingsUpdate {
+  provider?: GenerativeProviderKind;
+  model?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  dailyImageLimit?: number;
+}
+
 export interface ProviderSettingsUpdate {
   vision?: ProviderEntryUpdate;
   decision?: ProviderEntryUpdate;
   planner?: PlannerProviderSettingsUpdate;
+  generative?: GenerativeProviderSettingsUpdate;
 }
 
 export interface ProviderTestResult {

@@ -192,14 +192,14 @@ export function StudioCanvas({
         role="group"
         aria-label="生成结果并排对比"
         onKeyDown={handleKeyDown}
-        className="studio-canvas flex h-full min-h-64 w-full items-center justify-center gap-3 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+        className="studio-canvas flex h-full min-h-64 w-full items-center justify-center gap-3 overflow-hidden rounded-xl border border-[#e4e8e5] bg-[#eceeec] p-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#277a68]"
       >
         {[
           { url: bottomUrl, label: `修改前 · ${bottomLabel}` },
           { url: resultUrl, label: "AI 结果" },
         ].map((pane) => (
           <figure key={pane.label} className="relative flex h-full min-w-0 flex-1 flex-col">
-            <figcaption className="mb-1.5 text-[11px] text-neutral-400">{pane.label}</figcaption>
+            <figcaption className="mb-1.5 text-[11px] text-[#69716c]">{pane.label}</figcaption>
             {pane.url ? (
               // eslint-disable-next-line @next/next/no-img-element -- object URLs are not next/image targets
               <img
@@ -209,7 +209,7 @@ export function StudioCanvas({
                 draggable={false}
               />
             ) : (
-              <div className="flex min-h-0 flex-1 items-center justify-center text-xs text-neutral-500">
+              <div className="flex min-h-0 flex-1 items-center justify-center text-xs text-[#8a938e]">
                 等待图片…
               </div>
             )}
@@ -233,13 +233,13 @@ export function StudioCanvas({
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onKeyDown={handleKeyDown}
-      className="studio-canvas relative flex h-full min-h-64 w-full cursor-grab touch-none items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+      className="studio-canvas relative flex h-full min-h-64 w-full cursor-grab touch-none items-center justify-center overflow-hidden rounded-xl border border-[#e4e8e5] bg-[#eceeec] active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#277a68]"
     >
       <div className="relative" style={frameStyle(boxWidth, boxHeight)}>
         {expanded && (
           <div
             aria-hidden="true"
-            className="absolute inset-0 rounded-sm border border-dashed border-sky-500/70 bg-neutral-900/60"
+            className="absolute inset-0 rounded-sm border border-dashed border-[#277a68]/70 bg-[#277a68]/[0.06]"
           />
         )}
 
@@ -277,7 +277,7 @@ export function StudioCanvas({
             alt=""
             aria-hidden="true"
             draggable={false}
-            className="pointer-events-none absolute select-none opacity-45 mix-blend-screen"
+            className="pointer-events-none absolute select-none opacity-40 mix-blend-multiply invert"
             style={{
               left: `${sourceRect.left}%`,
               top: `${sourceRect.top}%`,
@@ -289,28 +289,28 @@ export function StudioCanvas({
       </div>
 
       {!bottomUrl && (
-        <p className="absolute text-xs text-neutral-500">等待渲染预览…</p>
+        <p className="absolute text-xs text-[#8a938e]">等待渲染预览…</p>
       )}
 
       <div className="pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-1.5">
-        <span className="rounded-full border border-white/15 bg-black/65 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/75">
+        <span className="rounded-full border border-[#d7dcd8] bg-[rgba(255,255,255,0.92)] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[#3d4541]">
           {showResult ? "AI 结果" : `底图 · ${bottomLabel}`}
         </span>
         {isRunning && stageLabel && (
-          <span className="rounded-full border border-sky-400/30 bg-sky-950/70 px-2.5 py-1 text-[10px] text-sky-200">
+          <span className="rounded-full border border-[#277a68]/40 bg-[#e7f1ed] px-2.5 py-1 text-[10px] text-[#1f6252]">
             {stageLabel}
           </span>
         )}
         {expanded && !showResult && (
-          <span className="rounded-full border border-white/15 bg-black/65 px-2.5 py-1 text-[10px] text-white/60">
+          <span className="rounded-full border border-[#d7dcd8] bg-[rgba(255,255,255,0.92)] px-2.5 py-1 text-[10px] text-[#69716c]">
             虚线为扩充目标画幅 {frameWidth} × {frameHeight}
           </span>
         )}
       </div>
 
       {compare === "slider" && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 border-t border-neutral-800 bg-neutral-950/85 px-3 py-2">
-          <label htmlFor="studio-compare-position" className="text-[11px] text-neutral-400">
+        <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 border-t border-[#e4e8e5] bg-[rgba(255,255,255,0.94)] px-3 py-2">
+          <label htmlFor="studio-compare-position" className="text-[11px] text-[#69716c]">
             对比位置
           </label>
           <input
@@ -321,9 +321,9 @@ export function StudioCanvas({
             step={1}
             value={comparePosition}
             onChange={(event) => onComparePositionChange(Number(event.target.value))}
-            className="h-1.5 w-full accent-sky-500"
+            className="h-1.5 w-full accent-[#277a68]"
           />
-          <span className="w-10 text-right font-mono text-[11px] text-neutral-300">
+          <span className="w-10 text-right font-mono text-[11px] text-[#3d4541]">
             {comparePosition}%
           </span>
         </div>

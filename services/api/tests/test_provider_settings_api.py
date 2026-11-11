@@ -142,9 +142,81 @@ def test_get_reports_mock_defaults_without_exposing_keys(client: TestClient):
             "hasApiKey": False,
             "apiKeySource": "none",
         },
+        "generative": {
+            "provider": "mock",
+            "model": "wanx2.1-imageedit",
+            "baseUrl": "https://dashscope.aliyuncs.com",
+            "hasApiKey": False,
+            "apiKeySource": "none",
+            "dailyImageLimit": 0,
+            "ready": True,
+        },
         "isMock": True,
         "hasSavedOverrides": False,
     }
+
+
+def test_generative_settings_require_a_key_and_switch_the_provider(
+    client: TestClient,
+    settings: Settings,
+):
+    response = client.post(
+        PREFIX,
+        json={"generative": {"provider": "dashscope", "model": "wanx2.1-imageedit"}},
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["error"]["code"] == "invalid_provider_settings"
+    assert "generative.apiKey" in json.dumps(body["error"]["details"])
+
+    response = client.post(
+        PREFIX,
+        json={
+            "generative": {
+                "provider": "dashscope",
+                "model": "wanx2.1-imageedit",
+                "apiKey": "sk-generative-secret",
+                "dailyImageLimit": 20,
+            }
+        },
+    )
+    assert response.status_code == 200, response.text
+    generative = response.json()["generative"]
+    assert generative == {
+        "provider": "dashscope",
+        "model": "wanx2.1-imageedit",
+        "baseUrl": "https://dashscope.aliyuncs.com",
+        "hasApiKey": True,
+        "apiKeySource": "saved",
+        "dailyImageLimit": 20,
+        "ready": True,
+    }
+
+    stored = _saved_path(settings).read_text(encoding="utf-8")
+    assert "sk-generative-secret" not in stored
+    assert "sk-generative-secret" not in response.text
+
+    service = client.app.state.generative_service
+    assert service.provider.name == "dashscope"
+    assert service.provider.model == "wanx2.1-imageedit"
+    assert service.provider.is_mock is False
+
+
+def test_generative_settings_can_return_to_mock(client: TestClient):
+    client.post(
+        PREFIX,
+        json={
+            "generative": {
+                "provider": "dashscope",
+                "apiKey": "sk-generative-secret",
+            }
+        },
+    )
+    response = client.post(PREFIX, json={"generative": {"provider": "mock"}})
+    assert response.status_code == 200, response.text
+    assert response.json()["generative"]["provider"] == "mock"
+    assert response.json()["generative"]["ready"] is True
+    assert client.app.state.generative_service.provider.name == "mock"
 
 
 def test_saving_openai_settings_masks_and_persists_keys(

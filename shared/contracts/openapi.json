@@ -13012,6 +13012,22 @@
             },
             "type": "array",
             "title": "Notes"
+          },
+          "minEdge": {
+            "type": "integer",
+            "title": "Minedge",
+            "default": 0
+          },
+          "maxOutpaintScale": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxoutpaintscale"
           }
         },
         "additionalProperties": false,
@@ -13495,6 +13511,138 @@
         "type": "object",
         "title": "GenerativeParams",
         "description": "Execution parameters shared by the current task types."
+      },
+      "GenerativeProviderSettingsUpdate": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "mock",
+                  "dashscope"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "apiKey": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8192,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apikey"
+          },
+          "clearApiKey": {
+            "type": "boolean",
+            "title": "Clearapikey",
+            "default": false
+          },
+          "dailyImageLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dailyimagelimit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GenerativeProviderSettingsUpdate",
+        "description": "Generative image model; ``dashscope`` requires an API key to become ready."
+      },
+      "GenerativeProviderSettingsView": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "mock",
+              "dashscope"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "baseUrl": {
+            "type": "string",
+            "title": "Baseurl"
+          },
+          "hasApiKey": {
+            "type": "boolean",
+            "title": "Hasapikey"
+          },
+          "apiKeySource": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "environment",
+              "none"
+            ],
+            "title": "Apikeysource"
+          },
+          "dailyImageLimit": {
+            "type": "integer",
+            "title": "Dailyimagelimit"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "model",
+          "baseUrl",
+          "hasApiKey",
+          "apiKeySource",
+          "dailyImageLimit",
+          "ready"
+        ],
+        "title": "GenerativeProviderSettingsView"
       },
       "GenerativeResultStatus": {
         "type": "string",
@@ -17876,6 +18024,16 @@
                 "type": "null"
               }
             ]
+          },
+          "generative": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerativeProviderSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -17893,6 +18051,9 @@
           "planner": {
             "$ref": "#/components/schemas/PlannerProviderSettingsView"
           },
+          "generative": {
+            "$ref": "#/components/schemas/GenerativeProviderSettingsView"
+          },
           "isMock": {
             "type": "boolean",
             "title": "Ismock"
@@ -17908,6 +18069,7 @@
           "vision",
           "decision",
           "planner",
+          "generative",
           "isMock",
           "hasSavedOverrides"
         ],
@@ -17996,7 +18158,8 @@
             "enum": [
               "vision",
               "decision",
-              "planner"
+              "planner",
+              "generative"
             ],
             "title": "Provider"
           },

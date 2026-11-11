@@ -630,6 +630,19 @@ class SqliteGenerativeRepository:
             connection.close()
         return int(row["total"])
 
+    def count_created_since(self, since_iso: str) -> int:
+        """Count every task created after ``since_iso`` for the daily budget."""
+
+        connection = connect(self._path)
+        try:
+            row = connection.execute(
+                "SELECT COUNT(*) AS total FROM generative_task WHERE created_at >= ?",
+                (since_iso,),
+            ).fetchone()
+        finally:
+            connection.close()
+        return int(row["total"])
+
     def has_active_for_image(self, image_id: str) -> bool:
         return self._has_active("image_id", image_id)
 

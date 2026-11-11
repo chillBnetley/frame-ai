@@ -29,16 +29,16 @@ export function GenerativeTaskResult({
   onReject,
 }: GenerativeTaskResultProps) {
   return (
-    <div className="flex flex-col gap-3 p-4 bg-neutral-950 border border-neutral-800 rounded-lg">
+    <div className="flex flex-col gap-3 p-4 bg-[#ffffff] border border-[#e4e8e5] rounded-lg">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold text-neutral-200">{title}</h3>
+        <h3 className="text-xs font-semibold text-[#202522]">{title}</h3>
         <div className="flex items-center gap-2">
           {badge && (
-            <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="text-[11px] px-2 py-0.5 rounded bg-[#eaf6ef] text-[#1f7a52] border border-[#c4e5d3]">
               {badge}
             </span>
           )}
-          <span className="text-[11px] text-neutral-400 font-mono">
+          <span className="text-[11px] text-[#69716c] font-mono">
             {result.width} × {result.height}
           </span>
         </div>
@@ -48,7 +48,7 @@ export function GenerativeTaskResult({
       <img
         src={generativeResultImageUrl(result.resultId)}
         alt={alt}
-        className="max-h-72 w-full object-contain rounded border border-neutral-800 bg-neutral-900"
+        className="max-h-72 w-full object-contain rounded border border-[#e4e8e5] bg-[#eceeec]"
       />
 
       {result.warnings && result.warnings.length > 0 && (
@@ -56,7 +56,7 @@ export function GenerativeTaskResult({
           {result.warnings.map((warning) => (
             <span
               key={warning}
-              className="text-[10px] px-2 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700"
+              className="text-[10px] px-2 py-0.5 rounded bg-[#f6f7f6] text-[#69716c] border border-[#dfe4e0]"
             >
               {warning}
             </span>
@@ -68,7 +68,7 @@ export function GenerativeTaskResult({
         <button
           type="button"
           onClick={() => onReject(result.resultId)}
-          className="px-3 py-1.5 text-xs rounded-lg border border-neutral-700 text-neutral-300 hover:bg-neutral-800 transition-colors"
+          className="px-3 py-1.5 text-xs rounded-lg border border-[#dfe4e0] text-[#3d4541] hover:bg-[#eef1ef] transition-colors"
         >
           {rejectLabel}
         </button>
@@ -76,7 +76,7 @@ export function GenerativeTaskResult({
           type="button"
           onClick={() => onAccept(result.resultId)}
           disabled={busy}
-          className="px-4 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white shadow-sm transition-colors"
+          className="px-4 py-1.5 text-xs font-medium rounded-lg bg-[#277a68] hover:bg-[#1f6252] disabled:bg-[#dfe4e0] disabled:text-[#8a938e] text-[#ffffff] shadow-sm transition-colors"
         >
           {busy ? acceptingLabel : acceptLabel}
         </button>

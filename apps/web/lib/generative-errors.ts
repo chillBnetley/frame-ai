@@ -145,6 +145,36 @@ const CODE_ENTRIES: Record<string, CodeEntry> = {
     category: "size_limit",
     message: "输入图片超过 Provider 可处理的最大尺寸。",
   },
+  generative_input_too_small: {
+    category: "size_limit",
+    message: "图片比当前模型要求的最小边长还小。",
+    nextStep: "换一张长边和短边都更大的照片（通义万相要求每边至少 512px）。",
+  },
+  generative_outpaint_scale_exceeded: {
+    category: "size_limit",
+    message: "扩图倍数超过当前模型的上限。",
+    nextStep: "把目标画幅改小一些；通义万相每边最多扩 2 倍。",
+  },
+  generative_daily_limit_reached: {
+    category: "provider",
+    message: "已达到今天设置的生成张数上限。",
+    nextStep: "明天再试，或在模型设置里调整每日张数。",
+  },
+  generative_provider_not_configured: {
+    category: "provider",
+    message: "生成式模型尚未配置完成。",
+    nextStep: "在模型设置中填写百炼 API Key，或切回 Mock。",
+  },
+  generative_provider_rejected_content: {
+    category: "provider",
+    message: "Provider 以内容安全策略拒绝了这张图片或指令。",
+    nextStep: "换一张照片或改写指令后重试。",
+  },
+  generative_provider_cancelled: {
+    category: "provider",
+    message: "任务在 Provider 侧被取消。",
+    nextStep: "重新提交一次。",
+  },
   generative_output_too_large: {
     category: "size_limit",
     message: "生成结果超过允许的像素上限。",

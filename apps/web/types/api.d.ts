@@ -2669,6 +2669,13 @@ export interface components {
             declaredRetention: string;
             /** Notes */
             notes?: string[];
+            /**
+             * Minedge
+             * @default 0
+             */
+            minEdge: number;
+            /** Maxoutpaintscale */
+            maxOutpaintScale?: number | null;
         };
         /** GenerativeErrorInfo */
         GenerativeErrorInfo: {
@@ -2863,6 +2870,50 @@ export interface components {
              */
             candidates: number;
             outpaint?: components["schemas"]["GenerativeOutpaintParams"] | null;
+        };
+        /**
+         * GenerativeProviderSettingsUpdate
+         * @description Generative image model; ``dashscope`` requires an API key to become ready.
+         */
+        GenerativeProviderSettingsUpdate: {
+            /** Provider */
+            provider?: ("mock" | "dashscope") | null;
+            /** Model */
+            model?: string | null;
+            /** Baseurl */
+            baseUrl?: string | null;
+            /** Apikey */
+            apiKey?: string | null;
+            /**
+             * Clearapikey
+             * @default false
+             */
+            clearApiKey: boolean;
+            /** Dailyimagelimit */
+            dailyImageLimit?: number | null;
+        };
+        /** GenerativeProviderSettingsView */
+        GenerativeProviderSettingsView: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "mock" | "dashscope";
+            /** Model */
+            model: string;
+            /** Baseurl */
+            baseUrl: string;
+            /** Hasapikey */
+            hasApiKey: boolean;
+            /**
+             * Apikeysource
+             * @enum {string}
+             */
+            apiKeySource: "saved" | "environment" | "none";
+            /** Dailyimagelimit */
+            dailyImageLimit: number;
+            /** Ready */
+            ready: boolean;
         };
         /**
          * GenerativeResultStatus
@@ -4577,12 +4628,14 @@ export interface components {
             vision?: components["schemas"]["ProviderEntryUpdate"] | null;
             decision?: components["schemas"]["ProviderEntryUpdate"] | null;
             planner?: components["schemas"]["PlannerProviderSettingsUpdate"] | null;
+            generative?: components["schemas"]["GenerativeProviderSettingsUpdate"] | null;
         };
         /** ProviderSettingsView */
         ProviderSettingsView: {
             vision: components["schemas"]["ProviderEntryView"];
             decision: components["schemas"]["ProviderEntryView"];
             planner: components["schemas"]["PlannerProviderSettingsView"];
+            generative: components["schemas"]["GenerativeProviderSettingsView"];
             /** Ismock */
             isMock: boolean;
             /** Hassavedoverrides */
@@ -4618,7 +4671,7 @@ export interface components {
              * Provider
              * @enum {string}
              */
-            provider: "vision" | "decision" | "planner";
+            provider: "vision" | "decision" | "planner" | "generative";
             /** Date */
             date: string;
             /** Requests */

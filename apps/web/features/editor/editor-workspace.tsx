@@ -675,6 +675,7 @@ function EditorStage({
               aria-expanded={analysisOpen}
               aria-controls="analysis-panel"
               onClick={() => {
+                setStudioOpen(false);
                 setPhotographerOpen(false);
                 setAnalysisOpen((value) => !value);
               }}
@@ -694,6 +695,7 @@ function EditorStage({
               aria-expanded={photographerOpen}
               aria-controls="photographer-panel"
               onClick={() => {
+                setStudioOpen(false);
                 setAnalysisOpen(false);
                 setPhotographerOpen((value) => !value);
               }}

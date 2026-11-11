@@ -8,7 +8,9 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.errors import ProviderConfigurationError
 from app.ai.factory import ProviderBundle
+from app.ai.generative import GenerativeProvider
 from app.ai.generative_factory import build_generative_provider
 from app.api.errors import register_exception_handlers
 from app.api.routes import analysis, config, exports, health, images, previews, sessions
@@ -54,7 +56,7 @@ from app.services.image_service import ImageService
 from app.services.personal_style_analysis_service import PersonalStyleAnalysisService
 from app.services.personal_style_service import PersonalStyleService
 from app.services.preview_store import PreviewStore
-from app.services.provider_settings_service import ProviderSettingsService
+from app.services.provider_settings_service import ProviderSettingsService, ResolvedGenerative
 from app.services.render_service import RenderService
 from app.services.semantic_mask_service import SemanticMaskService
 from app.services.session_service import SessionService
@@ -66,6 +68,33 @@ from app.services.style_mix_service import StyleMixService
 from app.styles.library import seed_style_library
 
 logger = logging.getLogger("frame_ai.main")
+
+
+def _build_generative_provider(
+    settings: Settings,
+    config: ResolvedGenerative,
+) -> GenerativeProvider:
+    """Build the generative provider, falling back to mock when misconfigured.
+
+    A saved DashScope entry without a key is already rejected by the settings
+    validation; this only covers an environment-only misconfiguration, where
+    refusing to start would take the whole app down over an optional feature.
+    """
+
+    try:
+        return build_generative_provider(
+            settings,
+            provider=config.provider,
+            model=config.model,
+            base_url=config.base_url,
+            api_key=config.api_key or None,
+        )
+    except ProviderConfigurationError:
+        logger.warning(
+            "generative_provider_fallback provider=%s reason=not_configured",
+            config.provider,
+        )
+        return build_generative_provider(settings, provider="mock")
 API_PREFIX = "/api/v1"
 ALLOWED_CORS_METHODS = ["GET", "POST", "DELETE", "OPTIONS"]
 
@@ -192,10 +221,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             SqliteStyleEvolutionRepository(resolved_settings.database_path),
             personal_style_service,
         )
+        generative_config = providers.generative_config()
         generative_service = GenerativeTaskService(
             resolved_settings,
             session_service,
-            build_generative_provider(resolved_settings),
+            _build_generative_provider(resolved_settings, generative_config),
             generative_repo,
             generated_store,
             asset_resolver,
@@ -213,7 +243,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             analysis_tasks.update_providers(bundle)
             photographer_service.update_planner(bundle.planner)
 
+        def on_generative_changed(config: ResolvedGenerative) -> None:
+            generative_service.set_provider(
+                _build_generative_provider(resolved_settings, config)
+            )
+
         providers.set_on_change(on_providers_changed)
+        providers.set_on_generative_change(on_generative_changed)
         app.state.provider_settings_service = providers
         analysis_tasks.recover()
         app.state.analysis_task_service = analysis_tasks

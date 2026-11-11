@@ -67,13 +67,13 @@ export interface StudioToolRailProps {
 }
 
 const sectionClass = "flex flex-col gap-2";
-const headingClass = "text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400";
+const headingClass = "text-[11px] font-medium uppercase tracking-[0.12em] text-[#8a938e]";
 const choiceClass =
   "w-full px-3 py-2 text-left text-xs rounded-lg border transition-all disabled:cursor-not-allowed disabled:opacity-45";
 const choiceActiveClass =
-  "bg-sky-950/60 border-sky-500/70 text-white ring-1 ring-sky-500/40";
+  "bg-[#277a68] border-[#277a68] text-[#ffffff] font-semibold shadow-[0_4px_12px_-6px_rgba(39,122,104,0.6)]";
 const choiceIdleClass =
-  "bg-neutral-950/50 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:bg-neutral-900";
+  "bg-[#f6f7f6] border-[#dfe4e0] text-[#3d4541] hover:border-[#c3cec8] hover:bg-[#eef1ef]";
 
 export function StudioToolRail({
   capability,
@@ -105,7 +105,7 @@ export function StudioToolRail({
   return (
     <div
       aria-label="创意工作台工具区"
-      className="flex flex-col gap-5 p-4 rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-100"
+      className="flex flex-col gap-5 p-4 rounded-xl border border-[#e4e8e5] bg-[#f6f7f6] text-[#202522]"
     >
       <div className={sectionClass}>
         <h3 id={`${railId}-capability`} className={headingClass}>
@@ -126,13 +126,13 @@ export function StudioToolRail({
                 className={`${choiceClass} ${item.value === capability ? choiceActiveClass : choiceIdleClass}`}
               >
                 <span className="block font-medium">{item.label}</span>
-                <span className="mt-0.5 block text-[11px] text-neutral-400">{item.hint}</span>
+                <span className="mt-0.5 block text-[11px] opacity-70">{item.hint}</span>
               </button>
             );
           })}
         </div>
         {capabilities?.isMock && (
-          <p className="text-[11px] text-amber-300">模拟生成模式：结果由 Mock Provider 产出。</p>
+          <p className="text-[11px] text-[#8a5a00]">模拟生成模式：结果由 Mock Provider 产出。</p>
         )}
       </div>
 
@@ -257,13 +257,13 @@ export function StudioToolRail({
         >
           适应窗口
         </button>
-        <p className="text-[11px] leading-relaxed text-neutral-500">
+        <p className="text-[11px] leading-relaxed text-[#8a938e]">
           画布内：滚轮缩放、拖动或方向键平移、双指区域无需额外模式。
         </p>
       </div>
 
       {activeMeta && (
-        <p className="text-[11px] leading-relaxed text-neutral-400 border-t border-neutral-800 pt-3">
+        <p className="text-[11px] leading-relaxed text-[#69716c] border-t border-[#e4e8e5] pt-3">
           当前：{activeMeta.label}
         </p>
       )}
