@@ -136,6 +136,7 @@ export interface SessionActions {
   activate: (revisionId: string) => Promise<RevisionOutcome>;
   acceptProposal: (recipe: EditRecipe) => Promise<RevisionOutcome>;
   refresh: () => Promise<boolean>;
+  reloadHistory: () => Promise<void>;
 }
 
 export function useSessionActions(): SessionActions {
@@ -395,6 +396,13 @@ export function useSessionActions(): SessionActions {
     }
   }, [dispatch, loadHistory, sessionId]);
 
+  const reloadHistory = useCallback(async (): Promise<void> => {
+    if (sessionId === null) {
+      return;
+    }
+    await loadHistory(sessionId);
+  }, [loadHistory, sessionId]);
+
   return {
     startSession,
     commit,
@@ -404,5 +412,6 @@ export function useSessionActions(): SessionActions {
     activate,
     acceptProposal,
     refresh,
+    reloadHistory,
   };
 }

@@ -24,6 +24,7 @@ import { LocalAdjustmentsPanel } from "@/features/editor/components/local-adjust
 import { PreviewImage } from "@/features/editor/components/preview-image";
 import { PreviewMonitor } from "@/features/editor/components/preview-monitor";
 import { HealthIndicator } from "@/features/editor/health-indicator";
+import { CreativeStudio } from "@/features/generative/studio/creative-studio";
 import { PhotographerPanel } from "@/features/photographer/components/photographer-panel";
 import { usePhotographer } from "@/features/photographer/hooks/use-photographer";
 import { usePhotographerChat } from "@/features/photographer/hooks/use-photographer-chat";
@@ -81,7 +82,7 @@ import {
 } from "@/lib/recipe";
 import { validateUploadFile, type UploadLimits } from "@/lib/upload-validation";
 import type { ApiStatus, UploadedImage, UploadError } from "@/types/image";
-import type { Crop } from "@/types/session";
+import type { Crop, SessionState } from "@/types/session";
 
 const NON_RETRYABLE_CODES = new Set([
   "file_too_large",
@@ -237,7 +238,7 @@ function EditorStage({
 }: EditorStageProps) {
   const state = useEditorState();
   const dispatch = useEditorDispatch();
-  const { commit, undo, redo, reset, activate } = useSessionActions();
+  const { commit, undo, redo, reset, activate, reloadHistory } = useSessionActions();
   const { preview, requestFinal, retry } = useRenderPreview();
   const { sentinelRef: previewSentinelRef, isVisible: previewVisible } =
     usePreviewVisibility();
@@ -252,6 +253,7 @@ function EditorStage({
   const [photographerOpen, setPhotographerOpen] = useState(false);
   const styles = useStyles(photographerOpen);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [studioOpen, setStudioOpen] = useState(false);
   const [cropMode, setCropMode] = useState(false);
   const [cropBase, setCropBase] = useState<CropBase | null>(null);
   const [cropBaseError, setCropBaseError] = useState<string | null>(null);
@@ -424,6 +426,26 @@ function EditorStage({
     setCompareOpen((value) => !value);
   }, [cropBefore, cropMode, dispatch]);
 
+  const handleOpenStudio = useCallback(() => {
+    setAnalysisOpen(false);
+    setPhotographerOpen(false);
+    setCompareOpen(false);
+    setStudioOpen(true);
+    if (selectIsDirty(state)) {
+      requestCommit();
+    }
+  }, [requestCommit, state]);
+
+  // Accepting a candidate creates the revision server-side, so the local head
+  // and the history strip are re-read rather than patched by hand.
+  const handleGenerativeAccepted = useCallback(
+    async (next: SessionState) => {
+      dispatch({ type: "session-replaced", state: next });
+      await reloadHistory();
+    },
+    [dispatch, reloadHistory],
+  );
+
   const handleReturnToPreview = useCallback(() => {
     const surface = document.getElementById("editor-preview-surface");
     const reduceMotion =
@@ -497,10 +519,26 @@ function EditorStage({
     state.phase === "ready" &&
     !previewVisible &&
     preview.url !== null &&
+    !studioOpen &&
     !compareOpen &&
     !cropMode &&
     !exportOpen &&
     !proposalOriginal;
+
+  const historyBar = (
+    <HistoryBar
+      canUndo={selectCanUndo(state)}
+      canRedo={selectCanRedo(state)}
+      canReset={selectCanReset(state)}
+      busy={saving}
+      items={state.history}
+      activeRevisionId={state.activeRevisionId}
+      onUndo={() => void undo()}
+      onRedo={() => void redo()}
+      onReset={() => void handleReset()}
+      onActivate={(revisionId) => void activate(revisionId)}
+    />
+  );
 
   return (
     <div
@@ -510,10 +548,26 @@ function EditorStage({
           : "grid gap-4 lg:grid-cols-[minmax(0,2.2fr)_minmax(280px,0.9fr)]"
       }
     >
+      {studioOpen && (
+        <div className="min-w-0 lg:col-span-2 xl:col-span-3">
+          <CreativeStudio
+            sessionId={state.sessionId}
+            previewImageUrl={preview.url}
+            previewWidth={preview.width}
+            previewHeight={preview.height}
+            originalImageUrl={state.imageId ? originalImageUrl(state.imageId) : null}
+            imageWidth={image?.width ?? 0}
+            imageHeight={image?.height ?? 0}
+            onResultAccepted={handleGenerativeAccepted}
+            onExit={() => setStudioOpen(false)}
+            historySlot={historyBar}
+          />
+        </div>
+      )}
       <div
         className={`editor-preview-column grid content-start gap-4 ${
-          panelOpen ? "lg:col-start-1 lg:row-start-1" : ""
-        }`}
+          panelOpen && !studioOpen ? "lg:col-start-1 lg:row-start-1" : ""
+        } ${studioOpen ? "hidden" : ""}`}
       >
         <section
           aria-labelledby="editor-preview-heading"
@@ -617,6 +671,20 @@ function EditorStage({
                   生成中
                 </span>
               )}
+            </button>
+            <button
+              type="button"
+              aria-pressed={studioOpen}
+              onClick={handleOpenStudio}
+              disabled={uploading || cropMode || saving}
+              title={
+                cropMode
+                  ? "请先完成或取消裁切，再进入创意工作台。"
+                  : "在统一工作台中使用扩图、智能消除与局部生成。"
+              }
+              className={toolButtonBase}
+            >
+              AI 创意工作台
             </button>
             <button
               type="button"
@@ -855,20 +923,7 @@ function EditorStage({
           </p>
         </section>
 
-        <div className="editor-history">
-          <HistoryBar
-            canUndo={selectCanUndo(state)}
-            canRedo={selectCanRedo(state)}
-            canReset={selectCanReset(state)}
-            busy={saving}
-            items={state.history}
-            activeRevisionId={state.activeRevisionId}
-            onUndo={() => void undo()}
-            onRedo={() => void redo()}
-            onReset={() => void handleReset()}
-            onActivate={(revisionId) => void activate(revisionId)}
-          />
-        </div>
+        <div className="editor-history">{historyBar}</div>
       </div>
 
       <AnalysisPanel
@@ -917,7 +972,7 @@ function EditorStage({
         aria-label="参数面板"
         className={`editor-adjustment-panel min-w-0 ${
           panelOpen ? "lg:col-start-2 lg:row-start-1 xl:col-start-3" : ""
-        }`}
+        } ${studioOpen ? "hidden" : ""}`}
       >
         <div
           className="editor-adjustment-scroll rounded-2xl border border-white/8 bg-black/20 p-4"
