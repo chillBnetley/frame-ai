@@ -17,6 +17,7 @@ const CATEGORY_LABELS: Record<GenerativeErrorCategory, string> = {
 /** Every `generative_*` code the API can return, harvested from services/api. */
 const BACKEND_GENERATIVE_CODES = [
   "generative_base_changed",
+  "generative_base_geometry_unsupported",
   "generative_blank_output",
   "generative_capability_unsupported",
   "generative_consent_required",

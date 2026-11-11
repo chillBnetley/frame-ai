@@ -7,7 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -42,8 +42,10 @@ from app.imaging.generative_removal import (
 )
 from app.imaging.loader import load_image
 from app.imaging.output import encode_image, to_uint8
+from app.imaging.pipeline import render as render_image
 from app.models.generative import (
     GeneratedAssetRecord,
+    GenerativeBaseMode,
     GenerativeCapabilitiesResponse,
     GenerativeErrorInfo,
     GenerativeOutpaintParams,
@@ -60,6 +62,7 @@ from app.models.generative import (
     GenerativeTaskStatusResponse,
     GenerativeTaskType,
 )
+from app.models.recipe import EditRecipe, recipe_hash
 from app.models.sessions import CreateRevisionRequest, SessionState
 from app.repositories.generative_repo import (
     DuplicateGeneratedAssetError,
@@ -162,6 +165,21 @@ class GenerativeTaskService:
             else str(session.revision.base_generated_asset_id)
         )
         mask_id = None if request.mask_id is None else str(request.mask_id)
+        if request.base_mode is GenerativeBaseMode.GRADED:
+            # Masks and outpaint geometry are base-normalised, so a flattened
+            # input may not change the frame. Crop/rotation support needs mask
+            # reprojection and is deliberately out of scope.
+            adjustments = session.revision.recipe.adjustments
+            if adjustments.crop is not None or adjustments.rotation_deg != 0:
+                raise AppError(
+                    422,
+                    "generative_base_geometry_unsupported",
+                    "A graded input base must not carry crop or rotation.",
+                    {
+                        "hasCrop": adjustments.crop is not None,
+                        "rotationDeg": adjustments.rotation_deg,
+                    },
+                )
         if mask_id is None and request.task_type in (
             GenerativeTaskType.REMOVE,
             GenerativeTaskType.LOCAL_EDIT,
@@ -269,6 +287,7 @@ class GenerativeTaskService:
             str(session.image_id),
             str(session.active_revision_id),
             base_generated_asset_id,
+            request.base_mode,
             request.task_type,
             plan.instruction,
             params_payload,
@@ -308,6 +327,7 @@ class GenerativeTaskService:
             session_id=str(session.session_id),
             base_revision_id=str(session.active_revision_id),
             base_generated_asset_id=base_generated_asset_id,
+            base_mode=request.base_mode,
             task_type=request.task_type,
             instruction=plan.instruction,
             plan_json=plan.model_dump_json(),
@@ -578,9 +598,16 @@ class GenerativeTaskService:
         capabilities = self.provider.capabilities()
         base = self.assets.resolve(task.image_id, task.base_generated_asset_id)
         self.repository.set_stage(task.id, GenerativeTaskStage.PREPARING_INPUT.value)
+        recipe = self._graded_input_recipe(task)
         input_bytes, input_pixels, width, height = self._prepare_input(
             base,
             capabilities.max_output_pixels,
+            recipe=recipe,
+        )
+        self.repository.set_input_provenance(
+            task.id,
+            input_sha256=hashlib.sha256(input_bytes).hexdigest(),
+            input_recipe_hash=None if recipe is None else recipe_hash(recipe),
         )
         inner_mask = self._load_mask(task, width, height)
         if task.task_type in (GenerativeTaskType.REMOVE, GenerativeTaskType.LOCAL_EDIT):
@@ -742,10 +769,24 @@ class GenerativeTaskService:
         except Exception:
             logger.warning("generative_provider_cancel_failed job_id=%s", job.provider_job_id)
 
+    def _graded_input_recipe(self, task: GenerativeTaskRecord) -> EditRecipe | None:
+        if task.base_mode is not GenerativeBaseMode.GRADED:
+            return None
+        if task.base_revision_id is None:
+            raise AppError(
+                409,
+                "generative_base_changed",
+                "The revision this task was based on no longer exists.",
+            )
+        revision = self.sessions.get_revision(task.session_id, UUID(task.base_revision_id))
+        return revision.recipe
+
     def _prepare_input(
         self,
         base: ResolvedImage,
         provider_max_pixels: int,
+        *,
+        recipe: EditRecipe | None = None,
     ) -> tuple[bytes, NDArray[np.uint8], int, int]:
         limit = min(self.settings.generative_max_input_pixels, provider_max_pixels)
         try:
@@ -757,7 +798,26 @@ class GenerativeTaskService:
                 "The image is larger than the generative pipeline currently accepts.",
                 {"maxPixels": limit, "reason": exc.code},
             ) from exc
-        pixels = to_uint8(image.rgb)
+        if recipe is None:
+            pixels = to_uint8(image.rgb)
+            width = image.width
+            height = image.height
+        else:
+            rendered = render_image(
+                image,
+                recipe.adjustments,
+                image_sha256=base.sha256,
+                curve=recipe.curve,
+                hsl=recipe.hsl,
+                color_grading=recipe.color_grading,
+                masks=recipe.masks,
+                local_adjustments=recipe.local_adjustments,
+                quality="export",
+            )
+            # bit_depth defaults to 8, so the pipeline already quantised.
+            pixels = cast(NDArray[np.uint8], rendered.rgb)
+            width = rendered.width
+            height = rendered.height
         data = encode_image(pixels, image_format="png")
         if len(data) > self.settings.generative_max_output_bytes:
             raise AppError(
@@ -766,7 +826,7 @@ class GenerativeTaskService:
                 "The prepared input exceeds the configured generative size limit.",
                 {"bytes": len(data)},
             )
-        return data, pixels, image.width, image.height
+        return data, pixels, width, height
 
     def _validate_output(
         self,
@@ -1021,6 +1081,8 @@ class GenerativeTaskService:
             base_generated_asset_id=(
                 None if task.base_generated_asset_id is None else UUID(task.base_generated_asset_id)
             ),
+            base_mode=task.base_mode,
+            input_sha256=task.input_sha256,
             created_at=task.created_at,
             updated_at=task.updated_at,
             started_at=task.started_at,
@@ -1056,6 +1118,7 @@ class GenerativeTaskService:
         image_id: str,
         base_revision_id: str,
         base_generated_asset_id: str | None,
+        base_mode: GenerativeBaseMode,
         task_type: GenerativeTaskType,
         instruction: str,
         params: dict[str, Any],
@@ -1068,6 +1131,7 @@ class GenerativeTaskService:
                 "image": image_id,
                 "baseRevision": base_revision_id,
                 "baseAsset": base_generated_asset_id,
+                "baseMode": base_mode.value,
                 "taskType": task_type.value,
                 "instruction": instruction,
                 "params": params,

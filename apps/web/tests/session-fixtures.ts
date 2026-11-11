@@ -25,6 +25,8 @@ interface SessionStateOptions {
   canUndo?: boolean;
   canRedo?: boolean;
   sessionId?: string;
+  baseWidth?: number;
+  baseHeight?: number;
 }
 
 export function sessionState(options: SessionStateOptions = {}): SessionState {
@@ -43,6 +45,8 @@ export function sessionState(options: SessionStateOptions = {}): SessionState {
       parentId: revisionNo > 1 ? NEXT_REVISION_ID : null,
       source: options.source ?? (revisionNo > 1 ? "user" : "initial"),
       recipe: normalizeRecipe(options.recipe),
+      baseWidth: options.baseWidth ?? 800,
+      baseHeight: options.baseHeight ?? 600,
       createdAt: "2026-11-02T00:00:00Z",
     },
   };

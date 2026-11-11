@@ -28,6 +28,8 @@ interface HarnessProps {
     width: number;
     height: number;
   } | null>;
+  onUseSemanticForGenerative?: (kind: "person" | "sky") => Promise<void>;
+  generativeMaskBlockedReason?: string | null;
   previewUrl?: string | null;
   previewWidth?: number;
   previewHeight?: number;
@@ -43,6 +45,8 @@ function Harness({
   layersEnabled = false,
   semanticMasks,
   onRequestSemanticMask,
+  onUseSemanticForGenerative,
+  generativeMaskBlockedReason,
   previewUrl = "/api/v1/previews/mock",
   previewWidth = 800,
   previewHeight = 600,
@@ -64,6 +68,8 @@ function Harness({
       layersEnabled={layersEnabled}
       semanticMasks={semanticMasks}
       onRequestSemanticMask={onRequestSemanticMask}
+      onUseSemanticForGenerative={onUseSemanticForGenerative}
+      generativeMaskBlockedReason={generativeMaskBlockedReason}
       onChange={(next) => {
         onChange?.(next);
         setRecipe(next);
@@ -527,5 +533,61 @@ describe("LocalAdjustmentsPanel semantic masks", () => {
     });
     expect(recipe.localAdjustments[0]?.maskId).toBe(recipe.masks[0]?.id);
     expect(screen.getByText(/人物（语义）/)).toBeInTheDocument();
+  });
+});
+
+describe("LocalAdjustmentsPanel semantic masks for AI generation", () => {
+  const SEMANTIC_ON = {
+    enabled: true,
+    person: true,
+    sky: true,
+    models: { person: "1", sky: "1" },
+  };
+
+  it("hands the kind to the studio entry without touching the recipe", async () => {
+    const onUseSemanticForGenerative = vi.fn(async () => {});
+    const { onChange } = renderPanel({
+      semanticMasks: SEMANTIC_ON,
+      onUseSemanticForGenerative,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "天空用于 AI 生成" }));
+
+    await waitFor(() => expect(onUseSemanticForGenerative).toHaveBeenCalledWith("sky"));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("disables both entries and explains why when the base is a generated asset", () => {
+    renderPanel({
+      semanticMasks: SEMANTIC_ON,
+      onUseSemanticForGenerative: vi.fn(async () => {}),
+      generativeMaskBlockedReason: "当前基准是已生成的画面，AI 语义蒙版只能绑定原图。",
+    });
+
+    expect(screen.getByRole("button", { name: "人物用于 AI 生成" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "天空用于 AI 生成" })).toBeDisabled();
+    expect(
+      screen.getByText("当前基准是已生成的画面，AI 语义蒙版只能绑定原图。"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "人物蒙版" })).toBeEnabled();
+  });
+
+  it("keeps the entry out of the panel when the studio callback is absent", () => {
+    renderPanel({ semanticMasks: SEMANTIC_ON });
+
+    expect(screen.queryByRole("button", { name: /用于 AI 生成/ })).toBeNull();
+  });
+
+  it("surfaces the backend reason when the mask cannot be created", async () => {
+    renderPanel({
+      semanticMasks: SEMANTIC_ON,
+      onUseSemanticForGenerative: async () => {
+        throw new Error("语义识别不可用。");
+      },
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "人物用于 AI 生成" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("语义识别不可用。");
   });
 });

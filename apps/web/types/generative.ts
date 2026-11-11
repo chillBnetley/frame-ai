@@ -11,6 +11,7 @@ export type GenerativeMaskQuality = components["schemas"]["GenerativeMaskQuality
 export type GenerativeMaskKind = components["schemas"]["GenerativeMaskKind"];
 
 export type GenerativeTaskType = components["schemas"]["GenerativeTaskType"];
+export type GenerativeBaseMode = components["schemas"]["GenerativeBaseMode"];
 export type GenerativeTaskStatus = components["schemas"]["GenerativeTaskStatus"];
 export type GenerativeTaskStage = components["schemas"]["GenerativeTaskStage"];
 export type GenerativeResultStatus = components["schemas"]["GenerativeResultStatus"];

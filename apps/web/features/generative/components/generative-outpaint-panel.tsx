@@ -82,6 +82,7 @@ export function GenerativeOutpaintPanel({
     await generative.submit({
       sessionId,
       taskType: "outpaint",
+      baseMode: "base",
       instruction: instruction.trim(),
       maskId: maskId ?? null,
       consent: true,

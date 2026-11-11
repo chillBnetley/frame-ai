@@ -76,6 +76,9 @@ export interface EditorState {
   draft: EditorRecipe;
   activeRevisionId: string | null;
   headRevisionId: string | null;
+  baseWidth: number;
+  baseHeight: number;
+  baseGeneratedAssetId: string | null;
   canUndo: boolean;
   canRedo: boolean;
   history: RevisionSummary[];
@@ -184,6 +187,9 @@ export function createInitialEditorState(): EditorState {
     draft: recipe,
     activeRevisionId: null,
     headRevisionId: null,
+    baseWidth: 0,
+    baseHeight: 0,
+    baseGeneratedAssetId: null,
     canUndo: false,
     canRedo: false,
     history: [],
@@ -205,6 +211,9 @@ function fromSession(session: SessionState) {
     draft: recipe,
     activeRevisionId: session.activeRevisionId,
     headRevisionId: session.headRevisionId,
+    baseWidth: session.revision.baseWidth,
+    baseHeight: session.revision.baseHeight,
+    baseGeneratedAssetId: session.revision.baseGeneratedAssetId ?? null,
     canUndo: session.canUndo,
     canRedo: session.canRedo,
   };
@@ -245,6 +254,9 @@ function applySavedState(
     draft: upToDate ? committed : state.draft,
     activeRevisionId: session.activeRevisionId,
     headRevisionId: session.headRevisionId,
+    baseWidth: session.revision.baseWidth,
+    baseHeight: session.revision.baseHeight,
+    baseGeneratedAssetId: session.revision.baseGeneratedAssetId ?? null,
     canUndo: session.canUndo,
     canRedo: session.canRedo,
     save: upToDate

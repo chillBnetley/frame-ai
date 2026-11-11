@@ -4,8 +4,10 @@ import axe from "axe-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreativeStudio } from "@/features/generative/studio/creative-studio";
+import { buildStyleInstruction } from "@/features/generative/style-instruction";
 import { ApiClientError } from "@/lib/api/client";
 import * as generativeApi from "@/lib/api/generative";
+import * as personalStyleApi from "@/lib/api/personal-style";
 import type {
   GenerativeCapabilitiesResponse,
   GenerativeMaskView,
@@ -14,10 +16,18 @@ import type {
   GenerativeTaskStatusResponse,
 } from "@/types/generative";
 import type { SessionState } from "@/types/session";
+import type { AnalysisReport } from "@/types/analysis";
+import { analysisReport } from "./analysis-fixtures";
+import { PERSONAL_STYLE_ID, personalStyleItem } from "./personal-style-fixtures";
+
+vi.mock("@/lib/api/personal-style", () => ({
+  listPersonalStyles: vi.fn(),
+}));
 
 vi.mock("@/lib/api/generative", () => ({
   getGenerativeCapabilities: vi.fn(),
   listGenerativeMasks: vi.fn(),
+  createGenerativeMask: vi.fn(),
   createGenerativeTask: vi.fn(),
   getGenerativeTask: vi.fn(),
   cancelGenerativeTask: vi.fn(),
@@ -31,12 +41,14 @@ vi.mock("@/lib/api/generative", () => ({
 
 const mockGetCapabilities = vi.mocked(generativeApi.getGenerativeCapabilities);
 const mockListMasks = vi.mocked(generativeApi.listGenerativeMasks);
+const mockCreateMask = vi.mocked(generativeApi.createGenerativeMask);
 const mockCreateTask = vi.mocked(generativeApi.createGenerativeTask);
 const mockPollTask = vi.mocked(generativeApi.pollGenerativeTask);
 const mockAcceptResult = vi.mocked(generativeApi.acceptGenerativeResult);
 const mockRejectResult = vi.mocked(generativeApi.rejectGenerativeResult);
 const mockCancelTask = vi.mocked(generativeApi.cancelGenerativeTask);
 const mockRetryTask = vi.mocked(generativeApi.retryGenerativeTask);
+const mockListStyles = vi.mocked(personalStyleApi.listPersonalStyles);
 
 const MOCK_CAPABILITIES: GenerativeCapabilitiesResponse = {
   provider: "mock",
@@ -86,6 +98,7 @@ const MOCK_TASK_CREATED: GenerativeTaskCreated = {
 const MOCK_TASK_PROCESSING: GenerativeTaskStatusResponse = {
   taskId: "task-001",
   taskType: "outpaint",
+  baseMode: "base",
   status: "processing",
   stage: "submitting",
   instruction: "",
@@ -145,6 +158,8 @@ const MOCK_SESSION_STATE: SessionState = {
       localAdjustments: [],
     },
     baseGeneratedAssetId: "asset-001",
+    baseWidth: 800,
+    baseHeight: 600,
     generativeTaskId: "task-001",
     createdAt: "2026-11-10T12:00:05Z",
   },
@@ -161,22 +176,41 @@ async function severeViolations(container: HTMLElement) {
 
 interface RenderOptions {
   initialMaskId?: string | null;
+  baseWidth?: number;
+  baseHeight?: number;
+  gradedBaseAvailable?: boolean;
+  analysisReport?: AnalysisReport | null;
+  subjectMaskAvailable?: boolean;
+  initialCapability?: "outpaint" | "remove" | "local_edit";
   onResultAccepted?: (state: SessionState) => void;
   onResultRejected?: () => void;
   onExit?: () => void;
 }
 
 function renderStudio(options: RenderOptions = {}) {
-  const { initialMaskId = null, onResultAccepted, onResultRejected, onExit } = options;
+  const {
+    initialMaskId = null,
+    baseWidth = 800,
+    baseHeight = 600,
+    gradedBaseAvailable = true,
+    analysisReport = null,
+    subjectMaskAvailable = false,
+    initialCapability,
+    onResultAccepted,
+    onResultRejected,
+    onExit,
+  } = options;
   const utils = render(
     <CreativeStudio
       sessionId="sess-123"
       previewImageUrl="/preview/current.png"
-      previewWidth={800}
-      previewHeight={600}
+      baseWidth={baseWidth}
+      baseHeight={baseHeight}
+      gradedBaseAvailable={gradedBaseAvailable}
+      analysisReport={analysisReport}
+      subjectMaskAvailable={subjectMaskAvailable}
+      initialCapability={initialCapability}
       originalImageUrl="/images/original.png"
-      imageWidth={800}
-      imageHeight={600}
       initialMaskId={initialMaskId}
       onResultAccepted={onResultAccepted}
       onResultRejected={onResultRejected}
@@ -217,6 +251,7 @@ function pendingPoll(next: GenerativeTaskStatusResponse) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetCapabilities.mockResolvedValue(MOCK_CAPABILITIES);
+  mockListStyles.mockResolvedValue({ styles: [] });
   mockListMasks.mockResolvedValue({ items: [mask("mask-001", "brush")] });
   mockCreateTask.mockResolvedValue(MOCK_TASK_CREATED);
   mockPollTask.mockResolvedValue(MOCK_TASK_SUCCEEDED);
@@ -545,5 +580,290 @@ describe("CreativeStudio error guidance", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("蒙版错误");
     expect(alert).toHaveTextContent("下一步：重新绘制或重新选择蒙版");
+  });
+});
+
+describe("CreativeStudio graded input base", () => {
+  function baseModeGroup() {
+    return screen.getByRole("radiogroup", { name: "输入基准" });
+  }
+
+  it("keeps the untouched base by default", async () => {
+    const { user } = renderStudio();
+    await awaitCapabilities();
+
+    expect(within(baseModeGroup()).getByRole("radio", { name: "当前基准" })).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: "16:9" }));
+    await user.click(submitButton());
+
+    await waitFor(() => expect(mockCreateTask).toHaveBeenCalledTimes(1));
+    expect(payload()).toMatchObject({ taskType: "outpaint", baseMode: "base" });
+  });
+
+  it("sends baseMode=graded and promises byte-level write-back of the flattened pixels", async () => {
+    const { user } = renderStudio();
+    await awaitCapabilities();
+
+    await user.click(within(baseModeGroup()).getByRole("radio", { name: "已调色版本" }));
+    expect(screen.getByText(/保护区按压平后的已调色像素逐字节写回/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: /^AI 智能消除/ }));
+    await user.click(screen.getByRole("button", { name: "开始 AI 智能消除" }));
+
+    await waitFor(() => expect(mockCreateTask).toHaveBeenCalledTimes(1));
+    expect(payload()).toMatchObject({ taskType: "remove", baseMode: "graded" });
+  });
+
+  it("disables the graded base when the committed recipe carries crop or rotation", async () => {
+    const { user } = renderStudio({ gradedBaseAvailable: false });
+    await awaitCapabilities();
+
+    const graded = within(baseModeGroup()).getByRole("radio", { name: "已调色版本" });
+    expect(graded).toBeDisabled();
+    expect(graded).not.toBeChecked();
+    expect(within(baseModeGroup()).getByRole("radio", { name: "当前基准" })).toBeChecked();
+    expect(screen.getByText(/当前版本含裁切或旋转，已调色基准暂不可用/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "16:9" }));
+    await user.click(submitButton());
+
+    await waitFor(() => expect(mockCreateTask).toHaveBeenCalledTimes(1));
+    expect(payload()).toMatchObject({ baseMode: "base" });
+  });
+});
+
+describe("CreativeStudio analysis suggestions", () => {
+  it("fills the capability and instruction without submitting", async () => {
+    const report = analysisReport({
+      issues: [
+        {
+          id: "detail",
+          type: "low_detail",
+          severity: "high",
+          confidence: 0.9,
+          evidence: "主体区域纹理不足。",
+          suggestion: null,
+          regionIds: ["region_001"],
+        },
+      ],
+    });
+    const { user } = renderStudio({ analysisReport: report });
+    await awaitCapabilities();
+
+    await user.click(screen.getByRole("button", { name: "填入局部生成指令" }));
+
+    expect(screen.getByRole("radio", { name: /^AI 局部生成/ })).toBeChecked();
+    expect(screen.getByLabelText("生成指令（必填）")).toHaveValue(
+      "在选定区域补回真实纹理细节，保持原有光线与色彩",
+    );
+    expect(screen.getByText("关联主体：人物，可据此绘制矩形蒙版。")).toBeInTheDocument();
+    expect(mockCreateTask).not.toHaveBeenCalled();
+  });
+
+  it("fills an outpaint instruction for a composition defect", async () => {
+    const report = analysisReport({
+      issues: [
+        {
+          id: "space",
+          type: "negative_space_issue",
+          severity: "medium",
+          confidence: 0.7,
+          evidence: "留白偏少。",
+          suggestion: null,
+          regionIds: [],
+        },
+      ],
+    });
+    const { user } = renderStudio({ analysisReport: report });
+    await awaitCapabilities();
+
+    await user.click(screen.getByRole("button", { name: "填入扩图指令" }));
+
+    expect(screen.getByRole("radio", { name: /^AI 画幅扩充/ })).toBeChecked();
+    expect(screen.getByLabelText("扩图指示提示词（可选）")).toHaveValue(
+      "向外扩展画面补足留白，保持主体位置、透视与原有光线一致",
+    );
+    expect(mockCreateTask).not.toHaveBeenCalled();
+  });
+
+  it("keeps exposure advice in 参数精修 instead of offering a generation action", async () => {
+    renderStudio({ analysisReport: analysisReport() });
+    await awaitCapabilities();
+
+    expect(screen.getByText("建议在参数精修中处理")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^填入/ })).toBeNull();
+    expect(screen.getByText("整体欠曝")).toBeInTheDocument();
+    expect(
+      screen.getByText(/提高整体曝光或针对暗部做适度提亮。/),
+    ).toBeInTheDocument();
+    expect(mockCreateTask).not.toHaveBeenCalled();
+  });
+
+  it("hides the block when no analysis report is available", async () => {
+    renderStudio();
+    await awaitCapabilities();
+
+    expect(screen.queryByRole("heading", { name: "分析建议" })).toBeNull();
+  });
+});
+
+describe("CreativeStudio personal style presets", () => {
+  const STYLE_NAME = "我的风格（Visual DNA）";
+
+  async function openLocalEdit() {
+    const utils = renderStudio();
+    await awaitCapabilities();
+    await utils.user.click(screen.getByRole("radio", { name: /^AI 局部生成/ }));
+    return utils;
+  }
+
+  it("fills the style instruction and sends it only after an explicit submit", async () => {
+    mockListStyles.mockResolvedValue({
+      styles: [personalStyleItem({ status: "published" })],
+    });
+    const { user } = await openLocalEdit();
+
+    await user.selectOptions(
+      await screen.findByRole("combobox", { name: STYLE_NAME }),
+      PERSONAL_STYLE_ID,
+    );
+
+    const instruction = screen.getByLabelText("生成指令（必填）");
+    expect(instruction).toHaveValue(buildStyleInstruction(personalStyleItem({ status: "published" })));
+    expect(screen.getByText(/风格指令会随画面一起发送到该 Provider/)).toBeInTheDocument();
+    expect(mockCreateTask).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "开始 AI 局部生成" }));
+
+    await waitFor(() => expect(mockCreateTask).toHaveBeenCalledTimes(1));
+    expect(payload()).toMatchObject({
+      taskType: "local_edit",
+      instruction: buildStyleInstruction(personalStyleItem({ status: "published" })),
+    });
+  });
+
+  it("offers only published and enabled styles", async () => {
+    mockListStyles.mockResolvedValue({
+      styles: [
+        personalStyleItem({ id: "draft", name: "草稿风格", status: "draft" }),
+        personalStyleItem({ id: "off", name: "停用风格", status: "published", enabled: false }),
+        personalStyleItem({ status: "published" }),
+      ],
+    });
+    await openLocalEdit();
+
+    const select = await screen.findByRole("combobox", { name: STYLE_NAME });
+    expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "不使用风格",
+      "克制的城市叙事",
+    ]);
+  });
+
+  it("keeps the edited instruction when the preset is cleared", async () => {
+    mockListStyles.mockResolvedValue({
+      styles: [personalStyleItem({ status: "published" })],
+    });
+    const { user } = await openLocalEdit();
+
+    const select = await screen.findByRole("combobox", { name: STYLE_NAME });
+    await user.selectOptions(select, PERSONAL_STYLE_ID);
+    await user.clear(screen.getByLabelText("生成指令（必填）"));
+    await user.type(screen.getByLabelText("生成指令（必填）"), "把墙面换成风化砖墙");
+    await user.selectOptions(select, "");
+
+    expect(screen.getByLabelText("生成指令（必填）")).toHaveValue("把墙面换成风化砖墙");
+    expect(screen.queryByText(/风格指令会随画面一起发送到该 Provider/)).toBeNull();
+  });
+
+  it("explains when Visual DNA has no usable style", async () => {
+    await openLocalEdit();
+
+    expect(
+      await screen.findByText(/Visual DNA 中暂无已发布并启用的个人风格/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: STYLE_NAME })).toBeNull();
+  });
+
+  it("keeps the preset out of the other capabilities", async () => {
+    mockListStyles.mockResolvedValue({
+      styles: [personalStyleItem({ status: "published" })],
+    });
+    renderStudio();
+    await awaitCapabilities();
+
+    expect(screen.queryByRole("combobox", { name: STYLE_NAME })).toBeNull();
+  });
+});
+
+describe("CreativeStudio subject masks", () => {
+  const SUBJECT_REPORT = analysisReport({
+    issues: [
+      {
+        id: "detail",
+        type: "low_detail",
+        severity: "high",
+        confidence: 0.9,
+        evidence: "主体区域纹理不足。",
+        suggestion: null,
+        regionIds: ["region_001"],
+      },
+    ],
+  });
+
+  it("creates a rect mask from the analysis subject and selects it", async () => {
+    mockCreateMask.mockResolvedValue(mask("subject-mask-001", "rect"));
+    const { user } = renderStudio({
+      analysisReport: SUBJECT_REPORT,
+      subjectMaskAvailable: true,
+    });
+    await awaitCapabilities();
+
+    await user.click(screen.getByRole("button", { name: "填入局部生成指令" }));
+    await user.click(screen.getByRole("button", { name: "用主体区域建蒙版" }));
+
+    await waitFor(() => expect(mockCreateMask).toHaveBeenCalledTimes(1));
+    expect(mockCreateMask.mock.calls[0][0]).toEqual({
+      sessionId: "sess-123",
+      kind: "rect",
+      definition: {
+        region: { x: 0.2, y: 0.1, width: 0.4, height: 0.7 },
+        expand: 0,
+      },
+      feather: 0,
+      inverted: false,
+    });
+    expect(await screen.findByText("当前已选蒙版: subject-...")).toBeInTheDocument();
+    expect(mockCreateTask).not.toHaveBeenCalled();
+  });
+
+  it("offers no subject mask when the base is a generated asset", async () => {
+    renderStudio({ analysisReport: SUBJECT_REPORT });
+    await awaitCapabilities();
+
+    expect(screen.getByText("关联主体：人物，可据此绘制矩形蒙版。")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "用主体区域建蒙版" })).toBeNull();
+  });
+
+  it("reports the backend reason when the subject mask is rejected", async () => {
+    mockCreateMask.mockRejectedValue(
+      new ApiClientError("generative_mask_invalid", "蒙版区域过小。", 422),
+    );
+    const { user } = renderStudio({
+      analysisReport: SUBJECT_REPORT,
+      subjectMaskAvailable: true,
+    });
+    await awaitCapabilities();
+
+    await user.click(screen.getByRole("button", { name: "用主体区域建蒙版" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("蒙版区域过小。");
+  });
+
+  it("opens on the capability the caller presets", async () => {
+    renderStudio({ initialCapability: "remove", initialMaskId: "mask-001" });
+    await awaitCapabilities();
+
+    expect(screen.getByRole("radio", { name: /^AI 智能消除/ })).toBeChecked();
+    expect(screen.getByRole("button", { name: "开始 AI 智能消除" })).toBeEnabled();
   });
 });

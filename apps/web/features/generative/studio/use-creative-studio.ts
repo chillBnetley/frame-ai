@@ -5,6 +5,7 @@ import { useCallback, useMemo } from "react";
 import { computeOutpaintGeometry, type OutpaintGeometry } from "@/lib/generative-canvas";
 import { generativeMaskImageUrl } from "@/lib/api/generative";
 import type {
+  GenerativeBaseMode,
   GenerativeCapabilitiesResponse,
   GenerativeTaskRequest,
 } from "@/types/generative";
@@ -13,19 +14,27 @@ import type { OutpaintFormValues } from "../components/outpaint-params-form";
 import { useGenerativeCapabilities } from "../use-generative-capabilities";
 import { useGenerativeMasks, type GenerativeMasksController } from "../use-generative-masks";
 import { useGenerativeTask, type GenerativeTaskController } from "../use-generative-task";
+import { usePersonalStyleOptions } from "../use-personal-style-options";
 import { useStudioState, type StudioCapability, type StudioController } from "./use-studio-state";
+import type { PersonalStyleItem } from "@/types/personal-style";
 
 export interface CreativeStudioOptions {
   sessionId: string;
-  baseWidth?: number;
-  baseHeight?: number;
+  baseWidth: number;
+  baseHeight: number;
+  gradedBaseAvailable: boolean;
   initialMaskId?: string | null;
+  initialCapability?: StudioCapability;
+  /** False when the base is a generated asset, so analysis bboxes no longer line up. */
+  subjectMaskAvailable?: boolean;
   onResultAccepted?: (state: SessionState) => void;
   onResultRejected?: () => void;
 }
 
 export interface StudioValidationInput {
   capability: StudioCapability;
+  baseMode: GenerativeBaseMode;
+  gradedBaseAvailable: boolean;
   instruction: string;
   maskId: string | null;
   geometry: OutpaintGeometry;
@@ -33,6 +42,8 @@ export interface StudioValidationInput {
 }
 
 const OUTPAINT_NEEDS_FRAME_MESSAGE = "请选择画幅比例或增加至少一个方向的外扩边距。";
+const GRADED_BASE_UNAVAILABLE_MESSAGE =
+  "当前版本含裁切或旋转，无法用已调色版本作为生成基准，请改用当前基准。";
 
 /**
  * Client-side gate for the failures that never need a round-trip: missing
@@ -41,6 +52,10 @@ const OUTPAINT_NEEDS_FRAME_MESSAGE = "请选择画幅比例或增加至少一个
  */
 export function validateStudioRequest(input: StudioValidationInput): string | null {
   const prompt = input.instruction.trim();
+
+  if (input.baseMode === "graded" && !input.gradedBaseAvailable) {
+    return GRADED_BASE_UNAVAILABLE_MESSAGE;
+  }
 
   if (input.capability === "outpaint") {
     if (!input.geometry.isExpanded) {
@@ -83,6 +98,7 @@ export function buildStudioTaskRequest(
     return {
       sessionId: input.sessionId,
       taskType: "outpaint",
+      baseMode: input.baseMode,
       instruction: prompt,
       maskId: input.maskId,
       consent: true,
@@ -103,6 +119,7 @@ export function buildStudioTaskRequest(
   return {
     sessionId: input.sessionId,
     taskType: input.capability,
+    baseMode: input.baseMode,
     instruction: input.capability === "remove" ? prompt || "remove marked object" : prompt,
     maskId: input.maskId,
     consent: true,
@@ -179,6 +196,8 @@ const CAPABILITY_COPY: Record<
 export interface CreativeStudioController {
   studio: StudioController;
   capability: StudioCapability;
+  baseMode: GenerativeBaseMode;
+  gradedBaseAvailable: boolean;
   stageLabels: Record<string, string>;
   baseWidth: number;
   baseHeight: number;
@@ -186,6 +205,8 @@ export interface CreativeStudioController {
   masks: GenerativeMasksController;
   maskImageUrl: string | null;
   capabilities: GenerativeCapabilitiesResponse | null;
+  styleOptions: PersonalStyleItem[];
+  subjectMaskAvailable: boolean;
   task: GenerativeTaskController;
   validationMessage: string | null;
   canSubmit: boolean;
@@ -197,17 +218,24 @@ export interface CreativeStudioController {
 export function useCreativeStudio(options: CreativeStudioOptions): CreativeStudioController {
   const {
     sessionId,
-    baseWidth = 1920,
-    baseHeight = 1080,
+    baseWidth,
+    baseHeight,
+    gradedBaseAvailable,
     initialMaskId = null,
+    initialCapability,
+    subjectMaskAvailable = false,
     onResultAccepted,
     onResultRejected,
   } = options;
 
-  const studio = useStudioState();
+  const studio = useStudioState(initialCapability);
   const capabilities = useGenerativeCapabilities();
+  const styleOptions = usePersonalStyleOptions();
   const masks = useGenerativeMasks(sessionId, initialMaskId);
   const capability = studio.state.capability;
+  // A crop/rotation recipe cannot be flattened without reprojection, so the
+  // switch falls back to the untouched base instead of sending a bad request.
+  const baseMode: GenerativeBaseMode = gradedBaseAvailable ? studio.state.baseMode : "base";
 
   const task = useGenerativeTask({
     copy: CAPABILITY_COPY[capability],
@@ -230,6 +258,8 @@ export function useCreativeStudio(options: CreativeStudioOptions): CreativeStudi
 
   const validationMessage = validateStudioRequest({
     capability,
+    baseMode,
+    gradedBaseAvailable,
     instruction: studio.state.instruction,
     maskId: masks.selectedMaskId,
     geometry,
@@ -245,6 +275,8 @@ export function useCreativeStudio(options: CreativeStudioOptions): CreativeStudi
       buildStudioTaskRequest({
         sessionId,
         capability,
+        baseMode,
+        gradedBaseAvailable,
         instruction: studio.state.instruction,
         maskId: masks.selectedMaskId,
         geometry,
@@ -253,9 +285,11 @@ export function useCreativeStudio(options: CreativeStudioOptions): CreativeStudi
       }),
     );
   }, [
+    baseMode,
     capabilities,
     capability,
     geometry,
+    gradedBaseAvailable,
     masks.selectedMaskId,
     notify,
     sessionId,
@@ -280,6 +314,8 @@ export function useCreativeStudio(options: CreativeStudioOptions): CreativeStudi
   return {
     studio,
     capability,
+    baseMode,
+    gradedBaseAvailable,
     stageLabels: CAPABILITY_STAGE_LABELS[capability],
     baseWidth,
     baseHeight,
@@ -287,6 +323,8 @@ export function useCreativeStudio(options: CreativeStudioOptions): CreativeStudi
     masks,
     maskImageUrl,
     capabilities,
+    styleOptions,
+    subjectMaskAvailable,
     task,
     validationMessage,
     canSubmit: validationMessage === null,

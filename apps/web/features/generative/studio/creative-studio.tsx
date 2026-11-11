@@ -1,25 +1,33 @@
 "use client";
 
-import { useCallback, useId, useRef, type ReactNode } from "react";
+import { useCallback, useId, useMemo, useRef, type ReactNode } from "react";
 
 import { GenerativeTaskStatus } from "../components/generative-task-status";
+import { buildGenerativeSuggestions, type GenerativeSuggestion } from "../suggestions";
 import { StudioCanvas } from "./studio-canvas";
 import { StudioError } from "./studio-error";
 import { StudioTaskPanel } from "./studio-task-panel";
 import { StudioToolRail } from "./studio-tool-rail";
 import { CANVAS_ZOOM_STEP } from "@/lib/generative-canvas";
 import { useCreativeStudio, type CreativeStudioController } from "./use-creative-studio";
+import type { StudioCapability } from "./use-studio-state";
+import type { AnalysisReport } from "@/types/analysis";
 import type { SessionState } from "@/types/session";
 
 export interface CreativeStudioProps {
   sessionId: string;
   previewImageUrl?: string | null;
-  previewWidth?: number;
-  previewHeight?: number;
+  /** Base asset dimensions; the preview is downscaled and must not drive geometry. */
+  baseWidth: number;
+  baseHeight: number;
+  /** False when the committed recipe carries crop or rotation. */
+  gradedBaseAvailable: boolean;
   originalImageUrl?: string | null;
-  imageWidth?: number;
-  imageHeight?: number;
+  analysisReport?: AnalysisReport | null;
   initialMaskId?: string | null;
+  initialCapability?: StudioCapability;
+  /** False when the base is a generated asset, so analysis bboxes no longer line up. */
+  subjectMaskAvailable?: boolean;
   onResultAccepted?: (state: SessionState) => void;
   onResultRejected?: () => void;
   onExit?: () => void;
@@ -31,12 +39,14 @@ const CANVAS_HEIGHT_CLASS = "h-[46vh] min-h-64 lg:h-[58vh]";
 export function CreativeStudio({
   sessionId,
   previewImageUrl = null,
-  previewWidth = 0,
-  previewHeight = 0,
+  baseWidth,
+  baseHeight,
+  gradedBaseAvailable,
   originalImageUrl = null,
-  imageWidth = 0,
-  imageHeight = 0,
+  analysisReport = null,
   initialMaskId = null,
+  initialCapability,
+  subjectMaskAvailable = false,
   onResultAccepted,
   onResultRejected,
   onExit,
@@ -45,12 +55,19 @@ export function CreativeStudio({
   const headingId = useId();
   const controller = useCreativeStudio({
     sessionId,
-    baseWidth: previewWidth > 0 ? previewWidth : imageWidth || 1920,
-    baseHeight: previewHeight > 0 ? previewHeight : imageHeight || 1080,
+    baseWidth,
+    baseHeight,
+    gradedBaseAvailable,
     initialMaskId,
+    initialCapability,
+    subjectMaskAvailable,
     onResultAccepted,
     onResultRejected,
   });
+  const suggestions = useMemo(
+    () => buildGenerativeSuggestions(analysisReport),
+    [analysisReport],
+  );
 
   return (
     <StudioShell
@@ -58,6 +75,7 @@ export function CreativeStudio({
       sessionId={sessionId}
       previewImageUrl={previewImageUrl}
       originalImageUrl={originalImageUrl}
+      suggestions={suggestions}
       onExit={onExit}
       historySlot={historySlot}
       headingId={headingId}
@@ -70,6 +88,7 @@ interface StudioShellProps {
   sessionId: string;
   previewImageUrl: string | null;
   originalImageUrl: string | null;
+  suggestions: GenerativeSuggestion[];
   onExit?: () => void;
   historySlot?: ReactNode;
   headingId: string;
@@ -80,6 +99,7 @@ function StudioShell({
   sessionId,
   previewImageUrl,
   originalImageUrl,
+  suggestions,
   onExit,
   historySlot,
   headingId,
@@ -210,6 +230,7 @@ function StudioShell({
           imageUrl={previewImageUrl ?? originalImageUrl}
           baseWidth={baseWidth}
           baseHeight={baseHeight}
+          suggestions={suggestions}
         />
       </div>
 

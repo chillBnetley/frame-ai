@@ -168,6 +168,9 @@ export interface LocalAdjustmentsPanelProps {
   onRequestSemanticMask?: (
     kind: "person" | "sky",
   ) => Promise<SemanticMaskInfo | null>;
+  onUseSemanticForGenerative?: (kind: "person" | "sky") => Promise<void>;
+  /** Set when the session base is a generated asset, which semantic masks cannot bind to. */
+  generativeMaskBlockedReason?: string | null;
   onChange: (recipe: EditorRecipe) => void;
   onCommit: () => void;
 }
@@ -183,6 +186,8 @@ export function LocalAdjustmentsPanel({
   layersEnabled = false,
   semanticMasks,
   onRequestSemanticMask,
+  onUseSemanticForGenerative,
+  generativeMaskBlockedReason = null,
   onChange,
   onCommit,
 }: LocalAdjustmentsPanelProps) {
@@ -192,6 +197,8 @@ export function LocalAdjustmentsPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [semanticBusy, setSemanticBusy] = useState<"person" | "sky" | null>(null);
   const [semanticError, setSemanticError] = useState<string | null>(null);
+  const [generativeBusy, setGenerativeBusy] = useState<"person" | "sky" | null>(null);
+  const [generativeError, setGenerativeError] = useState<string | null>(null);
 
   const items = recipe.localAdjustments;
   const masksById = new Map(recipe.masks.map((mask) => [mask.id, mask]));
@@ -258,6 +265,25 @@ export function LocalAdjustmentsPanel({
       setSemanticError("语义蒙版生成失败，请确认模型可用后重试。");
     } finally {
       setSemanticBusy(null);
+    }
+  };
+
+  const sendToGenerative = async (kind: "person" | "sky") => {
+    if (!onUseSemanticForGenerative || generativeBusy !== null) {
+      return;
+    }
+    setGenerativeError(null);
+    setGenerativeBusy(kind);
+    try {
+      await onUseSemanticForGenerative(kind);
+    } catch (error: unknown) {
+      setGenerativeError(
+        error instanceof Error && error.message
+          ? error.message
+          : "创建 AI 蒙版失败，请稍后重试。",
+      );
+    } finally {
+      setGenerativeBusy(null);
     }
   };
 
@@ -394,6 +420,41 @@ export function LocalAdjustmentsPanel({
               <p role="alert" className="text-[10px] leading-relaxed text-amber-900">
                 {semanticError}
               </p>
+            )}
+            {onUseSemanticForGenerative && (
+              <>
+                <div className="grid grid-cols-2 gap-1">
+                  {(["person", "sky"] as const).map((kind) => {
+                    const blocked =
+                      !semanticMasks[kind] ||
+                      generativeBusy !== null ||
+                      semanticBusy !== null ||
+                      generativeMaskBlockedReason !== null;
+                    return (
+                      <button
+                        key={kind}
+                        type="button"
+                        disabled={blocked}
+                        onClick={() => void sendToGenerative(kind)}
+                        className={addButtonClass(blocked)}
+                      >
+                        {generativeBusy === kind
+                          ? "创建中…"
+                          : `${kind === "person" ? "人物" : "天空"}用于 AI 生成`}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] leading-relaxed text-white/30">
+                  {generativeMaskBlockedReason ??
+                    "会建立一张绑定原图的 AI 蒙版，并直接打开创意工作台的智能消除。"}
+                </p>
+                {generativeError && (
+                  <p role="alert" className="text-[10px] leading-relaxed text-amber-900">
+                    {generativeError}
+                  </p>
+                )}
+              </>
             )}
           </>
         ) : null}

@@ -71,6 +71,7 @@ export function GenerativeLocalEditPanel({
     await generative.submit({
       sessionId,
       taskType: "local_edit",
+      baseMode: "base",
       instruction: prompt,
       maskId: masks.selectedMaskId,
       consent: true,

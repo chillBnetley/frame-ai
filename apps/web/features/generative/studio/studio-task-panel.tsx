@@ -5,8 +5,13 @@ import { useId } from "react";
 import { GenerativeMaskSelect } from "../components/generative-mask-select";
 import { GenerativeTaskResult } from "../components/generative-task-result";
 import { OutpaintParamsForm } from "../components/outpaint-params-form";
+import type { GenerativeSuggestion } from "../suggestions";
+import { buildStyleInstruction } from "../style-instruction";
+import { StudioSuggestions } from "./studio-suggestions";
 import { STUDIO_CAPABILITIES } from "./studio-tool-rail";
 import type { CreativeStudioController } from "./use-creative-studio";
+import { createGenerativeMask } from "@/lib/api/generative";
+import type { GenerativeBaseMode } from "@/types/generative";
 
 export interface StudioTaskPanelProps {
   controller: CreativeStudioController;
@@ -14,6 +19,7 @@ export interface StudioTaskPanelProps {
   imageUrl: string | null;
   baseWidth: number;
   baseHeight: number;
+  suggestions: GenerativeSuggestion[];
 }
 
 const SUBMIT_LABELS: Record<string, string> = {
@@ -86,20 +92,71 @@ const MASK_SECTION: Record<string, { label: string; emptyHint: string; coverage:
 const FIELD_CLASS =
   "w-full bg-neutral-950 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-sky-500 disabled:opacity-50";
 
+const BASE_MODES: { value: GenerativeBaseMode; label: string; hint: string }[] = [
+  {
+    value: "base",
+    label: "当前基准",
+    hint: "直接使用当前版本的基准像素（原图或已采纳的生成图）。",
+  },
+  {
+    value: "graded",
+    label: "已调色版本",
+    hint: "先把当前调色压平成一张全分辨率图，再作为生成输入与保护区写回基准；原图文件不变。",
+  },
+];
+
+const GRADED_UNAVAILABLE_HINT =
+  "当前版本含裁切或旋转，已调色基准暂不可用；请先撤销裁切/旋转，或继续使用当前基准。";
+
 export function StudioTaskPanel({
   controller,
   sessionId,
   imageUrl,
   baseWidth,
   baseHeight,
+  suggestions,
 }: StudioTaskPanelProps) {
   const panelId = useId();
   const { studio, capability, task, masks, geometry, capabilities, validationMessage, canSubmit } =
     controller;
+  const { baseMode, gradedBaseAvailable, styleOptions, subjectMaskAvailable } = controller;
   const state = studio.state;
   const meta = STUDIO_CAPABILITIES.find((item) => item.value === capability);
   const prompt = PROMPT_FIELDS[capability];
   const maskSection = MASK_SECTION[capability];
+
+  const applySuggestion = (suggestion: GenerativeSuggestion): void => {
+    if (suggestion.capability) {
+      studio.setCapability(suggestion.capability);
+    }
+    if (suggestion.instruction) {
+      studio.setStyleId(null);
+      studio.setInstruction(suggestion.instruction);
+    }
+  };
+
+  const applyStyle = (styleId: string): void => {
+    const style = styleOptions.find((item) => item.id === styleId) ?? null;
+    studio.setStyleId(style?.id ?? null);
+    if (style) {
+      studio.setInstruction(buildStyleInstruction(style));
+    }
+  };
+
+  const createSubjectMask = async (suggestion: GenerativeSuggestion): Promise<void> => {
+    const region = suggestion.subjectBbox;
+    if (!region) {
+      return;
+    }
+    const created = await createGenerativeMask({
+      sessionId,
+      kind: "rect",
+      definition: { region, expand: 0 },
+      feather: 0,
+      inverted: false,
+    });
+    masks.addMask(created);
+  };
 
   return (
     <section
@@ -118,6 +175,50 @@ export function StudioTaskPanel({
             模拟生成模式
           </span>
         )}
+      </div>
+
+      <StudioSuggestions
+        suggestions={suggestions}
+        disabled={task.isRunning}
+        onApply={applySuggestion}
+        onCreateSubjectMask={subjectMaskAvailable ? createSubjectMask : undefined}
+      />
+
+      <div className="flex flex-col gap-2">
+        <label id={`${panelId}-base-mode-label`} className="text-xs font-medium text-neutral-300">
+          输入基准
+        </label>
+        <div
+          role="radiogroup"
+          aria-labelledby={`${panelId}-base-mode-label`}
+          className="grid grid-cols-2 gap-2"
+        >
+          {BASE_MODES.map((item) => {
+            const isSelected = baseMode === item.value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                disabled={task.isRunning || (item.value === "graded" && !gradedBaseAvailable)}
+                onClick={() => studio.setBaseMode(item.value)}
+                className={`py-1.5 px-3 text-xs rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isSelected
+                    ? "bg-sky-600 border-sky-400 text-white shadow-sm font-semibold"
+                    : "bg-neutral-800/80 border-neutral-700/80 text-neutral-300 hover:bg-neutral-800 hover:border-neutral-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] leading-relaxed text-neutral-400">
+          {gradedBaseAvailable
+            ? BASE_MODES.find((item) => item.value === baseMode)?.hint
+            : GRADED_UNAVAILABLE_HINT}
+        </p>
       </div>
 
       {capability === "outpaint" && (
@@ -145,6 +246,36 @@ export function StudioTaskPanel({
           onMaskCreated={masks.addMask}
         />
       )}
+
+      {capability === "local_edit" &&
+        (styleOptions.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`${panelId}-style`} className="text-xs font-medium text-neutral-300">
+              我的风格（Visual DNA）
+            </label>
+            <select
+              id={`${panelId}-style`}
+              value={state.styleId ?? ""}
+              disabled={task.isRunning}
+              onChange={(event) => applyStyle(event.target.value)}
+              className={FIELD_CLASS}
+            >
+              <option value="">不使用风格</option>
+              {styleOptions.map((style) => (
+                <option key={style.id} value={style.id}>
+                  {style.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] leading-relaxed text-neutral-400">
+              选择后只把风格描述填入生成指令，可继续编辑；不会自动提交任务。
+            </p>
+          </div>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-neutral-400">
+            我的风格：Visual DNA 中暂无已发布并启用的个人风格，可直接手写生成指令。
+          </p>
+        ))}
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${panelId}-prompt`} className="text-xs font-medium text-neutral-300">
@@ -240,7 +371,11 @@ export function StudioTaskPanel({
 
         <p className="text-[11px] leading-relaxed text-neutral-500">
           提交即同意将当前画面与蒙版发送到已配置的 Provider
-          {capabilities ? `（${capabilities.declaredRetention}）` : ""}；原图与保护区像素不会被覆盖。
+          {capabilities ? `（${capabilities.declaredRetention}）` : ""}；
+          {baseMode === "graded"
+            ? "原图文件保持不变，保护区按压平后的已调色像素逐字节写回。"
+            : "原图与保护区像素不会被覆盖。"}
+          {state.styleId ? "风格指令会随画面一起发送到该 Provider。" : ""}
           {capability === "outpaint" && geometry.isExpanded
             ? ` 目标画幅 ${geometry.targetWidth} × ${geometry.targetHeight}。`
             : ""}

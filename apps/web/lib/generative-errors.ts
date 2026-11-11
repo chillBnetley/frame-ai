@@ -237,6 +237,11 @@ const CODE_ENTRIES: Record<string, CodeEntry> = {
     message: "画面已有更新的版本，本次任务基于旧图，已中止。",
     nextStep: "基于最新版本重新提交生成任务。",
   },
+  generative_base_geometry_unsupported: {
+    category: "task_limit",
+    message: "当前版本含裁切或旋转，无法用已调色版本作为生成基准。",
+    nextStep: "改用「当前基准」，或先撤销裁切/旋转后再提交。",
+  },
   server_busy: {
     category: "task_limit",
     message: "服务器内存不足或正在处理另一张高清图，请稍后再试。",

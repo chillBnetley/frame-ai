@@ -2605,6 +2605,12 @@ export interface components {
          * @enum {string}
          */
         FitLevel: "high" | "medium" | "low" | "unsuitable";
+        /**
+         * GenerativeBaseMode
+         * @description Which pixels the task consumes: the base asset, or that asset graded flat.
+         * @enum {string}
+         */
+        GenerativeBaseMode: "base" | "graded";
         /** GenerativeCapabilitiesResponse */
         GenerativeCapabilitiesResponse: {
             /** Provider */
@@ -2900,6 +2906,8 @@ export interface components {
             params?: components["schemas"]["GenerativeParams"];
             /** Maskid */
             maskId?: string | null;
+            /** @default base */
+            baseMode: components["schemas"]["GenerativeBaseMode"];
             /**
              * Consent
              * @default false
@@ -2956,6 +2964,10 @@ export interface components {
             baseRevisionId?: string | null;
             /** Basegeneratedassetid */
             baseGeneratedAssetId?: string | null;
+            /** @default base */
+            baseMode: components["schemas"]["GenerativeBaseMode"];
+            /** Inputsha256 */
+            inputSha256?: string | null;
             /**
              * Createdat
              * Format: date-time
@@ -4721,6 +4733,10 @@ export interface components {
             creation?: components["schemas"]["RevisionCreationSummary"] | null;
             /** Basegeneratedassetid */
             baseGeneratedAssetId?: string | null;
+            /** Basewidth */
+            baseWidth: number;
+            /** Baseheight */
+            baseHeight: number;
             /** Generativetaskid */
             generativeTaskId?: string | null;
             /**

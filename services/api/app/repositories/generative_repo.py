@@ -16,6 +16,7 @@ from app.repositories.db import connect, utc_now
 
 _TASK_COLUMNS = (
     "id, owner_id, image_id, session_id, base_revision_id, base_generated_asset_id, "
+    "base_mode, input_sha256, input_recipe_hash, "
     "task_type, instruction, plan_json, params_json, mask_id, provider, model, "
     "prompt_version, provider_job_id, is_mock, status, stage, attempts, max_attempts, "
     "cancel_requested, consent_at, provider_retention, error_code, error_message, "
@@ -128,7 +129,7 @@ class SqliteGenerativeRepository:
                 "INSERT INTO generative_task "
                 f"({_TASK_COLUMNS}) VALUES "
                 "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-                " ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     task.id,
                     task.owner_id,
@@ -136,6 +137,9 @@ class SqliteGenerativeRepository:
                     task.session_id,
                     task.base_revision_id,
                     task.base_generated_asset_id,
+                    task.base_mode.value,
+                    task.input_sha256,
+                    task.input_recipe_hash,
                     task.task_type.value,
                     task.instruction,
                     task.plan_json,
@@ -258,6 +262,23 @@ class SqliteGenerativeRepository:
             connection.execute(
                 "UPDATE generative_task SET provider_job_id = ?, updated_at = ? WHERE id = ?",
                 (provider_job_id, utc_now(), task_id),
+            )
+        finally:
+            connection.close()
+
+    def set_input_provenance(
+        self,
+        task_id: str,
+        *,
+        input_sha256: str,
+        input_recipe_hash: str | None,
+    ) -> None:
+        connection = connect(self._path)
+        try:
+            connection.execute(
+                "UPDATE generative_task SET input_sha256 = ?, input_recipe_hash = ?, "
+                "updated_at = ? WHERE id = ?",
+                (input_sha256, input_recipe_hash, utc_now(), task_id),
             )
         finally:
             connection.close()

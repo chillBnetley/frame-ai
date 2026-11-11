@@ -47,6 +47,9 @@ class RevisionView(CamelModel):
     recipe: EditRecipe
     creation: RevisionCreationSummary | None = None
     base_generated_asset_id: UUID | None = None
+    # Dimensions of the base asset, not of the downscaled preview.
+    base_width: int
+    base_height: int
     generative_task_id: UUID | None = None
     created_at: datetime
 

@@ -10,7 +10,7 @@ import {
   type CanvasView,
 } from "@/lib/generative-canvas";
 import type { OutpaintFormValues } from "../components/outpaint-params-form";
-import type { GenerativeTaskType } from "@/types/generative";
+import type { GenerativeBaseMode, GenerativeTaskType } from "@/types/generative";
 
 export type StudioCapability = Extract<GenerativeTaskType, "outpaint" | "remove" | "local_edit">;
 export type StudioBaseLayer = "current" | "original";
@@ -18,6 +18,8 @@ export type StudioCompareMode = "off" | "slider" | "side";
 
 export interface StudioState {
   capability: StudioCapability;
+  baseMode: GenerativeBaseMode;
+  styleId: string | null;
   instruction: string;
   outpaint: OutpaintFormValues;
   baseLayer: StudioBaseLayer;
@@ -38,6 +40,8 @@ export const PAN_STEP_PX = 48;
 
 type StudioAction =
   | { type: "capability"; capability: StudioCapability }
+  | { type: "base-mode"; baseMode: GenerativeBaseMode }
+  | { type: "style"; styleId: string | null }
   | { type: "instruction"; instruction: string }
   | { type: "outpaint"; values: OutpaintFormValues }
   | { type: "base-layer"; baseLayer: StudioBaseLayer }
@@ -50,9 +54,13 @@ type StudioAction =
   | { type: "pan"; deltaX: number; deltaY: number }
   | { type: "fit"; boxWidth: number; boxHeight: number; contentWidth: number; contentHeight: number };
 
-export function createInitialStudioState(): StudioState {
+export function createInitialStudioState(
+  capability: StudioCapability = "outpaint",
+): StudioState {
   return {
-    capability: "outpaint",
+    capability,
+    baseMode: "base",
+    styleId: null,
     instruction: "",
     outpaint: INITIAL_OUTPAINT_VALUES,
     baseLayer: "current",
@@ -68,6 +76,10 @@ export function studioReducer(state: StudioState, action: StudioAction): StudioS
   switch (action.type) {
     case "capability":
       return { ...state, capability: action.capability, compare: "off" };
+    case "base-mode":
+      return { ...state, baseMode: action.baseMode };
+    case "style":
+      return { ...state, styleId: action.styleId };
     case "instruction":
       return { ...state, instruction: action.instruction };
     case "outpaint":
@@ -114,6 +126,8 @@ export function studioReducer(state: StudioState, action: StudioAction): StudioS
 export interface StudioController {
   state: StudioState;
   setCapability: (capability: StudioCapability) => void;
+  setBaseMode: (baseMode: GenerativeBaseMode) => void;
+  setStyleId: (styleId: string | null) => void;
   setInstruction: (instruction: string) => void;
   setOutpaint: (values: OutpaintFormValues) => void;
   setBaseLayer: (baseLayer: StudioBaseLayer) => void;
@@ -133,11 +147,21 @@ export interface StudioController {
   resetView: () => void;
 }
 
-export function useStudioState(): StudioController & { state: StudioState } {
-  const [state, dispatch] = useReducer(studioReducer, undefined, createInitialStudioState);
+export function useStudioState(
+  initialCapability?: StudioCapability,
+): StudioController & { state: StudioState } {
+  const [state, dispatch] = useReducer(studioReducer, initialCapability, createInitialStudioState);
 
   const setCapability = useCallback(
     (capability: StudioCapability) => dispatch({ type: "capability", capability }),
+    [],
+  );
+  const setBaseMode = useCallback(
+    (baseMode: GenerativeBaseMode) => dispatch({ type: "base-mode", baseMode }),
+    [],
+  );
+  const setStyleId = useCallback(
+    (styleId: string | null) => dispatch({ type: "style", styleId }),
     [],
   );
   const setInstruction = useCallback(
@@ -197,6 +221,8 @@ export function useStudioState(): StudioController & { state: StudioState } {
   return {
     state,
     setCapability,
+    setBaseMode,
+    setStyleId,
     setInstruction,
     setOutpaint,
     setBaseLayer,

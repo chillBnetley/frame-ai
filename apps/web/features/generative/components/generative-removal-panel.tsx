@@ -66,6 +66,7 @@ export function GenerativeRemovalPanel({
     await generative.submit({
       sessionId,
       taskType: "remove",
+      baseMode: "base",
       instruction: instruction.trim() || "remove marked object",
       maskId: masks.selectedMaskId,
       consent: true,

@@ -25,6 +25,7 @@ import { PreviewImage } from "@/features/editor/components/preview-image";
 import { PreviewMonitor } from "@/features/editor/components/preview-monitor";
 import { HealthIndicator } from "@/features/editor/health-indicator";
 import { CreativeStudio } from "@/features/generative/studio/creative-studio";
+import type { StudioCapability } from "@/features/generative/studio/use-studio-state";
 import { PhotographerPanel } from "@/features/photographer/components/photographer-panel";
 import { usePhotographer } from "@/features/photographer/hooks/use-photographer";
 import { usePhotographerChat } from "@/features/photographer/hooks/use-photographer-chat";
@@ -63,6 +64,7 @@ import {
   uploadImage,
 } from "@/lib/api/client";
 import { renderPreview } from "@/lib/api/sessions";
+import { createGenerativeMask } from "@/lib/api/generative";
 import { describeUploadError } from "@/lib/api/errors";
 import {
   describeEditorError,
@@ -217,6 +219,11 @@ interface CropBase {
   height: number;
 }
 
+interface StudioPreset {
+  maskId: string;
+  capability: StudioCapability;
+}
+
 interface EditorStageProps {
   image: UploadedImage | null;
   uploading: boolean;
@@ -254,6 +261,7 @@ function EditorStage({
   const styles = useStyles(photographerOpen);
   const [compareOpen, setCompareOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [studioPreset, setStudioPreset] = useState<StudioPreset | null>(null);
   const [cropMode, setCropMode] = useState(false);
   const [cropBase, setCropBase] = useState<CropBase | null>(null);
   const [cropBaseError, setCropBaseError] = useState<string | null>(null);
@@ -426,15 +434,36 @@ function EditorStage({
     setCompareOpen((value) => !value);
   }, [cropBefore, cropMode, dispatch]);
 
-  const handleOpenStudio = useCallback(() => {
-    setAnalysisOpen(false);
-    setPhotographerOpen(false);
-    setCompareOpen(false);
-    setStudioOpen(true);
-    if (selectIsDirty(state)) {
-      requestCommit();
-    }
-  }, [requestCommit, state]);
+  const handleOpenStudio = useCallback(
+    (preset: StudioPreset | null = null) => {
+      setStudioPreset(preset);
+      setAnalysisOpen(false);
+      setPhotographerOpen(false);
+      setCompareOpen(false);
+      setStudioOpen(true);
+      if (selectIsDirty(state)) {
+        requestCommit();
+      }
+    },
+    [requestCommit, state],
+  );
+
+  const handleUseSemanticForGenerative = useCallback(
+    async (kind: "person" | "sky") => {
+      if (state.sessionId === null) {
+        return;
+      }
+      const created = await createGenerativeMask({
+        sessionId: state.sessionId,
+        kind: "semantic",
+        definition: { semanticClass: kind, expand: 0 },
+        feather: 0,
+        inverted: false,
+      });
+      handleOpenStudio({ maskId: created.maskId, capability: "remove" });
+    },
+    [handleOpenStudio, state.sessionId],
+  );
 
   // Accepting a candidate creates the revision server-side, so the local head
   // and the history strip are re-read rather than patched by hand.
@@ -553,11 +582,17 @@ function EditorStage({
           <CreativeStudio
             sessionId={state.sessionId}
             previewImageUrl={preview.url}
-            previewWidth={preview.width}
-            previewHeight={preview.height}
+            baseWidth={state.baseWidth}
+            baseHeight={state.baseHeight}
+            gradedBaseAvailable={
+              state.committed.adjustments.crop == null &&
+              state.committed.adjustments.rotationDeg === 0
+            }
             originalImageUrl={state.imageId ? originalImageUrl(state.imageId) : null}
-            imageWidth={image?.width ?? 0}
-            imageHeight={image?.height ?? 0}
+            analysisReport={analysis.report}
+            initialMaskId={studioPreset?.maskId ?? null}
+            initialCapability={studioPreset?.capability}
+            subjectMaskAvailable={state.baseGeneratedAssetId === null}
             onResultAccepted={handleGenerativeAccepted}
             onExit={() => setStudioOpen(false)}
             historySlot={historyBar}
@@ -675,7 +710,7 @@ function EditorStage({
             <button
               type="button"
               aria-pressed={studioOpen}
-              onClick={handleOpenStudio}
+              onClick={() => handleOpenStudio()}
               disabled={uploading || cropMode || saving}
               title={
                 cropMode
@@ -1090,6 +1125,14 @@ function EditorStage({
                 state.imageId
                   ? (kind) => createSemanticMask(state.imageId!, kind)
                   : undefined
+              }
+              onUseSemanticForGenerative={
+                state.sessionId ? handleUseSemanticForGenerative : undefined
+              }
+              generativeMaskBlockedReason={
+                state.baseGeneratedAssetId === null
+                  ? null
+                  : "当前基准是已生成的画面，AI 语义蒙版只能绑定原图；请在工作台手动绘制蒙版。"
               }
               onChange={(recipe) => dispatch({ type: "draft-recipe", recipe })}
               onCommit={requestCommit}

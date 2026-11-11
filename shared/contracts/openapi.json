@@ -12736,6 +12736,15 @@
         ],
         "title": "FitLevel"
       },
+      "GenerativeBaseMode": {
+        "type": "string",
+        "enum": [
+          "base",
+          "graded"
+        ],
+        "title": "GenerativeBaseMode",
+        "description": "Which pixels the task consumes: the base asset, or that asset graded flat."
+      },
       "GenerativeCapabilitiesResponse": {
         "properties": {
           "provider": {
@@ -13446,6 +13455,10 @@
             ],
             "title": "Maskid"
           },
+          "baseMode": {
+            "$ref": "#/components/schemas/GenerativeBaseMode",
+            "default": "base"
+          },
           "consent": {
             "type": "boolean",
             "title": "Consent",
@@ -13574,6 +13587,21 @@
               }
             ],
             "title": "Basegeneratedassetid"
+          },
+          "baseMode": {
+            "$ref": "#/components/schemas/GenerativeBaseMode",
+            "default": "base"
+          },
+          "inputSha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputsha256"
           },
           "createdAt": {
             "type": "string",
@@ -18234,6 +18262,14 @@
             ],
             "title": "Basegeneratedassetid"
           },
+          "baseWidth": {
+            "type": "integer",
+            "title": "Basewidth"
+          },
+          "baseHeight": {
+            "type": "integer",
+            "title": "Baseheight"
+          },
           "generativeTaskId": {
             "anyOf": [
               {
@@ -18260,6 +18296,8 @@
           "parentId",
           "source",
           "recipe",
+          "baseWidth",
+          "baseHeight",
           "createdAt"
         ],
         "title": "RevisionView"

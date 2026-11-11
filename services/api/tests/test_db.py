@@ -45,7 +45,7 @@ def test_migrations_are_idempotent_and_schema_is_consistent(tmp_path: Path):
     finally:
         connection.close()
 
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
     assert {
         "image_asset",
         "edit_session",
@@ -153,7 +153,7 @@ def test_generative_migration_upgrades_an_existing_database(tmp_path: Path):
     directory = tmp_path / "migrations"
     directory.mkdir()
     for source in sorted(MIGRATIONS_DIR.glob("*.sql")):
-        if source.name.startswith("0012_"):
+        if source.name.startswith(("0012_", "0013_")):
             continue
         shutil.copyfile(source, directory / source.name)
     path = tmp_path / "frame.db"
@@ -193,6 +193,26 @@ def test_generative_migration_upgrades_an_existing_database(tmp_path: Path):
         directory / "0012_generative_core.sql",
     )
     initialize_database(path, directory)
+
+    connection = connect(path)
+    try:
+        connection.execute(
+            "INSERT INTO generative_task "
+            "(id, owner_id, image_id, session_id, base_revision_id, task_type, plan_json, "
+            " params_json, provider, model, prompt_version, is_mock, status, stage, "
+            " dedupe_key, created_at, updated_at, expires_at) "
+            "VALUES ('task', 'owner', 'image', 'session', 'revision', 'remove', '{}', '{}', "
+            "        'mock', 'mock-model', 'v1', 1, 'queued', 'queued', 'dedupe', "
+            "        'now', 'now', 'later')"
+        )
+    finally:
+        connection.close()
+
+    shutil.copyfile(
+        MIGRATIONS_DIR / "0013_generative_base_mode.sql",
+        directory / "0013_generative_base_mode.sql",
+    )
+    initialize_database(path, directory)
     initialize_database(path, directory)
 
     connection = connect(path)
@@ -205,6 +225,10 @@ def test_generative_migration_upgrades_an_existing_database(tmp_path: Path):
             "SELECT base_generated_asset_id, generative_task_id FROM edit_revision "
             "WHERE id = 'revision'"
         ).fetchone()
+        task = connection.execute(
+            "SELECT base_mode, input_sha256, input_recipe_hash FROM generative_task "
+            "WHERE id = 'task'"
+        ).fetchone()
         tables = {
             str(row["name"])
             for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -213,10 +237,14 @@ def test_generative_migration_upgrades_an_existing_database(tmp_path: Path):
     finally:
         connection.close()
 
-    assert versions == list(range(1, 13))
+    assert versions == list(range(1, 14))
     assert revision is not None
     assert revision["base_generated_asset_id"] is None
     assert revision["generative_task_id"] is None
+    assert task is not None
+    assert task["base_mode"] == "base"
+    assert task["input_sha256"] is None
+    assert task["input_recipe_hash"] is None
     assert {"generated_asset", "generative_mask", "generative_task", "generative_result"} <= tables
     assert foreign_key_issues == []
 

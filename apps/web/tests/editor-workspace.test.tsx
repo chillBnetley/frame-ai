@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,8 +28,27 @@ const SESSION_STATE = {
     parentId: null,
     source: "initial",
     recipe: { schemaVersion: "2.0", styleId: "natural", styleStrength: 0 },
+    baseWidth: 800,
+    baseHeight: 600,
     createdAt: "2026-11-02T00:00:00Z",
   },
+};
+
+const GENERATIVE_TASK_ID = "8c1f5a22-3d44-4b6e-9a10-2f5b6d0c3411";
+const GENERATIVE_MASK_ID = "9d2f6b33-4e55-4c7f-8b21-3a6c7e1d4522";
+
+const GENERATIVE_CAPABILITIES = {
+  provider: "mock",
+  model: "generative-mock-1",
+  isMock: true,
+  supportedTaskTypes: ["outpaint", "remove", "local_edit"],
+  supportsMask: true,
+  supportsMultipleOutputs: false,
+  maxOutputPixels: 24_000_000,
+  maxLongEdge: 8192,
+  allowedOutputFormats: ["png"],
+  declaredRetention: "Mock provider",
+  notes: [],
 };
 
 function jsonResponse(
@@ -55,6 +74,13 @@ interface SessionErrorOption extends UploadErrorOption {
 
 interface MockApiOptions {
   layers?: boolean;
+  baseWidth?: number;
+  baseHeight?: number;
+  previewWidth?: number;
+  previewHeight?: number;
+  committedCrop?: boolean;
+  semanticMasks?: boolean;
+  generatedBase?: boolean;
   uploadError?: UploadErrorOption;
   sessionError?: SessionErrorOption;
   revisionError?: UploadErrorOption;
@@ -80,6 +106,21 @@ function reportForUploadedImage() {
 function mockApi(options: MockApiOptions = {}) {
   let revisionCount = 0;
   let lastRevisionId = SESSION_STATE.activeRevisionId;
+  const session = {
+    ...SESSION_STATE,
+    revision: {
+      ...SESSION_STATE.revision,
+      baseWidth: options.baseWidth ?? SESSION_STATE.revision.baseWidth,
+      baseHeight: options.baseHeight ?? SESSION_STATE.revision.baseHeight,
+      baseGeneratedAssetId: options.generatedBase ? "asset-001" : null,
+      recipe: options.committedCrop
+        ? {
+            ...SESSION_STATE.revision.recipe,
+            adjustments: { crop: { x: 0.1, y: 0.1, w: 0.8, h: 0.8 } },
+          }
+        : SESSION_STATE.revision.recipe,
+    },
+  };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.endsWith("/api/v1/health")) {
@@ -98,11 +139,14 @@ function mockApi(options: MockApiOptions = {}) {
         features: {
           layers: options.layers === true,
           semanticMasks: {
-            enabled: false,
-            person: false,
-            sky: false,
+            enabled: options.semanticMasks === true,
+            person: options.semanticMasks === true,
+            sky: options.semanticMasks === true,
           },
-          semanticMaskModels: { person: null, sky: null },
+          semanticMaskModels: {
+            person: options.semanticMasks === true ? "1" : null,
+            sky: options.semanticMasks === true ? "1" : null,
+          },
         },
       });
     }
@@ -155,7 +199,7 @@ function mockApi(options: MockApiOptions = {}) {
             : {},
         );
       }
-      return jsonResponse(SESSION_STATE, 201);
+      return jsonResponse(session, 201);
     }
     if (
       url.endsWith(`/api/v1/sessions/${SESSION_STATE.sessionId}/revisions`) &&
@@ -180,12 +224,12 @@ function mockApi(options: MockApiOptions = {}) {
       }
       const revisionId = `7f2e5c31-9a4b-4d6e-8c10-${String(revisionCount).padStart(12, "0")}`;
       const response = {
-        ...SESSION_STATE,
+        ...session,
         activeRevisionId: revisionId,
         headRevisionId: revisionId,
         canUndo: true,
         revision: {
-          ...SESSION_STATE.revision,
+          ...session.revision,
           id: revisionId,
           revisionNo: revisionCount + 1,
           parentId: lastRevisionId,
@@ -216,8 +260,8 @@ function mockApi(options: MockApiOptions = {}) {
       }
       return jsonResponse({
         previewUrl: "/api/v1/previews/mocked-preview",
-        width: 800,
-        height: 600,
+        width: options.previewWidth ?? 800,
+        height: options.previewHeight ?? 600,
         quality: "final",
         cacheHit: false,
       });
@@ -245,6 +289,81 @@ function mockApi(options: MockApiOptions = {}) {
           result: reportForUploadedImage(),
         }),
       );
+    }
+    if (url.endsWith("/api/v1/generative/capabilities")) {
+      return jsonResponse(GENERATIVE_CAPABILITIES);
+    }
+    if (url.includes("/api/v1/generative/masks") && init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as {
+        kind: string;
+        definition?: { semanticClass?: string; region?: unknown };
+      };
+      return jsonResponse(
+        {
+          maskId: GENERATIVE_MASK_ID,
+          imageId: UPLOADED_IMAGE.imageId,
+          baseGeneratedAssetId: null,
+          kind: body.kind,
+          source: body.kind === "semantic" ? "semantic" : "user",
+          coordinateSpace: "base-normalized",
+          width: session.revision.baseWidth,
+          height: session.revision.baseHeight,
+          imageUrl: `/api/v1/generative/masks/${GENERATIVE_MASK_ID}/image`,
+          sha256: "a".repeat(64),
+          feather: 0,
+          inverted: false,
+          definition: body.definition ?? {},
+          quality: { coverage: 0.2, componentCount: 1, touchesBorder: false, warnings: [] },
+          modelVersion: body.kind === "semantic" ? "mock-1" : null,
+          createdAt: "2026-11-11T00:00:00Z",
+        },
+        201,
+      );
+    }
+    if (url.includes("/api/v1/generative/masks")) {
+      return jsonResponse({ items: [] });
+    }
+    if (url.endsWith("/api/v1/generative/tasks") && init?.method === "POST") {
+      return jsonResponse(
+        {
+          taskId: GENERATIVE_TASK_ID,
+          status: "queued",
+          stage: "queued",
+          deduplicated: false,
+          isMock: true,
+          provider: "mock",
+          model: "generative-mock-1",
+          expiresAt: "2026-11-12T00:00:00Z",
+        },
+        201,
+      );
+    }
+    if (url.includes(`/api/v1/generative/tasks/${GENERATIVE_TASK_ID}`)) {
+      return jsonResponse({
+        taskId: GENERATIVE_TASK_ID,
+        taskType: "outpaint",
+        status: "failed",
+        stage: "failed",
+        instruction: "",
+        isMock: true,
+        provider: "mock",
+        model: "generative-mock-1",
+        error: { code: "generative_blank_output", message: "生成结果为空白画面。" },
+        results: [],
+        attempts: 1,
+        maxAttempts: 2,
+        cancelRequested: false,
+        baseRevisionId: session.activeRevisionId,
+        baseGeneratedAssetId: null,
+        createdAt: "2026-11-11T00:00:00Z",
+        updatedAt: "2026-11-11T00:00:01Z",
+        startedAt: "2026-11-11T00:00:00Z",
+        completedAt: "2026-11-11T00:00:01Z",
+        expiresAt: "2026-11-12T00:00:00Z",
+      });
+    }
+    if (url.includes("/api/v1/personal-styles")) {
+      return jsonResponse({ styles: [] });
     }
     return jsonResponse({ error: { code: "not_found", message: "Not found", details: {} } }, 404);
   });
@@ -912,5 +1031,128 @@ describe("EditorWorkspace layer feature gate", () => {
 
     expect(screen.queryByRole("combobox", { name: "混合模式 1" })).toBeNull();
     expect(screen.queryByRole("button", { name: "上移图层 1" })).toBeNull();
+  });
+});
+
+describe("EditorWorkspace creative studio", () => {
+  async function openStudio(
+    options: MockApiOptions = {},
+    { runAnalysis = false }: { runAnalysis?: boolean } = {},
+  ) {
+    const fetchMock = mockApi(options);
+    render(<EditorWorkspace />);
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+    if (runAnalysis) {
+      await userEvent.click(screen.getByRole("button", { name: /AI 摄影分析/ }));
+      await userEvent.click(screen.getByRole("button", { name: "开始分析" }));
+      await screen.findByRole("heading", { name: "场景识别" }, { timeout: 3000 });
+    }
+    await userEvent.click(screen.getByRole("button", { name: /AI 创意工作台/ }));
+    expect(await screen.findByText("模拟生成模式")).toBeInTheDocument();
+    return fetchMock;
+  }
+
+  function taskBodies(fetchMock: FetchMock): Array<Record<string, unknown>> {
+    return fetchMock.mock.calls
+      .filter(
+        ([input, init]) =>
+          typeof input === "string" &&
+          input.endsWith("/api/v1/generative/tasks") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      )
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+  }
+
+  it("sizes the outpaint frame from the base asset, not the downscaled preview", async () => {
+    const fetchMock = await openStudio({
+      baseWidth: 4000,
+      baseHeight: 3000,
+      previewWidth: 2560,
+      previewHeight: 1920,
+    });
+
+    expect(screen.getAllByText(/4000 × 3000/).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("radio", { name: "16:9" }));
+    expect(screen.getAllByText(/5334 × 3000/).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: /^开始 AI / }));
+    await waitFor(() => expect(taskBodies(fetchMock)).toHaveLength(1));
+    expect(taskBodies(fetchMock)[0]).toMatchObject({
+      taskType: "outpaint",
+      params: {
+        outpaint: {
+          top: 0,
+          bottom: 0,
+          left: 667,
+          right: 667,
+          aspectRatio: "16:9",
+          alignment: "center",
+        },
+      },
+    });
+  });
+
+  it("offers the graded input base when the committed recipe only grades", async () => {
+    await openStudio();
+
+    const group = screen.getByRole("radiogroup", { name: "输入基准" });
+    expect(within(group).getByRole("radio", { name: "已调色版本" })).toBeEnabled();
+  });
+
+  it("disables the graded input base when the committed recipe carries a crop", async () => {
+    await openStudio({ committedCrop: true });
+
+    const group = screen.getByRole("radiogroup", { name: "输入基准" });
+    expect(within(group).getByRole("radio", { name: "已调色版本" })).toBeDisabled();
+    expect(within(group).getByRole("radio", { name: "当前基准" })).toBeChecked();
+    expect(screen.getByText(/当前版本含裁切或旋转，已调色基准暂不可用/)).toBeInTheDocument();
+  });
+
+  it("carries the analysis report into the studio parameter panel", async () => {
+    await openStudio({}, { runAnalysis: true });
+
+    expect(await screen.findByText("分析建议")).toBeInTheDocument();
+    expect(screen.getByText("建议在参数精修中处理")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^填入/ })).toBeNull();
+  });
+
+  it("creates a semantic mask and opens the studio preset to removal", async () => {
+    const fetchMock = mockApi({ semanticMasks: true });
+    render(<EditorWorkspace />);
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "人物用于 AI 生成" }));
+
+    expect(await screen.findByText("模拟生成模式")).toBeInTheDocument();
+    const maskCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        typeof input === "string" &&
+        input.endsWith("/api/v1/generative/masks") &&
+        (init as RequestInit | undefined)?.method === "POST",
+    );
+    expect(JSON.parse(String((maskCall?.[1] as RequestInit).body))).toMatchObject({
+      sessionId: SESSION_STATE.sessionId,
+      kind: "semantic",
+      definition: { semanticClass: "person" },
+    });
+    expect(screen.getByRole("radio", { name: /^AI 智能消除/ })).toBeChecked();
+    expect(
+      screen.getByText(`当前已选蒙版: ${GENERATIVE_MASK_ID.slice(0, 8)}...`),
+    ).toBeInTheDocument();
+  });
+
+  it("blocks the semantic AI entry when the base is a generated asset", async () => {
+    mockApi({ semanticMasks: true, generatedBase: true });
+    render(<EditorWorkspace />);
+    expect(await screen.findByText("API 已连接")).toBeInTheDocument();
+    await uploadFile();
+    expect(await screen.findByText("编辑预览")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "人物用于 AI 生成" })).toBeDisabled();
+    expect(screen.getByText(/当前基准是已生成的画面/)).toBeInTheDocument();
   });
 });

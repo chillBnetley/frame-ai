@@ -28,6 +28,7 @@ from app.repositories.session_repo import (
     SessionRecord,
     SqliteSessionRepository,
 )
+from app.services.asset_resolver import ImageAssetResolver, ResolvedImage
 from app.services.image_service import ImageService
 
 
@@ -69,10 +70,12 @@ class SessionService:
         settings: Settings,
         images: ImageService,
         *,
+        assets: ImageAssetResolver,
         repository: SqliteSessionRepository | None = None,
     ) -> None:
         self.settings = settings
         self.images = images
+        self.assets = assets
         self.repository = repository or SqliteSessionRepository(settings.database_path)
 
     def create(self, image_id: str) -> SessionState:
@@ -164,8 +167,10 @@ class SessionService:
     def get_revision(self, session_id: str, revision_id: UUID) -> RevisionView:
         key = _session_key(session_id)
         with _mapped():
+            session = self.repository.get(key)
             record = self.repository.get_revision(key, str(revision_id))
-        return _view(record)
+        base = self.assets.resolve(session.image_id, record.base_generated_asset_id)
+        return _view(record, base)
 
     def reset(self, session_id: str) -> SessionState:
         key = _session_key(session_id)
@@ -206,6 +211,10 @@ class SessionService:
                 active_revision_id=session.active_revision_id,
                 head_revision_id=session.head_revision_id,
             )
+        base = self.assets.resolve(
+            session.image_id,
+            revision.base_generated_asset_id,
+        )
         return SessionState(
             session_id=UUID(session.id),
             image_id=UUID(session.image_id),
@@ -213,7 +222,7 @@ class SessionService:
             head_revision_id=UUID(session.head_revision_id),
             can_undo=revision.parent_id is not None,
             can_redo=can_redo,
-            revision=_view(revision),
+            revision=_view(revision, base),
         )
 
 
@@ -228,7 +237,7 @@ def _session_key(value: str) -> str:
         ) from exc
 
 
-def _view(record: RevisionRecord) -> RevisionView:
+def _view(record: RevisionRecord, base: ResolvedImage) -> RevisionView:
     return RevisionView(
         id=UUID(record.id),
         revision_no=record.revision_no,
@@ -241,6 +250,8 @@ def _view(record: RevisionRecord) -> RevisionView:
             if record.base_generated_asset_id is None
             else UUID(record.base_generated_asset_id)
         ),
+        base_width=base.width,
+        base_height=base.height,
         generative_task_id=(
             None if record.generative_task_id is None else UUID(record.generative_task_id)
         ),

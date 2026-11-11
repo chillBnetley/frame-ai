@@ -105,7 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             semantic_registry,
         )
         app.state.semantic_mask_service = semantic_mask_service
-        session_service = SessionService(resolved_settings, service)
+        session_service = SessionService(resolved_settings, service, assets=asset_resolver)
         render_service = RenderService(
             resolved_settings,
             service,

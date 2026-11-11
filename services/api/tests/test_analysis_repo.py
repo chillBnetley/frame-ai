@@ -82,7 +82,7 @@ def test_migration_creates_analysis_tables(tmp_path: Path):
         connection.close()
 
     assert {"analysis_task", "analysis_result"} <= names
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 
 def test_create_get_and_dedupe_roundtrip(tmp_path: Path):

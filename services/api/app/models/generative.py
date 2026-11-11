@@ -17,6 +17,13 @@ class GenerativeTaskType(StrEnum):
     LOCAL_EDIT = "local_edit"
 
 
+class GenerativeBaseMode(StrEnum):
+    """Which pixels the task consumes: the base asset, or that asset graded flat."""
+
+    BASE = "base"
+    GRADED = "graded"
+
+
 class GenerativeTaskStatus(StrEnum):
     CREATED = "created"
     VALIDATING = "validating"
@@ -166,6 +173,7 @@ class GenerativeTaskRequest(CamelModel):
     instruction: str = Field(default="", max_length=2000)
     params: GenerativeParams = Field(default_factory=GenerativeParams)
     mask_id: UUID | None = None
+    base_mode: GenerativeBaseMode = GenerativeBaseMode.BASE
     # Required only when the selected provider sends pixels off this machine.
     consent: bool = False
 
@@ -227,6 +235,8 @@ class GenerativeTaskStatusResponse(CamelModel):
     cancel_requested: bool = False
     base_revision_id: UUID | None = None
     base_generated_asset_id: UUID | None = None
+    base_mode: GenerativeBaseMode = GenerativeBaseMode.BASE
+    input_sha256: str | None = None
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None = None
@@ -259,6 +269,9 @@ class GenerativeTaskRecord(CamelModel):
     session_id: str
     base_revision_id: str | None = None
     base_generated_asset_id: str | None = None
+    base_mode: GenerativeBaseMode = GenerativeBaseMode.BASE
+    input_sha256: str | None = None
+    input_recipe_hash: str | None = None
     task_type: GenerativeTaskType
     instruction: str
     plan_json: str

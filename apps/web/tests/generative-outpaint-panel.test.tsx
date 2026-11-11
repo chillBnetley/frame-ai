@@ -58,6 +58,7 @@ const MOCK_TASK_CREATED: GenerativeTaskCreated = {
 const MOCK_TASK_SUCCEEDED: GenerativeTaskStatusResponse = {
   taskId: "task-001",
   taskType: "outpaint",
+  baseMode: "base",
   status: "succeeded",
   stage: "completed",
   instruction: "expand horizon",
@@ -104,6 +105,8 @@ const MOCK_SESSION_STATE: SessionState = {
       localAdjustments: [],
     },
     baseGeneratedAssetId: "asset-001",
+    baseWidth: 800,
+    baseHeight: 600,
     generativeTaskId: "task-001",
     createdAt: "2026-11-10T12:00:05Z",
   },

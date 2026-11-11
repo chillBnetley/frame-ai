@@ -40,6 +40,7 @@ function statusResponse(overrides: Partial<GenerativeTaskStatusResponse> = {}) {
   const base: GenerativeTaskStatusResponse = {
     taskId: "task-001",
     taskType: "remove",
+    baseMode: "base",
     status: "succeeded",
     stage: "completed",
     instruction: "remove it",
@@ -88,6 +89,8 @@ const SESSION_STATE: SessionState = {
       localAdjustments: [],
     },
     baseGeneratedAssetId: "asset-001",
+    baseWidth: 800,
+    baseHeight: 600,
     generativeTaskId: "task-001",
     createdAt: "2026-11-10T12:00:05Z",
   },
@@ -96,6 +99,7 @@ const SESSION_STATE: SessionState = {
 const REQUEST = {
   sessionId: "sess-123",
   taskType: "remove" as const,
+  baseMode: "base" as const,
   instruction: "remove it",
   maskId: "mask-001",
   consent: true,
