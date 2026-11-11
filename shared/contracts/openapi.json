@@ -18087,6 +18087,44 @@
         "type": "object",
         "title": "RevisionCreationSummary"
       },
+      "RevisionGenerativeSummary": {
+        "properties": {
+          "taskType": {
+            "$ref": "#/components/schemas/GenerativeTaskType"
+          },
+          "instructionSummary": {
+            "type": "string",
+            "title": "Instructionsummary"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "isMock": {
+            "type": "boolean",
+            "title": "Ismock"
+          },
+          "baseMode": {
+            "$ref": "#/components/schemas/GenerativeBaseMode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "taskType",
+          "instructionSummary",
+          "provider",
+          "model",
+          "isMock",
+          "baseMode"
+        ],
+        "title": "RevisionGenerativeSummary",
+        "description": "Provenance of a revision created by accepting a generative result."
+      },
       "RevisionListResponse": {
         "properties": {
           "items": {
@@ -18186,6 +18224,16 @@
             ],
             "title": "Generativetaskid"
           },
+          "generative": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionGenerativeSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -18281,6 +18329,16 @@
               }
             ],
             "title": "Generativetaskid"
+          },
+          "generative": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionGenerativeSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "createdAt": {
             "type": "string",

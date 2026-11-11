@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -72,6 +73,17 @@ class RevisionRecord:
     render_key: str | None = None
     base_generated_asset_id: str | None = None
     generative_task_id: str | None = None
+
+
+@dataclass(frozen=True)
+class GenerativeProvenanceRecord:
+    task_id: str
+    task_type: str
+    instruction: str
+    provider: str
+    model: str
+    is_mock: bool
+    base_mode: str
 
 
 _SESSION_COLUMNS = (
@@ -546,6 +558,36 @@ class SqliteSessionRepository:
         records = [_to_revision(item) for item in rows[:limit]]
         next_cursor = records[-1].revision_no if len(rows) > limit else None
         return records, next_cursor
+
+    def generative_provenance(
+        self,
+        task_ids: Iterable[str],
+    ) -> dict[str, GenerativeProvenanceRecord]:
+        unique = sorted({task_id for task_id in task_ids if task_id})
+        if not unique:
+            return {}
+        placeholders = ", ".join("?" for _ in unique)
+        connection = connect(self._path)
+        try:
+            rows = connection.execute(
+                "SELECT id, task_type, instruction, provider, model, is_mock, base_mode "
+                f"FROM generative_task WHERE id IN ({placeholders})",
+                unique,
+            ).fetchall()
+        finally:
+            connection.close()
+        return {
+            str(row["id"]): GenerativeProvenanceRecord(
+                task_id=str(row["id"]),
+                task_type=str(row["task_type"]),
+                instruction=str(row["instruction"]),
+                provider=str(row["provider"]),
+                model=str(row["model"]),
+                is_mock=bool(row["is_mock"]),
+                base_mode=str(row["base_mode"]),
+            )
+            for row in rows
+        }
 
     @staticmethod
     def _require_session(connection: sqlite3.Connection, session_id: str) -> SessionRecord:

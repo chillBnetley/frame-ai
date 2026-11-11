@@ -8,10 +8,13 @@ from uuid import UUID
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.conversion import ConversionMode
+from app.models.generative import GenerativeBaseMode, GenerativeTaskType
 from app.models.recipe import EditRecipe, default_recipe, recipe_hash, stored_recipe_json
 from app.models.sessions import (
+    REVISION_INSTRUCTION_SUMMARY_CHARS,
     CreateRevisionRequest,
     RevisionCreationSummary,
+    RevisionGenerativeSummary,
     RevisionListResponse,
     RevisionSource,
     RevisionSummary,
@@ -19,6 +22,7 @@ from app.models.sessions import (
     SessionState,
 )
 from app.repositories.session_repo import (
+    GenerativeProvenanceRecord,
     IdempotencyKeyReuseError,
     RevisionConflictError,
     RevisionCreation,
@@ -170,7 +174,7 @@ class SessionService:
             session = self.repository.get(key)
             record = self.repository.get_revision(key, str(revision_id))
         base = self.assets.resolve(session.image_id, record.base_generated_asset_id)
-        return _view(record, base)
+        return _view(record, base, self._provenance([record]))
 
     def reset(self, session_id: str) -> SessionState:
         key = _session_key(session_id)
@@ -198,10 +202,17 @@ class SessionService:
                 limit=limit,
                 cursor=cursor,
             )
+        provenance = self._provenance(records)
         return RevisionListResponse(
-            items=[_summary(record) for record in records],
+            items=[_summary(record, provenance) for record in records],
             next_cursor=None if next_cursor is None else str(next_cursor),
         )
+
+    def _provenance(self, records: list[RevisionRecord]) -> dict[str, GenerativeProvenanceRecord]:
+        task_ids = [r.generative_task_id for r in records if r.generative_task_id is not None]
+        if not task_ids:
+            return {}
+        return self.repository.generative_provenance(task_ids)
 
     def _state(self, session: SessionRecord) -> SessionState:
         with _mapped():
@@ -222,7 +233,7 @@ class SessionService:
             head_revision_id=UUID(session.head_revision_id),
             can_undo=revision.parent_id is not None,
             can_redo=can_redo,
-            revision=_view(revision, base),
+            revision=_view(revision, base, self._provenance([revision])),
         )
 
 
@@ -237,7 +248,11 @@ def _session_key(value: str) -> str:
         ) from exc
 
 
-def _view(record: RevisionRecord, base: ResolvedImage) -> RevisionView:
+def _view(
+    record: RevisionRecord,
+    base: ResolvedImage,
+    provenance: dict[str, GenerativeProvenanceRecord],
+) -> RevisionView:
     return RevisionView(
         id=UUID(record.id),
         revision_no=record.revision_no,
@@ -246,20 +261,22 @@ def _view(record: RevisionRecord, base: ResolvedImage) -> RevisionView:
         recipe=EditRecipe.model_validate_json(record.recipe_json),
         creation=_creation(record),
         base_generated_asset_id=(
-            None
-            if record.base_generated_asset_id is None
-            else UUID(record.base_generated_asset_id)
+            None if record.base_generated_asset_id is None else UUID(record.base_generated_asset_id)
         ),
         base_width=base.width,
         base_height=base.height,
         generative_task_id=(
             None if record.generative_task_id is None else UUID(record.generative_task_id)
         ),
+        generative=_generative(record, provenance),
         created_at=record.created_at,
     )
 
 
-def _summary(record: RevisionRecord) -> RevisionSummary:
+def _summary(
+    record: RevisionRecord,
+    provenance: dict[str, GenerativeProvenanceRecord],
+) -> RevisionSummary:
     return RevisionSummary(
         id=UUID(record.id),
         revision_no=record.revision_no,
@@ -268,14 +285,35 @@ def _summary(record: RevisionRecord) -> RevisionSummary:
         recipe_hash=record.recipe_hash,
         creation=_creation(record),
         base_generated_asset_id=(
-            None
-            if record.base_generated_asset_id is None
-            else UUID(record.base_generated_asset_id)
+            None if record.base_generated_asset_id is None else UUID(record.base_generated_asset_id)
         ),
         generative_task_id=(
             None if record.generative_task_id is None else UUID(record.generative_task_id)
         ),
+        generative=_generative(record, provenance),
         created_at=record.created_at,
+    )
+
+
+def _generative(
+    record: RevisionRecord,
+    provenance: dict[str, GenerativeProvenanceRecord],
+) -> RevisionGenerativeSummary | None:
+    if record.generative_task_id is None:
+        return None
+    item = provenance.get(record.generative_task_id)
+    if item is None:
+        return None
+    instruction = " ".join(item.instruction.split())
+    if len(instruction) > REVISION_INSTRUCTION_SUMMARY_CHARS:
+        instruction = instruction[: REVISION_INSTRUCTION_SUMMARY_CHARS - 1] + "…"
+    return RevisionGenerativeSummary(
+        task_type=GenerativeTaskType(item.task_type),
+        instruction_summary=instruction,
+        provider=item.provider,
+        model=item.model,
+        is_mock=item.is_mock,
+        base_mode=GenerativeBaseMode(item.base_mode),
     )
 
 

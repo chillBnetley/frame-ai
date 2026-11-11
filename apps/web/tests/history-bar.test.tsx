@@ -111,4 +111,38 @@ describe("HistoryBar", () => {
       "true",
     );
   });
+
+  it("shows generative provenance badge and instruction summary for AI revisions", () => {
+    const items: RevisionSummary[] = [
+      {
+        ...ITEMS[0],
+        generative: {
+          taskType: "outpaint",
+          instructionSummary: "横向延伸海面与晚霞",
+          provider: "mock",
+          model: "mock-outpaint-v1",
+          isMock: true,
+          baseMode: "base",
+        },
+      },
+      {
+        ...ITEMS[1],
+        source: "ai",
+        generative: {
+          taskType: "local_edit",
+          instructionSummary: "增加暖金逆光",
+          provider: "qwen",
+          model: "qwen-image-edit",
+          isMock: false,
+          baseMode: "graded",
+        },
+      },
+    ];
+    renderBar({ items, activeRevisionId: items[0].id });
+
+    expect(screen.getByText("扩图 · Mock")).toBeInTheDocument();
+    expect(screen.getByText(/横向延伸海面与晚霞/)).toBeInTheDocument();
+    expect(screen.getByText("局部生成 · qwen")).toBeInTheDocument();
+    expect(screen.getByText(/增加暖金逆光/)).toBeInTheDocument();
+  });
 });

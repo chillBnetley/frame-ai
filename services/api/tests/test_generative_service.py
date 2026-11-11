@@ -798,3 +798,35 @@ def test_base_mode_is_part_of_the_dedupe_key(client: TestClient, settings: Setti
         assert graded.task_id != first.task_id
     finally:
         service.shutdown()
+
+
+def test_expired_cleanup_is_throttled_but_can_be_forced(
+    client: TestClient,
+    settings: Settings,
+):
+    session = _new_session(client)
+    service = _make_service(client, settings, MockGenerativeProvider())
+    try:
+        task_id = _create(service, session)
+        status = _wait(service, task_id)
+        assert status.status is GenerativeTaskStatus.SUCCEEDED
+        from app.repositories.db import connect
+
+        connection = connect(settings.database_path)
+        try:
+            connection.execute(
+                "UPDATE generative_result SET created_at = '2000-01-01T00:00:00.000Z'"
+            )
+        finally:
+            connection.close()
+
+        # Task creation already ran a sweep; force the throttle window open.
+        service._last_cleanup_at = 0.0
+        assert service.maybe_cleanup_expired_results() == 1
+        assert service.maybe_cleanup_expired_results() == 0
+        assert service.repository.get_result(str(status.results[0].result_id)) is None
+
+        service._last_cleanup_at = 0.0
+        assert service.maybe_cleanup_expired_results() == 0
+    finally:
+        service.shutdown()

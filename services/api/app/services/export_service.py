@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -95,6 +96,8 @@ class ExportResult:
     media_type: str
     warnings: tuple[str, ...] = ()
     bit_depth: ExportBitDepth = 8
+    ai_generated: bool = False
+    ai_provenance: dict[str, Any] | None = None
 
 
 class ExportService:
@@ -304,6 +307,27 @@ class ExportService:
                 pixels = cast(NDArray[np.uint8], canvas)
                 canvas_alpha = cast(NDArray[np.uint8] | None, canvas_alpha)
             quality = request.quality if request.quality is not None else EXPORT_JPEG_QUALITY
+            provenance: dict[str, Any] | None = None
+            if base.is_generated:
+                task_id = base.task_id or (
+                    None
+                    if revision.generative_task_id is None
+                    else str(revision.generative_task_id)
+                )
+                task = None
+                if task_id and hasattr(self.assets, "generated"):
+                    task = self.assets.generated.get_task(task_id)
+                provenance = {
+                    "generator": "FRAME AI",
+                    "ai_generated": True,
+                    "asset_id": base.id,
+                    "task_id": task_id,
+                    "task_type": task.task_type.value if task else "generative",
+                    "provider": task.provider if task else "unknown",
+                    "model": task.model if task else "unknown",
+                    "is_mock": task.is_mock if task else False,
+                    "base_mode": task.base_mode.value if task else "base",
+                }
             try:
                 data = encode_image(
                     pixels,
@@ -311,6 +335,7 @@ class ExportService:
                     quality=quality,
                     alpha=canvas_alpha,
                     bit_depth=rendered.bit_depth,
+                    provenance=provenance,
                 )
             except (OSError, ValueError) as exc:
                 raise AppError(
@@ -326,13 +351,14 @@ class ExportService:
         filename = f"frame-{revision.id.hex[:8]}{suffix}"
         logger.info(
             "export_completed session_id=%s revision_id=%s format=%s bit_depth=%s "
-            "bytes=%s duration_ms=%.2f",
+            "bytes=%s duration_ms=%.2f ai_generated=%s",
             state.session_id,
             revision.id,
             request.format,
             request.bit_depth,
             len(data),
             (time.perf_counter() - started) * 1000,
+            base.is_generated,
         )
         return ExportResult(
             data=data,
@@ -342,4 +368,26 @@ class ExportService:
             media_type=media_type,
             warnings=rendered.warnings,
             bit_depth=request.bit_depth,
+            ai_generated=base.is_generated,
+            ai_provenance=provenance,
         )
+
+
+def apply_provenance_headers(
+    headers: dict[str, str],
+    *,
+    ai_generated: bool,
+    provenance: Mapping[str, Any] | None = None,
+) -> None:
+    if not ai_generated:
+        return
+    headers["X-Frame-AI-Generated"] = "true"
+    if provenance:
+        if "task_type" in provenance:
+            headers["X-Frame-AI-Task-Type"] = str(provenance["task_type"])
+        if "provider" in provenance:
+            headers["X-Frame-AI-Provider"] = str(provenance["provider"])
+        if "model" in provenance:
+            headers["X-Frame-AI-Model"] = str(provenance["model"])
+        if "is_mock" in provenance:
+            headers["X-Frame-AI-Is-Mock"] = "true" if provenance["is_mock"] else "false"

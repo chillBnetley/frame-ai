@@ -36,9 +36,18 @@ def main() -> int:
     print(f"data dir: {settings.data_dir}")
     print(f"orphan originals: {len(plan.orphan_originals)}")
     print(f"orphan proxies: {len(plan.orphan_proxies)}")
+    print(f"orphan generated assets: {len(plan.orphan_generated)}")
+    print(f"orphan generative results: {len(plan.orphan_results)}")
+    print(f"orphan masks: {len(plan.orphan_masks)}")
     print(f"image records with missing original: {len(plan.dangling_images)}")
     if args.list_paths:
-        for path in (*plan.orphan_originals, *plan.orphan_proxies):
+        for path in (
+            *plan.orphan_originals,
+            *plan.orphan_proxies,
+            *plan.orphan_generated,
+            *plan.orphan_results,
+            *plan.orphan_masks,
+        ):
             print(f"  file {path}")
         for image_id in plan.dangling_images:
             print(f"  record {image_id}")
@@ -52,6 +61,9 @@ def main() -> int:
         "deleted: "
         f"{report.deleted_originals} originals, "
         f"{report.deleted_proxies} proxies, "
+        f"{report.deleted_generated} generated, "
+        f"{report.deleted_results} results, "
+        f"{report.deleted_masks} masks, "
         f"{report.deleted_records} records; "
         f"skipped (locked/unremovable): {report.skipped}"
     )

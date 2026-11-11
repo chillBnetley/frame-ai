@@ -120,11 +120,17 @@ class DeletionService:
         self._purge_export_jobs((normalized,))
         for storage_key in outcome.result_storage_keys:
             self.generated.discard(storage_key)
+        for storage_key in outcome.generated_storage_keys:
+            self.generated.discard(storage_key)
+        for storage_key in outcome.mask_storage_keys:
+            self.generated.discard(storage_key)
         # The original image stays; its content-addressed caches are still valid.
         logger.info(
-            "session_deleted session_id=%s image_id=%s",
+            "session_deleted session_id=%s image_id=%s generated_removed=%s results_removed=%s",
             normalized,
             outcome.image_id,
+            len(outcome.generated_storage_keys),
+            len(outcome.result_storage_keys),
         )
 
     def _purge_export_jobs(self, session_ids: tuple[str, ...]) -> None:

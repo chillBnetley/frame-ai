@@ -27,6 +27,8 @@ class SessionDeletionRecord:
     status: DeletionStatus
     image_id: str | None = None
     result_storage_keys: tuple[str, ...] = ()
+    generated_storage_keys: tuple[str, ...] = ()
+    mask_storage_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -122,6 +124,52 @@ class SqliteDeletionRepository:
                         (normalized,),
                     ).fetchall()
                 )
+                # Assets produced by this session's tasks (or used as a base by
+                # its revisions) are safe to drop only when nothing outside the
+                # session still points at them. A cross-session task can share a
+                # mask, so checking revisions alone is not enough: a mask on a
+                # surviving task would cascade away or trip its RESTRICT.
+                unreferenced_assets = connection.execute(
+                    "SELECT id, storage_key FROM generated_asset "
+                    "WHERE id IN ("
+                    "  SELECT ga.id FROM generated_asset ga "
+                    "  JOIN generative_task gt ON gt.id = ga.task_id "
+                    "  WHERE gt.session_id = ? "
+                    "  UNION "
+                    "  SELECT base_generated_asset_id FROM edit_revision "
+                    "  WHERE session_id = ? AND base_generated_asset_id IS NOT NULL"
+                    ") AND id NOT IN ("
+                    "  SELECT base_generated_asset_id FROM edit_revision "
+                    "  WHERE session_id != ? AND base_generated_asset_id IS NOT NULL"
+                    ") AND id NOT IN ("
+                    "  SELECT base_generated_asset_id FROM generative_task "
+                    "  WHERE session_id != ? AND base_generated_asset_id IS NOT NULL"
+                    ") AND id NOT IN ("
+                    "  SELECT mask.base_generated_asset_id FROM generative_mask mask "
+                    "  JOIN generative_task task ON task.mask_id = mask.id "
+                    "  WHERE task.session_id != ?"
+                    ")",
+                    (normalized, normalized, normalized, normalized, normalized),
+                ).fetchall()
+                unreferenced_ids = [str(r["id"]) for r in unreferenced_assets]
+                generated_keys = tuple(str(r["storage_key"]) for r in unreferenced_assets)
+                mask_keys: list[str] = []
+                if unreferenced_ids:
+                    placeholders = ", ".join("?" for _ in unreferenced_ids)
+                    mask_rows = connection.execute(
+                        "SELECT storage_key FROM generative_mask "
+                        f"WHERE base_generated_asset_id IN ({placeholders})",
+                        unreferenced_ids,
+                    ).fetchall()
+                    for m_row in mask_rows:
+                        m_key = str(m_row["storage_key"])
+                        mask_keys.append(m_key)
+                        if m_key.endswith(".png"):
+                            mask_keys.append(m_key[: -len(".png")] + ".json")
+                    connection.execute(
+                        f"DELETE FROM generated_asset WHERE id IN ({placeholders})",
+                        unreferenced_ids,
+                    )
                 connection.execute("DELETE FROM edit_session WHERE id = ?", (normalized,))
                 self._remember(connection, "session", normalized)
             except BaseException:
@@ -134,6 +182,8 @@ class SqliteDeletionRepository:
             status="deleted",
             image_id=str(row["image_id"]),
             result_storage_keys=result_keys,
+            generated_storage_keys=generated_keys,
+            mask_storage_keys=tuple(mask_keys),
         )
 
     def sha_is_shared(self, sha256: str) -> bool:
@@ -175,6 +225,40 @@ class SqliteDeletionRepository:
             )
             for row in rows
         ]
+
+    def list_live_generated_keys(self) -> set[str]:
+        connection = connect(self._path)
+        try:
+            rows = connection.execute(
+                "SELECT storage_key FROM generated_asset WHERE deleted_at IS NULL"
+            ).fetchall()
+        finally:
+            connection.close()
+        return {str(row["storage_key"]) for row in rows}
+
+    def list_live_result_keys(self) -> set[str]:
+        connection = connect(self._path)
+        try:
+            rows = connection.execute("SELECT storage_key FROM generative_result").fetchall()
+        finally:
+            connection.close()
+        return {str(row["storage_key"]) for row in rows}
+
+    def list_live_mask_keys(self) -> set[str]:
+        connection = connect(self._path)
+        try:
+            rows = connection.execute(
+                "SELECT storage_key FROM generative_mask WHERE deleted_at IS NULL"
+            ).fetchall()
+        finally:
+            connection.close()
+        keys: set[str] = set()
+        for row in rows:
+            key = str(row["storage_key"])
+            keys.add(key)
+            if key.endswith(".png"):
+                keys.add(key[: -len(".png")] + ".json")
+        return keys
 
     @staticmethod
     def _generated_keys(connection: sqlite3.Connection, image_id: str) -> tuple[str, ...]:

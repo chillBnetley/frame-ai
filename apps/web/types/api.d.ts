@@ -4677,6 +4677,22 @@ export interface components {
             /** Renderkey */
             renderKey?: string | null;
         };
+        /**
+         * RevisionGenerativeSummary
+         * @description Provenance of a revision created by accepting a generative result.
+         */
+        RevisionGenerativeSummary: {
+            taskType: components["schemas"]["GenerativeTaskType"];
+            /** Instructionsummary */
+            instructionSummary: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Ismock */
+            isMock: boolean;
+            baseMode: components["schemas"]["GenerativeBaseMode"];
+        };
         /** RevisionListResponse */
         RevisionListResponse: {
             /** Items */
@@ -4707,6 +4723,7 @@ export interface components {
             baseGeneratedAssetId?: string | null;
             /** Generativetaskid */
             generativeTaskId?: string | null;
+            generative?: components["schemas"]["RevisionGenerativeSummary"] | null;
             /**
              * Createdat
              * Format: date-time
@@ -4739,6 +4756,7 @@ export interface components {
             baseHeight: number;
             /** Generativetaskid */
             generativeTaskId?: string | null;
+            generative?: components["schemas"]["RevisionGenerativeSummary"] | null;
             /**
              * Createdat
              * Format: date-time

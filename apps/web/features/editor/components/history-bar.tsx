@@ -16,6 +16,14 @@ const SOURCE_GLYPHS: Record<RevisionSource, string> = {
   reset: "↺",
 };
 
+const GENERATIVE_TASK_LABELS: Record<string, string> = {
+  outpaint: "扩图",
+  remove: "消除",
+  local_edit: "局部生成",
+  inpaint: "修补",
+};
+
+
 function formatTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
@@ -155,6 +163,12 @@ export function HistoryBar({
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5 text-xs text-white/80">
                         #{item.revisionNo} · {SOURCE_LABELS[item.source]}
+                        {item.generative && (
+                          <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-1.5 py-0.5 text-[9px] text-sky-300">
+                            {GENERATIVE_TASK_LABELS[item.generative.taskType] ?? item.generative.taskType}
+                            {item.generative.isMock ? " · Mock" : ` · ${item.generative.provider}`}
+                          </span>
+                        )}
                         {active && (
                           <span className="rounded-full border border-accent/30 px-1.5 py-0.5 text-[9px] text-accent">
                             当前
@@ -167,6 +181,7 @@ export function HistoryBar({
                         )}
                       </span>
                       <span className="mt-0.5 block truncate font-mono text-[9px] text-white/30">
+                        {item.generative?.instructionSummary ? `${item.generative.instructionSummary} · ` : ""}
                         {item.id.slice(0, 8)}… · {formatTime(item.createdAt)}
                       </span>
                     </span>

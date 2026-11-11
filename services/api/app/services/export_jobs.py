@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 from uuid import uuid4
 
 from app.core.errors import AppError
@@ -54,6 +54,8 @@ class _ExportJob:
     warnings: tuple[str, ...] = ()
     error: AppError | None = None
     finished_at: float | None = None
+    ai_generated: bool = False
+    ai_provenance: dict[str, Any] | None = None
 
 
 class ExportJobManager:
@@ -404,6 +406,8 @@ class ExportJobManager:
                     job.media_type = result.media_type
                     job.bit_depth = result.bit_depth
                     job.warnings = result.warnings
+                    job.ai_generated = result.ai_generated
+                    job.ai_provenance = result.ai_provenance
                     job.updated_at = _utcnow()
                     job.finished_at = time.time()
                     finalized = True

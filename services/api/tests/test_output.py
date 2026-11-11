@@ -268,6 +268,48 @@ def test_sixteen_bit_encoding_validates_dtype_and_alpha():
         )
 
 
+def test_encode_image_embeds_ai_provenance_across_formats():
+    pixels = _pixels()
+    provenance = {
+        "ai_generated": True,
+        "task_type": "outpaint",
+        "provider": "mock",
+        "model": "mock-outpaint-v1",
+        "is_mock": True,
+    }
+
+    # 1. 8-bit JPEG: Exif ImageDescription
+    jpeg_bytes = encode_image(pixels, image_format="jpeg", provenance=provenance)
+    exif = Image.open(BytesIO(jpeg_bytes)).getexif()
+    assert exif.get(0x0131) == "FRAME AI"
+    assert "outpaint" in str(exif.get(0x010E))
+
+    # 2. 8-bit PNG: tEXt chunk
+    png_bytes = encode_image(pixels, image_format="png", provenance=provenance)
+    info = Image.open(BytesIO(png_bytes)).info
+    assert "outpaint" in info.get("FRAME-AI-Provenance", "")
+
+    # 3. 16-bit PNG: custom tEXt chunk
+    sixteen = to_uint16(pixels.astype(np.float32) / 255.0)
+    png16_bytes = encode_image(sixteen, image_format="png", bit_depth=16, provenance=provenance)
+    info16 = Image.open(BytesIO(png16_bytes)).info
+    assert "outpaint" in info16.get("FRAME-AI-Provenance", "")
+
+    # 4. 8-bit TIFF: ImageDescription tag
+    tiff_bytes = encode_image(pixels, image_format="tiff", provenance=provenance)
+    with tifffile.TiffFile(BytesIO(tiff_bytes)) as tf:
+        desc = tf.pages[0].tags["ImageDescription"].value
+        assert "FRAME-AI:" in desc
+        assert "outpaint" in desc
+
+    # 5. 16-bit TIFF: ImageDescription tag
+    tiff16_bytes = encode_image(sixteen, image_format="tiff", bit_depth=16, provenance=provenance)
+    with tifffile.TiffFile(BytesIO(tiff16_bytes)) as tf:
+        desc16 = tf.pages[0].tags["ImageDescription"].value
+        assert "FRAME-AI:" in desc16
+        assert "outpaint" in desc16
+
+
 def test_eight_bit_tiff_round_trips_with_icc():
     pixels = _pixels()
 

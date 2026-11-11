@@ -274,7 +274,7 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `POST /api/v1/sessions` | `{imageId}` | 201 会话状态；创建 `source=initial` 的默认配方 revision | 404 `image_not_found`；422 |
 | `GET /api/v1/sessions/{sessionId}` | — | 会话状态 | 404 `session_not_found` |
 | `DELETE /api/v1/sessions/{sessionId}` | — | 204，无响应体；重复删除同样 204；保留原图 | 404 `session_not_found`；409 `resource_busy`（该会话正在导出） |
-| `GET /api/v1/sessions/{sessionId}/revisions` ⊕ | `?limit=20&cursor=3` | `{items:[{id, revisionNo, parentId, source, recipeHash, createdAt}], nextCursor}`；按 `revisionNo` 降序 | 404 `session_not_found`；422 |
+| `GET /api/v1/sessions/{sessionId}/revisions` ⊕ | `?limit=20&cursor=3` | `{items:[{id, revisionNo, parentId, source, recipeHash, createdAt, generative?}], nextCursor}`；按 `revisionNo` 降序。`generative` 仅在采纳生成结果产生的版本上出现：`{taskType, instructionSummary, provider, model, isMock, baseMode}` | 404 `session_not_found`；422 |
 | `POST /api/v1/sessions/{sessionId}/render` | `{recipe, maxEdge?, quality?}` + 可选头 `X-Render-Seq` | 200 `{previewUrl, width, height, quality, cacheHit, warnings}`；无状态，不写数据库 | 404 `session_not_found`/`image_not_found`；409 `render_superseded`；422 `validation_error`；503 `server_busy` |
 | `POST /api/v1/sessions/{sessionId}/revisions` | `{recipe, parentRevisionId, source?}` + 头 `Idempotency-Key` | 201 新 revision 并设为活动；同 key 同内容重放 200 原 revision | 409 `revision_conflict` / `idempotency_key_reuse`；404；422 |
 | `POST /api/v1/sessions/{sessionId}/undo` | 可选 `{revisionId}` | 会话状态；仅移动 `active` | 409 `nothing_to_undo`；409 `revision_conflict`（客户端期望版本不符） |
@@ -400,7 +400,7 @@ GET /api/v1/sessions/{sessionId}/compare?revisionId=<uuid>&maxEdge=1600
 | `POST /api/v1/exports` ⊕ | `{sessionId, revisionId, format:"jpeg"\|"png"\|"tiff", quality?, maxEdge?, bitDepth?:8\|16, colorSpace?}` | 202 作业对象：`{jobId, status:"queued"\|"running", filename:null, width:null, height:null, bitDepth, warnings:[], error:null, createdAt, updatedAt}` | 404 `session_not_found`/`revision_not_found`；422 `validation_error`（含 JPEG+16 组合、`bitDepth` 越界）/`unsupported_icc_profile`；503 `server_busy`（队列已满或服务关闭，带 `Retry-After: 2`） |
 | `GET /api/v1/exports/{jobId}` ⊕ | — | 作业对象；`status` 为 `queued/running/succeeded/failed/cancelled`。`succeeded` 时带 `filename/width/height/bitDepth/warnings`，`failed` 时带 `error:{code,message,details}` | 404 `export_not_found` |
 | `DELETE /api/v1/exports/{jobId}` ⊕ | — | 204；排队作业立即取消，运行中作业在下一个检查点停止；已结束作业幂等返回 204 | 404 `export_not_found` |
-| `GET /api/v1/exports/{jobId}/result` ⊕ | — | 文件流（`image/jpeg`/`image/png`/`image/tiff`）+ `Content-Disposition` + `X-Export-Width/Height/Bit-Depth` + 可选 `X-Export-Warning`（含 `denoise_skipped_for_16bit`）；`Cache-Control: no-store`、`X-Content-Type-Options: nosniff` | 404 `export_not_found`/`export_result_missing`；409 `export_not_ready`/`export_cancelled`/`export_failed` |
+| `GET /api/v1/exports/{jobId}/result` ⊕ | — | 文件流（`image/jpeg`/`image/png`/`image/tiff`）+ `Content-Disposition` + `X-Export-Width/Height/Bit-Depth` + 可选 `X-Export-Warning`（含 `denoise_skipped_for_16bit`）+ 生成基准时的 `X-Frame-AI-*` 溯源头；`Cache-Control: no-store`、`X-Content-Type-Options: nosniff` | 404 `export_not_found`/`export_result_missing`；409 `export_not_ready`/`export_cancelled`/`export_failed` |
 
 作业语义：
 
@@ -434,6 +434,12 @@ POST /api/v1/sessions/{sessionId}/export
 - `Content-Disposition: attachment; filename="frame-<8位id>.jpg"`（或 `.png`/`.tiff`）。
 - `X-Export-Width`、`X-Export-Height`：实际导出像素尺寸；等于请求 `maxEdge` 限制后的画布尺寸（未请求时是旋转/裁切后的完整画布尺寸）。
 - `X-Export-Bit-Depth`：`8` 或 `16`，与请求的 `bitDepth` 一致（JPEG 恒为 `8`）。
+- 基准资产是生成结果时（V6.3 Batch 9）：追加 `X-Frame-AI-Generated: true`、
+  `X-Frame-AI-Task-Type`（`outpaint`/`remove`/`local_edit`/`inpaint`）、`X-Frame-AI-Provider`、
+  `X-Frame-AI-Model`、`X-Frame-AI-Is-Mock`，同时文件内写入溯源：
+  PNG `tEXt: FRAME-AI-Provenance`、JPEG Exif `ImageDescription`、TIFF `ImageDescription`，
+  值为 `FRAME-AI:` 前缀 + JSON（`ai_generated/task_type/provider/model/is_mock/base_mode/...`）。
+  普通版本导出不带这些头，也不写元数据。
 - 本次**实际参与渲染的像素**（应用 `maxEdge` 下采样之后）超过 `FRAME_EXPORT_DENOISE_SIMPLIFY_PIXELS`（默认 12 MP）且启用了降噪时：8-bit 导出使用与 draft 相同的较小降噪搜索窗口，并带 `X-Export-Warning: denoise_simplified`；16-bit 导出**跳过降噪**并带 `X-Export-Warning: denoise_skipped_for_16bit`。无提示时省略此头。因此同一张大图的全尺寸 8-bit 导出会带简化头、长边 2400 的不会。前端应向用户显示对应的降噪提示。
 - `Cache-Control: no-store`、`X-Content-Type-Options: nosniff`。
 

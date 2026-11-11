@@ -333,3 +333,89 @@ def _image_row(settings: Settings, image_id: str) -> dict[str, object]:
         connection.close()
     assert row is not None
     return dict(row)
+
+
+def test_accepted_revision_exposes_generative_provenance(
+    client: TestClient,
+    settings: Settings,
+):
+    session = _new_session(client)
+    task = _run_task(client, session, instruction="warm the sunset over the water")
+    result = task["results"][0]
+    accepted = client.post(f"/api/v1/generative/results/{result['resultId']}/accept")
+    assert accepted.status_code == 200, accepted.text
+    state = accepted.json()
+
+    summary = state["revision"]["generative"]
+    assert summary is not None
+    assert summary["taskType"] == "local_edit"
+    assert summary["instructionSummary"] == "warm the sunset over the water"
+    assert summary["isMock"] is True
+    assert summary["baseMode"] == "base"
+    assert summary["provider"] == task["provider"]
+    assert summary["model"] == task["model"]
+
+    listed = client.get(f"/api/v1/sessions/{session['sessionId']}/revisions")
+    assert listed.status_code == 200, listed.text
+    items = {item["id"]: item for item in listed.json()["items"]}
+    assert items[state["activeRevisionId"]]["generative"] == summary
+    initial = [item for item in listed.json()["items"] if item["revisionNo"] == 1][0]
+    assert initial["generative"] is None
+
+
+def test_export_of_a_generated_base_carries_ai_provenance(
+    client: TestClient,
+    settings: Settings,
+):
+    from io import BytesIO
+
+    from PIL import Image
+
+    session = _new_session(client)
+    initial_state = client.get(f"/api/v1/sessions/{session['sessionId']}").json()
+    manual = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/export",
+        json={"revisionId": initial_state["activeRevisionId"], "format": "png"},
+    )
+    assert manual.status_code == 200, manual.text
+    assert "X-Frame-AI-Generated" not in manual.headers
+    assert "FRAME-AI-Provenance" not in Image.open(BytesIO(manual.content)).info
+
+    task = _run_task(client, session)
+    result = task["results"][0]
+    accepted = client.post(f"/api/v1/generative/results/{result['resultId']}/accept")
+    assert accepted.status_code == 200, accepted.text
+    state = accepted.json()
+
+    export = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/export",
+        json={"revisionId": state["activeRevisionId"], "format": "png"},
+    )
+    assert export.status_code == 200, export.text
+    assert export.headers["X-Frame-AI-Generated"] == "true"
+    assert export.headers["X-Frame-AI-Task-Type"] == "local_edit"
+    assert export.headers["X-Frame-AI-Provider"] == task["provider"]
+    assert export.headers["X-Frame-AI-Model"] == task["model"]
+    assert export.headers["X-Frame-AI-Is-Mock"] == "true"
+    info = Image.open(BytesIO(export.content)).info
+    provenance = info.get("FRAME-AI-Provenance")
+    assert provenance is not None and "local_edit" in provenance
+
+    jpeg = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/export",
+        json={"revisionId": state["activeRevisionId"], "format": "jpeg"},
+    )
+    assert jpeg.status_code == 200, jpeg.text
+    exif = Image.open(BytesIO(jpeg.content)).getexif()
+    assert exif.get(0x0131) == "FRAME AI"
+    assert "local_edit" in str(exif.get(0x010E))
+
+    tiff = client.post(
+        f"/api/v1/sessions/{session['sessionId']}/export",
+        json={"revisionId": state["activeRevisionId"], "format": "tiff"},
+    )
+    assert tiff.status_code == 200, tiff.text
+    import tifffile
+
+    with tifffile.TiffFile(BytesIO(tiff.content)) as handle:
+        assert "local_edit" in handle.pages[0].tags["ImageDescription"].value

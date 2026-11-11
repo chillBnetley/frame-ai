@@ -22,6 +22,8 @@ class ResolvedImage:
     height: int
     mime_type: str
     exif_orientation: int = 1
+    is_generated: bool = False
+    task_id: str | None = None
 
 
 class ImageAssetResolver:
@@ -71,6 +73,8 @@ class ImageAssetResolver:
             height=asset.height,
             mime_type=asset.mime_type,
             exif_orientation=1,
+            is_generated=True,
+            task_id=asset.task_id,
         )
 
 

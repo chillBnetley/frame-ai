@@ -23,7 +23,7 @@ from app.models.sessions import (
     UndoRequest,
 )
 from app.services.deletion_service import DeletionService
-from app.services.export_service import ExportService
+from app.services.export_service import ExportService, apply_provenance_headers
 from app.services.render_service import RenderService
 from app.services.session_service import SessionService
 
@@ -193,4 +193,9 @@ def export_revision(
     }
     if result.warnings:
         headers["X-Export-Warning"] = ",".join(result.warnings)
+    apply_provenance_headers(
+        headers,
+        ai_generated=result.ai_generated,
+        provenance=result.ai_provenance,
+    )
     return Response(content=result.data, media_type=result.media_type, headers=headers)

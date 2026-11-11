@@ -5,11 +5,24 @@ from typing import Literal
 from uuid import UUID
 
 from app.models.conversion import ConversionMode
+from app.models.generative import GenerativeBaseMode, GenerativeTaskType
 from app.models.recipe import EditRecipe
 from app.models.schemas import CamelModel
 
 RevisionSource = Literal["initial", "user", "ai", "reset"]
 WritableRevisionSource = Literal["user", "ai"]
+REVISION_INSTRUCTION_SUMMARY_CHARS = 80
+
+
+class RevisionGenerativeSummary(CamelModel):
+    """Provenance of a revision created by accepting a generative result."""
+
+    task_type: GenerativeTaskType
+    instruction_summary: str
+    provider: str
+    model: str
+    is_mock: bool
+    base_mode: GenerativeBaseMode
 
 
 class RevisionCreationSummary(CamelModel):
@@ -51,6 +64,7 @@ class RevisionView(CamelModel):
     base_width: int
     base_height: int
     generative_task_id: UUID | None = None
+    generative: RevisionGenerativeSummary | None = None
     created_at: datetime
 
 
@@ -73,6 +87,7 @@ class RevisionSummary(CamelModel):
     creation: RevisionCreationSummary | None = None
     base_generated_asset_id: UUID | None = None
     generative_task_id: UUID | None = None
+    generative: RevisionGenerativeSummary | None = None
     created_at: datetime
 
 

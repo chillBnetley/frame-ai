@@ -22,10 +22,19 @@ class PurgePlan:
     orphan_originals: tuple[Path, ...]
     orphan_proxies: tuple[Path, ...]
     dangling_images: tuple[str, ...]
+    orphan_generated: tuple[Path, ...] = ()
+    orphan_results: tuple[Path, ...] = ()
+    orphan_masks: tuple[Path, ...] = ()
 
     @property
     def total_files(self) -> int:
-        return len(self.orphan_originals) + len(self.orphan_proxies)
+        return (
+            len(self.orphan_originals)
+            + len(self.orphan_proxies)
+            + len(self.orphan_generated)
+            + len(self.orphan_results)
+            + len(self.orphan_masks)
+        )
 
 
 @dataclass(frozen=True)
@@ -33,6 +42,9 @@ class PurgeReport:
     deleted_originals: int = 0
     deleted_proxies: int = 0
     deleted_records: int = 0
+    deleted_generated: int = 0
+    deleted_results: int = 0
+    deleted_masks: int = 0
     skipped: int = 0
 
 
@@ -73,10 +85,37 @@ def build_plan(
     orphan_proxies = tuple(
         sorted(path for path in _iter_files(proxy_dir) if path.name not in expected_proxies)
     )
+    live_generated = repo.list_live_generated_keys()
+    orphan_generated = tuple(
+        sorted(
+            path
+            for path in _iter_files(settings.generated_dir)
+            if f"{settings.generated_dirname}/{path.name}" not in live_generated
+        )
+    )
+    live_results = repo.list_live_result_keys()
+    orphan_results = tuple(
+        sorted(
+            path
+            for path in _iter_files(settings.generative_results_dir)
+            if f"{settings.generative_results_dirname}/{path.name}" not in live_results
+        )
+    )
+    live_masks = repo.list_live_mask_keys()
+    orphan_masks = tuple(
+        sorted(
+            path
+            for path in _iter_files(settings.data_dir / "masks")
+            if f"masks/{path.name}" not in live_masks
+        )
+    )
     return PurgePlan(
         orphan_originals=orphan_originals,
         orphan_proxies=orphan_proxies,
         dangling_images=tuple(sorted(dangling)),
+        orphan_generated=orphan_generated,
+        orphan_results=orphan_results,
+        orphan_masks=orphan_masks,
     )
 
 
@@ -89,8 +128,20 @@ def apply_plan(
     repo = repository or SqliteDeletionRepository(settings.database_path)
     deleted_originals = _unlink_all(plan.orphan_originals)
     deleted_proxies = _unlink_all(plan.orphan_proxies)
+    deleted_generated = _unlink_all(plan.orphan_generated)
+    deleted_results = _unlink_all(plan.orphan_results)
+    deleted_masks = _unlink_all(plan.orphan_masks)
     skipped = (
-        len(plan.orphan_originals) - deleted_originals + len(plan.orphan_proxies) - deleted_proxies
+        len(plan.orphan_originals)
+        - deleted_originals
+        + len(plan.orphan_proxies)
+        - deleted_proxies
+        + len(plan.orphan_generated)
+        - deleted_generated
+        + len(plan.orphan_results)
+        - deleted_results
+        + len(plan.orphan_masks)
+        - deleted_masks
     )
     deleted_records = 0
     for image_id in plan.dangling_images:
@@ -103,12 +154,19 @@ def apply_plan(
         deleted_originals=deleted_originals,
         deleted_proxies=deleted_proxies,
         deleted_records=deleted_records,
+        deleted_generated=deleted_generated,
+        deleted_results=deleted_results,
+        deleted_masks=deleted_masks,
         skipped=skipped,
     )
     logger.info(
-        "purge_applied originals=%s proxies=%s records=%s skipped=%s",
+        "purge_applied originals=%s proxies=%s generated=%s results=%s masks=%s "
+        "records=%s skipped=%s",
         report.deleted_originals,
         report.deleted_proxies,
+        report.deleted_generated,
+        report.deleted_results,
+        report.deleted_masks,
         report.deleted_records,
         report.skipped,
     )

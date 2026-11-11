@@ -11,6 +11,7 @@ from app.api.deps import get_export_job_manager
 from app.models.export import ExportJobRequest, ExportJobResponse
 from app.models.schemas import ErrorResponse
 from app.services.export_jobs import ExportJobManager
+from app.services.export_service import apply_provenance_headers
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 
@@ -102,6 +103,11 @@ def download_export_result(
     }
     if job.warnings:
         headers["X-Export-Warning"] = ",".join(job.warnings)
+    apply_provenance_headers(
+        headers,
+        ai_generated=job.ai_generated,
+        provenance=job.ai_provenance,
+    )
     return StreamingResponse(
         _file_chunks(stream),
         media_type=job.media_type or "application/octet-stream",

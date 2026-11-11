@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import json
 import logging
 import struct
 import zlib
+from collections.abc import Mapping
 from functools import lru_cache
 from io import BytesIO
-from typing import Literal, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 import cv2
 import numpy as np
 import tifffile
 from numpy.typing import NDArray
-from PIL import Image, ImageCms
+from PIL import Image, ImageCms, PngImagePlugin
+
+PROVENANCE_KEY = "FRAME-AI-Provenance"
 
 ImageFormat = Literal["jpeg", "png", "tiff"]
 BitDepth = Literal[8, 16]
@@ -103,23 +107,33 @@ def _composite_on_white(
     return np.ascontiguousarray(np.clip(np.rint(composited), 0.0, 255.0).astype(np.uint8))
 
 
-def _insert_iccp(payload: bytes, profile: bytes) -> bytes:
-    """Insert an iCCP chunk between PNG IHDR and the first image chunk."""
-    compressed = zlib.compress(profile)
-    data = _ICC_PROFILE_NAME + b"\0" + b"\0" + compressed
-    chunk_type = b"iCCP"
-    chunk = (
+def _format_provenance(provenance: Mapping[str, Any] | None) -> str | None:
+    if not provenance:
+        return None
+    return json.dumps(provenance, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+
+
+def _make_png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
         struct.pack(">I", len(data))
         + chunk_type
         + data
         + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
     )
+
+
+def _insert_iccp(payload: bytes, profile: bytes) -> bytes:
+    """Insert an iCCP chunk between PNG IHDR and the first image chunk."""
+    compressed = zlib.compress(profile)
+    data = _ICC_PROFILE_NAME + b"\0" + b"\0" + compressed
+    chunk = _make_png_chunk(b"iCCP", data)
     return payload[:_PNG_IHDR_END] + chunk + payload[_PNG_IHDR_END:]
 
 
 def _encode_png_sixteen(
     pixels: NDArray[np.uint16],
     alpha: NDArray[np.uint16] | None,
+    provenance_text: str | None = None,
 ) -> bytes:
     # OpenCV expects BGR(A); a 16-bit RGB source cannot go through Pillow.
     bgr = np.ascontiguousarray(pixels[..., ::-1])
@@ -127,26 +141,40 @@ def _encode_png_sixteen(
     success, buffer = cv2.imencode(".png", source)
     if not success:
         raise ValueError("the 16-bit PNG could not be encoded")
-    return _insert_iccp(buffer.tobytes(), srgb_icc_profile())
+    raw = buffer.tobytes()
+    chunks: list[bytes] = []
+    compressed = zlib.compress(srgb_icc_profile())
+    iccp_data = _ICC_PROFILE_NAME + b"\0" + b"\0" + compressed
+    chunks.append(_make_png_chunk(b"iCCP", iccp_data))
+    if provenance_text is not None:
+        text_data = PROVENANCE_KEY.encode("latin-1") + b"\0" + provenance_text.encode("latin-1")
+        chunks.append(_make_png_chunk(b"tEXt", text_data))
+    return raw[:_PNG_IHDR_END] + b"".join(chunks) + raw[_PNG_IHDR_END:]
 
 
 def _encode_tiff(
     pixels: NDArray[np.uint8] | NDArray[np.uint16],
     alpha: NDArray[np.uint8] | NDArray[np.uint16] | None,
+    provenance_text: str | None = None,
 ) -> bytes:
     array = pixels if alpha is None else np.dstack([pixels, alpha])
     buffer = BytesIO()
     # Keep the container reproducible: no host name, tool version or clock.
+    kwargs: dict[str, Any] = {
+        "photometric": "rgb",
+        "compression": "deflate",
+        "iccprofile": srgb_icc_profile(),
+        "metadata": None,
+        "software": False,
+        "datetime": False,
+        "extrasamples": None if alpha is None else ["unassalpha"],
+    }
+    if provenance_text is not None:
+        kwargs["description"] = f"FRAME-AI:{provenance_text}"
     tifffile.imwrite(
         buffer,
         np.ascontiguousarray(array),
-        photometric="rgb",
-        compression="deflate",
-        iccprofile=srgb_icc_profile(),
-        metadata=None,
-        software=False,
-        datetime=False,
-        extrasamples=None if alpha is None else ["unassalpha"],
+        **kwargs,
     )
     return buffer.getvalue()
 
@@ -158,6 +186,7 @@ def encode_image(
     quality: int = JPEG_QUALITY,
     alpha: NDArray[np.uint8] | NDArray[np.uint16] | None = None,
     bit_depth: BitDepth = 8,
+    provenance: Mapping[str, Any] | None = None,
 ) -> bytes:
     if bit_depth not in (8, 16):
         raise ValueError("bit_depth must be 8 or 16")
@@ -165,6 +194,8 @@ def encode_image(
         raise ValueError(f"unsupported image format: {image_format}")
     if not 1 <= quality <= 100:
         raise ValueError("quality must be between 1 and 100")
+
+    provenance_text = _format_provenance(provenance)
 
     if bit_depth == 16:
         if image_format == "jpeg":
@@ -175,8 +206,8 @@ def encode_image(
         sixteen_pixels = cast(NDArray[np.uint16], pixels)
         sixteen_alpha = cast(NDArray[np.uint16] | None, alpha)
         if image_format == "png":
-            return _encode_png_sixteen(sixteen_pixels, sixteen_alpha)
-        return _encode_tiff(sixteen_pixels, sixteen_alpha)
+            return _encode_png_sixteen(sixteen_pixels, sixteen_alpha, provenance_text)
+        return _encode_tiff(sixteen_pixels, sixteen_alpha, provenance_text)
 
     if pixels.dtype != np.uint8 or pixels.ndim != 3 or pixels.shape[2] != 3:
         raise ValueError("pixels must be an HxWx3 uint8 array")
@@ -185,7 +216,7 @@ def encode_image(
     eight_alpha = cast(NDArray[np.uint8] | None, alpha)
 
     if image_format == "tiff":
-        return _encode_tiff(eight_pixels, eight_alpha)
+        return _encode_tiff(eight_pixels, eight_alpha, provenance_text)
 
     format_name, _, _ = FORMAT_INFO[image_format]
     if image_format == "png":
@@ -204,5 +235,16 @@ def encode_image(
     if image_format == "jpeg":
         options["quality"] = quality
         options["subsampling"] = 0 if quality >= 90 else 2
+        if provenance_text is not None:
+            exif = Image.Exif()
+            exif[0x010E] = f"FRAME-AI:{provenance_text}"
+            exif[0x0131] = "FRAME AI"
+            options["exif"] = exif.tobytes()
+    elif image_format == "png":
+        if provenance_text is not None:
+            pnginfo = PngImagePlugin.PngInfo()
+            pnginfo.add_text("Software", "FRAME AI")
+            pnginfo.add_text(PROVENANCE_KEY, provenance_text)
+            options["pnginfo"] = pnginfo
     image.save(buffer, format=format_name, **options)
     return buffer.getvalue()

@@ -362,3 +362,121 @@ def test_purge_keeps_proxies_of_live_images(client: TestClient, settings: Settin
     assert plan.orphan_proxies == ()
     assert plan.orphan_originals == ()
     assert plan.dangling_images == ()
+
+
+def _accept_generative_edit(client: TestClient, session_id: str) -> dict[str, object]:
+    import time
+
+    mask = client.post(
+        "/api/v1/generative/masks",
+        json={
+            "sessionId": session_id,
+            "kind": "rect",
+            "definition": {"region": {"x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5}},
+        },
+    )
+    assert mask.status_code == 201, mask.text
+    created = client.post(
+        "/api/v1/generative/tasks",
+        json={
+            "sessionId": session_id,
+            "taskType": "local_edit",
+            "instruction": "deletion lifecycle",
+            "maskId": mask.json()["maskId"],
+            "params": {"candidates": 1},
+        },
+    )
+    assert created.status_code == 201, created.text
+    task_id = created.json()["taskId"]
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        payload = client.get(f"/api/v1/generative/tasks/{task_id}").json()
+        if payload["status"] in {"succeeded", "failed", "cancelled", "expired"}:
+            break
+        time.sleep(0.02)
+    assert payload["status"] == "succeeded", payload
+    result = payload["results"][0]
+    accepted = client.post(f"/api/v1/generative/results/{result['resultId']}/accept")
+    assert accepted.status_code == 200, accepted.text
+    return {"maskId": mask.json()["maskId"], "resultId": result["resultId"]}
+
+
+def test_deleting_a_session_removes_its_generated_assets(
+    client: TestClient,
+    settings: Settings,
+):
+    image_id, session_id = _upload_and_session(client)
+    _accept_generative_edit(client, session_id)
+    # A mask created after acceptance is bound to the generated asset and must
+    # leave with it; the first mask belongs to the original image-level base.
+    bound_mask = client.post(
+        "/api/v1/generative/masks",
+        json={
+            "sessionId": session_id,
+            "kind": "rect",
+            "definition": {"region": {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.2}},
+        },
+    )
+    assert bound_mask.status_code == 201, bound_mask.text
+    assert bound_mask.json()["baseGeneratedAssetId"] is not None
+
+    connection = connect(settings.database_path)
+    try:
+        generated = connection.execute("SELECT storage_key FROM generated_asset").fetchall()
+        bound_key = connection.execute(
+            "SELECT storage_key FROM generative_mask WHERE base_generated_asset_id IS NOT NULL"
+        ).fetchone()["storage_key"]
+    finally:
+        connection.close()
+    assert generated
+    generated_paths = [settings.data_dir / str(row["storage_key"]) for row in generated]
+    assert all(path.is_file() for path in generated_paths)
+    bound_mask_path = settings.data_dir / str(bound_key)
+    assert bound_mask_path.is_file()
+
+    deleted = client.delete(f"/api/v1/sessions/{session_id}")
+
+    assert deleted.status_code == 204, deleted.text
+    assert all(not path.exists() for path in generated_paths)
+    assert not bound_mask_path.exists()
+    assert _counts(settings, "generated_asset") == 0
+    assert _counts(settings, "generative_task") == 0
+    assert _counts(settings, "generative_result") == 0
+    # The image-level mask made against the original is still used by the
+    # surviving image, so only the generated-asset mask above was removed.
+    remaining = _counts(settings, "generative_mask")
+    assert remaining == 1
+    assert _counts(settings, "image_asset", "id = ?", (image_id,)) == 1
+    assert (settings.data_dir / "originals" / f"{image_id}.png").is_file()
+
+
+def test_purge_plan_and_apply_cover_generative_files(
+    client: TestClient,
+    settings: Settings,
+):
+    generated_dir = settings.generated_dir
+    results_dir = settings.generative_results_dir
+    masks_dir = settings.data_dir / "masks"
+    for directory in (generated_dir, results_dir, masks_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    orphan_generated = generated_dir / "orphan.png"
+    orphan_result = results_dir / "orphan.png"
+    orphan_mask = masks_dir / "orphan.png"
+    orphan_sidecar = masks_dir / "orphan.json"
+    for path in (orphan_generated, orphan_result, orphan_mask, orphan_sidecar):
+        path.write_bytes(b"x")
+
+    plan = build_plan(settings)
+
+    assert plan.orphan_generated == (orphan_generated,)
+    assert plan.orphan_results == (orphan_result,)
+    assert set(plan.orphan_masks) == {orphan_mask, orphan_sidecar}
+
+    report = apply_plan(settings, plan)
+
+    assert report.deleted_generated == 1
+    assert report.deleted_results == 1
+    assert report.deleted_masks == 2
+    assert not any(
+        path.exists() for path in (orphan_generated, orphan_result, orphan_mask, orphan_sidecar)
+    )

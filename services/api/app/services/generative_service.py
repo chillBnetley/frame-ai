@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -130,6 +131,8 @@ class GenerativeTaskService:
             thread_name_prefix="frame-generative",
         )
         self._closed = False
+        self._last_cleanup_at: float = 0.0
+        self._cleanup_lock = threading.Lock()
 
     # ----------------------------------------------------------------- public
 
@@ -156,6 +159,7 @@ class GenerativeTaskService:
         owner: OwnerScope,
         idempotency_key: str | None,
     ) -> tuple[GenerativeTaskCreated, bool]:
+        self.maybe_cleanup_expired_results()
         session = self.sessions.get(str(request.session_id))
         image_id = str(session.image_id)
         capabilities = self.provider.capabilities()
@@ -189,10 +193,7 @@ class GenerativeTaskService:
                 "generative_mask_required",
                 "This task type requires a mask indicating the editable region.",
             )
-        if (
-            request.task_type == GenerativeTaskType.LOCAL_EDIT
-            and not request.instruction.strip()
-        ):
+        if request.task_type == GenerativeTaskType.LOCAL_EDIT and not request.instruction.strip():
             raise AppError(
                 422,
                 "generative_instruction_required",
@@ -228,10 +229,7 @@ class GenerativeTaskService:
             target_height = outpaint_geo.target_height
 
         try:
-            has_mask = (
-                mask_id is not None
-                or request.task_type == GenerativeTaskType.OUTPAINT
-            )
+            has_mask = mask_id is not None or request.task_type == GenerativeTaskType.OUTPAINT
             self.provider.validate_spec(
                 GenerativeRequestSpec(
                     task_type=request.task_type,
@@ -513,11 +511,30 @@ class GenerativeTaskService:
     def recover(self) -> int:
         self.store.cleanup_temp()
         queued = self.repository.recover_startup()
-        self.cleanup_expired_results()
+        self.maybe_cleanup_expired_results(force=True)
         for task_id in queued:
             self._submit(task_id)
         logger.info("generative_recovered pending=%s", len(queued))
         return len(queued)
+
+    def maybe_cleanup_expired_results(
+        self,
+        *,
+        force: bool = False,
+        now: datetime | None = None,
+    ) -> int:
+        monotonic_now = time.monotonic()
+        if not force and (monotonic_now - self._last_cleanup_at) < 60.0:
+            return 0
+        with self._cleanup_lock:
+            if not force and (time.monotonic() - self._last_cleanup_at) < 60.0:
+                return 0
+            self._last_cleanup_at = time.monotonic()
+            try:
+                return self.cleanup_expired_results(now=now)
+            except Exception:
+                logger.exception("generative_cleanup_failed")
+                return 0
 
     def cleanup_expired_results(self, *, now: datetime | None = None) -> int:
         current = now or datetime.now(UTC)
