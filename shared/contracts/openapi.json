@@ -838,6 +838,128 @@
         }
       }
     },
+    "/api/v1/images/{image_id}/deletion-preview": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Preview Image Deletion",
+        "operationId": "preview_image_deletion_api_v1_images__image_id__deletion_preview_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageDeletionPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or empty upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Image is being analyzed or exported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Upload or pixel limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported or invalid image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Semantic mask model is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Semantic mask inference timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images/{image_id}": {
       "delete": {
         "tags": [
@@ -8356,6 +8478,97 @@
         }
       }
     },
+    "/api/v1/generative/storage": {
+      "get": {
+        "tags": [
+          "generative"
+        ],
+        "summary": "Get Storage",
+        "operationId": "get_storage_api_v1_generative_storage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerativeStorageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Generative task, result, mask, or asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task state, mask, or base revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Generative input or output exceeds the configured limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request, unsupported capability, or missing consent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider returned an invalid or blank image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Generation queue is full or the pipeline is unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Generation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/generative/masks": {
       "post": {
         "tags": [
@@ -13357,6 +13570,45 @@
         ],
         "title": "GenerativeResultView"
       },
+      "GenerativeStorageResponse": {
+        "properties": {
+          "usedBytes": {
+            "type": "integer",
+            "title": "Usedbytes"
+          },
+          "limitBytes": {
+            "type": "integer",
+            "title": "Limitbytes"
+          },
+          "assetBytes": {
+            "type": "integer",
+            "title": "Assetbytes"
+          },
+          "resultBytes": {
+            "type": "integer",
+            "title": "Resultbytes"
+          },
+          "maskBytes": {
+            "type": "integer",
+            "title": "Maskbytes"
+          },
+          "retentionDays": {
+            "type": "integer",
+            "title": "Retentiondays"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "usedBytes",
+          "limitBytes",
+          "assetBytes",
+          "resultBytes",
+          "maskBytes",
+          "retentionDays"
+        ],
+        "title": "GenerativeStorageResponse"
+      },
       "GenerativeTaskCreated": {
         "properties": {
           "taskId": {
@@ -13770,6 +14022,56 @@
         "additionalProperties": false,
         "type": "object",
         "title": "HslBand"
+      },
+      "ImageDeletionPreviewResponse": {
+        "properties": {
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Imageid"
+          },
+          "sessions": {
+            "type": "integer",
+            "title": "Sessions"
+          },
+          "revisions": {
+            "type": "integer",
+            "title": "Revisions"
+          },
+          "analysisTasks": {
+            "type": "integer",
+            "title": "Analysistasks"
+          },
+          "generativeTasks": {
+            "type": "integer",
+            "title": "Generativetasks"
+          },
+          "generativeResults": {
+            "type": "integer",
+            "title": "Generativeresults"
+          },
+          "generatedAssets": {
+            "type": "integer",
+            "title": "Generatedassets"
+          },
+          "generativeMasks": {
+            "type": "integer",
+            "title": "Generativemasks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "imageId",
+          "sessions",
+          "revisions",
+          "analysisTasks",
+          "generativeTasks",
+          "generativeResults",
+          "generatedAssets",
+          "generativeMasks"
+        ],
+        "title": "ImageDeletionPreviewResponse"
       },
       "ImageListItem": {
         "properties": {

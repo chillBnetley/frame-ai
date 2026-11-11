@@ -1,4 +1,4 @@
-import type { UploadedImage, HealthResponse, RuntimeConfig } from "@/types/image";
+import type { UploadedImage, ImageDeletionPreview, HealthResponse, RuntimeConfig } from "@/types/image";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 const UPLOAD_TIMEOUT_MS = 60_000;
@@ -193,6 +193,21 @@ export async function deleteImage(  imageId: string,
   await apiRequest(
     `/api/v1/images/${encodeURIComponent(imageId)}`,
     { method: "DELETE" },
+    { signal },
+  );
+}
+
+/**
+ * Fetches preview counts of sessions, revisions, tasks and generated assets
+ * that will be permanently cleared when this image is deleted.
+ */
+export async function fetchDeletionPreview(
+  imageId: string,
+  signal?: AbortSignal,
+): Promise<ImageDeletionPreview> {
+  return apiJson<ImageDeletionPreview>(
+    `/api/v1/images/${encodeURIComponent(imageId)}/deletion-preview`,
+    { cache: "no-store" },
     { signal },
   );
 }

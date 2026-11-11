@@ -12,6 +12,7 @@ import type {
   GenerativeCapabilitiesResponse,
   GenerativeMaskView,
   GenerativeResultView,
+  GenerativeStorageResponse,
   GenerativeTaskCreated,
   GenerativeTaskStatusResponse,
 } from "@/types/generative";
@@ -26,6 +27,7 @@ vi.mock("@/lib/api/personal-style", () => ({
 
 vi.mock("@/lib/api/generative", () => ({
   getGenerativeCapabilities: vi.fn(),
+  getGenerativeStorage: vi.fn(),
   listGenerativeMasks: vi.fn(),
   createGenerativeMask: vi.fn(),
   createGenerativeTask: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock("@/lib/api/generative", () => ({
 }));
 
 const mockGetCapabilities = vi.mocked(generativeApi.getGenerativeCapabilities);
+const mockGetStorage = vi.mocked(generativeApi.getGenerativeStorage);
 const mockListMasks = vi.mocked(generativeApi.listGenerativeMasks);
 const mockCreateMask = vi.mocked(generativeApi.createGenerativeMask);
 const mockCreateTask = vi.mocked(generativeApi.createGenerativeTask);
@@ -62,6 +65,15 @@ const MOCK_CAPABILITIES: GenerativeCapabilitiesResponse = {
   allowedOutputFormats: ["png"],
   declaredRetention: "Mock provider",
   notes: [],
+};
+
+const MOCK_STORAGE: GenerativeStorageResponse = {
+  usedBytes: 10 * 1024 * 1024,
+  limitBytes: 2048 * 1024 * 1024,
+  assetBytes: 8 * 1024 * 1024,
+  resultBytes: 2 * 1024 * 1024,
+  maskBytes: 0,
+  retentionDays: 7,
 };
 
 function mask(maskId: string, kind: GenerativeMaskView["kind"]): GenerativeMaskView {
@@ -251,6 +263,7 @@ function pendingPoll(next: GenerativeTaskStatusResponse) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetCapabilities.mockResolvedValue(MOCK_CAPABILITIES);
+  mockGetStorage.mockResolvedValue(MOCK_STORAGE);
   mockListStyles.mockResolvedValue({ styles: [] });
   mockListMasks.mockResolvedValue({ items: [mask("mask-001", "brush")] });
   mockCreateTask.mockResolvedValue(MOCK_TASK_CREATED);
@@ -865,5 +878,33 @@ describe("CreativeStudio subject masks", () => {
 
     expect(screen.getByRole("radio", { name: /^AI 智能消除/ })).toBeChecked();
     expect(screen.getByRole("button", { name: "开始 AI 智能消除" })).toBeEnabled();
+  });
+});
+
+describe("CreativeStudio storage budget meter", () => {
+  it("displays the storage usage meter", async () => {
+    renderStudio();
+    await awaitCapabilities();
+
+    expect(await screen.findByTestId("generative-storage-meter")).toBeInTheDocument();
+    expect(screen.getByText("本机 AI 存储预算")).toBeInTheDocument();
+  });
+
+  it("disables submit and shows error guidance when storage is full", async () => {
+    mockGetStorage.mockResolvedValue({
+      usedBytes: 2048 * 1024 * 1024,
+      limitBytes: 2048 * 1024 * 1024,
+      assetBytes: 2000 * 1024 * 1024,
+      resultBytes: 48 * 1024 * 1024,
+      maskBytes: 0,
+      retentionDays: 7,
+    });
+    const { user } = renderStudio();
+    await awaitCapabilities();
+
+    await user.click(screen.getByRole("radio", { name: "16:9" }));
+    expect(await screen.findByText(/存储预算已耗尽/)).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+    expect(screen.getByText(/生成式存储已达上限/)).toBeInTheDocument();
   });
 });

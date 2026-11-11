@@ -261,6 +261,11 @@ const CODE_ENTRIES: Record<string, CodeEntry> = {
   generative_internal_error: { category: "generation_failed", message: "服务出现未预期错误。" },
 
   // Persistence.
+  generative_storage_budget_exceeded: {
+    category: "save_failed",
+    message: "生成式存储用量已达上限，无法提交新的生成任务。",
+    nextStep: "删除不需要的照片或编辑会话，或等待临时候选结果过期自动清理。",
+  },
   generative_storage_error: {
     category: "save_failed",
     message: "生成结果写入本机存储失败。",

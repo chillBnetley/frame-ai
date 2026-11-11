@@ -27,3 +27,4 @@ export type GenerativeTaskListResponse = components["schemas"]["GenerativeTaskLi
 export type GenerativeResultView = components["schemas"]["GenerativeResultView"];
 export type GenerativeErrorInfo = components["schemas"]["GenerativeErrorInfo"];
 export type GenerativeCapabilitiesResponse = components["schemas"]["GenerativeCapabilitiesResponse"];
+export type GenerativeStorageResponse = components["schemas"]["GenerativeStorageResponse"];

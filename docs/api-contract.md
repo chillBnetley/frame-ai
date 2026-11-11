@@ -254,10 +254,11 @@ API 在本机边界之上再加两道轻量防护，避免 DNS 重绑定与浏�
 | `GET /api/v1/config` | — | `{maxUploadBytes, maxJsonBodyBytes, maxImagePixels, allowedMimeTypes, features:{layers}}` | — |
 | `POST /api/v1/images` | multipart，唯一 `file` 字段 | 201 `{imageId, originalName, width, height, exifOrientation, mimeType, bytes}` | 400 `invalid_upload`/`empty_file`；413 `payload_too_large`/`file_too_large`；415 `invalid_image`/`mime_mismatch`/`unsupported_media_type`/`animated_not_supported`/`unsupported_tiff_compression`/`tiff_multipage_not_supported`/`associated_alpha_not_supported`；500 `storage_error` |
 | `GET /api/v1/images/{imageId}/original` | 可选 `?download=true` | 原始字节；`inline` 或 `attachment` | 404 `image_not_found`/`image_file_missing` |
+| `GET /api/v1/images/{imageId}/deletion-preview` ⊕ | — | 200 `{imageId, sessions, revisions, analysisTasks, generativeTasks, generativeResults, generatedAssets, generativeMasks}` | 404 `image_not_found` |
 | `POST /api/v1/images/{imageId}/semantic-masks` | `{semanticClass:"person"\|"sky"}` | 201 `{matteId, sha256, modelVersion, semanticClass, width, height}`；同 matte 重复调用复用同一结果 | 404 `image_not_found`；422 `validation_error`；503 `semantic_mask_unavailable`（flag/模型不可用）；504 `semantic_mask_timeout` |
 | `DELETE /api/v1/images/{imageId}` | — | 204，无响应体；重复删除同样 204 | 404 `image_not_found`；409 `resource_busy`（分析 pending/processing） |
 
-`DELETE /images/{imageId}` 硬删除图片及其会话、revision、分析任务/结果、方案与反馈，并在提交后删除原图、无共享引用的代理与预览缓存。删除不可恢复；编辑器在删除前要求二次确认，并在成功后回到上传态。文件删除失败不回滚 204，由 `scripts/purge_orphans.py` 重试。
+`DELETE /images/{imageId}` 硬删除图片及其会话、revision、分析任务/结果、方案与反馈，以及关联的生成任务、候选结果、生成资产与蒙版，并在提交后删除原图、无共享引用的代理与预览缓存。删除不可恢复；编辑器在删除前通过 `GET /api/v1/images/{imageId}/deletion-preview` 异步拉取关联记录统计并进行细项告警二次确认（接口不可用时优雅回退至静态警告文案），并在成功后回到上传态。文件删除失败不回滚 204，由 `scripts/purge_orphans.py` 重试。
 
 `features.layers` 来自 `FRAME_FEATURE_LAYERS`（默认 `false`），只用于前端能力曝光与 UI 显隐；后端始终接受、校验并渲染图层字段，关闭开关不会拒绝写入或改变像素。`features.semanticMasks.enabled` 是 `FRAME_FEATURE_SEMANTIC_MASKS` 本身；`person/sky` 在 flag 开启且对应模型校验通过、缓存可写时才为 true，`features.semanticMaskModels` 给出模型版本（不可用为 null）。flag 开启但模型都不可用时前端仍显示两个禁用按钮与原因；flag 关闭/模型缺失只影响 UI 与推理端点，已保存的语义蒙版仍会渲染。
 
@@ -668,6 +669,25 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 - `GET /feedback` 的 `summary` 对本次扫描窗口（上限 500 条）给出动作计数、`bySource`、`mockCount`/`realCount`/`degradedCount`、
   `ratedCount`、`changeFrequency`、`rubricAverages` 与固定三条 disclaimer；不含也不推断任何“质量提升”结论。
 
+### 4.9 生成式编辑与存储（阶段 6.3）
+
+前缀 `/api/v1/generative`，提供非破坏性 AI 画幅扩充（outpaint）、智能消除（remove）与局部重绘（local edit）。
+所有生成式任务遵守单会话单任务、字节级保护区写回与统一版本线规则。
+
+| 方法与路径 | 请求 | 响应 | 主要错误 |
+| --- | --- | --- | --- |
+| `GET /api/v1/generative/capabilities` | — | `GenerativeCapabilitiesResponse`（支持的任务类型、尺寸上限、模型与 retention 天数） | — |
+| `GET /api/v1/generative/storage` ⊕ | — | `GenerativeStorageResponse`：`{usedBytes, limitBytes, assetBytes, resultBytes, maskBytes, retentionDays}` | 401（未授权） |
+| `POST /api/v1/generative/tasks` | `GenerativeTaskRequest`（`sessionId`, `taskType`, `baseMode`, `instruction`, `maskId`, `outpaint` 等） | 201 `GenerativeTaskResponse`；同幂等 Key 返回已有任务 | 400 `task_type_unsupported`；404 `session_not_found`/`mask_not_found`；413 `generative_storage_budget_exceeded`；422 `validation_error`；429 `rate_limited` |
+| `GET /api/v1/generative/tasks/{taskId}` | — | `GenerativeTaskResponse`（含运行状态与结果列表） | 404 `task_not_found` |
+| `POST /api/v1/generative/tasks/{taskId}/cancel` | — | 200 取消任务 | 404 `task_not_found`；409 `task_cannot_cancel` |
+| `POST /api/v1/generative/tasks/{taskId}/retry` | — | 200 重启失败任务 | 404 `task_not_found`；409 `task_not_failed` |
+| `POST /api/v1/generative/results/{resultId}/accept` | — | 200 `SessionState`（版本前进并挂接生成资产） | 404 `result_not_found`；409 `result_not_candidate` |
+| `POST /api/v1/generative/results/{resultId}/reject` | — | 200 放弃候选结果 | 404 `result_not_found` |
+
+- **存储配额约束（OD-3）**：由配置 `FRAME_GENERATIVE_DISK_BUDGET_MB`（默认 2048 MB）控制软上限。创建生成任务时，若当前生成资产、临时候选与蒙版总占用达到上限，系统优先主动清理超期的过期候选结果；若清理后仍超过上限，返回 HTTP 413 `generative_storage_budget_exceeded`，`details` 给出 `usedBytes` 与 `limitBytes`。
+- **删除前告知（Batch 10）**：`GET /api/v1/images/{imageId}/deletion-preview` 在用户点击删除照片时异步拉取关联的会话、版本、分析任务、生成任务、临时候选、生成资产与蒙版计数；前端弹窗细项展示将要清理的内容，避免意外丢失。
+
 ## 5. 相对任务书 §7 的契约扩展
 
 | 扩展 | 说明 |
@@ -769,6 +789,7 @@ Provider 与回退状态；模型输出只是“意图”，最终配方一律�
 | `unsupported_tiff_compression` | 415 | TIFF 使用 LZW/JPEG 等未支持压缩（仅接受未压缩与 Deflate） |
 | `associated_alpha_not_supported` | 415 | TIFF 使用 associated（预乘）alpha；只接受 unassociated alpha |
 | `tiff_multipage_not_supported` | 415 | TIFF 含多页/多帧 |
+| `generative_storage_budget_exceeded` | 413 | 生成式磁盘总使用量超过设定软预算，且主动清理过期候选后仍超限（OD-3） |
 | `unsupported_icc_profile` | 422 | 16-bit 输入的 ICC 为 LUT/结构化（`A2B*`/`B2A*`/`D2B*`/`B2D*`/`mAB`/`mBA`/`mft*`）/non-RGB/XYZ 或超出解析边界，不做静默降级 |
 | `unsupported_bit_depth` | 422 | 导出服务的保护性错误（绕过 HTTP 模型直接调用）；HTTP 入口的 JPEG+16 组合统一返回 `validation_error` |
 | `validation_error` | 422 | 字段校验失败（含未知字段 `extra_forbidden`），`details.fields` 给出字段、规则与限制 |

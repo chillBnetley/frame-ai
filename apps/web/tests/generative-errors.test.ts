@@ -62,6 +62,7 @@ const BACKEND_GENERATIVE_CODES = [
   "generative_result_not_found",
   "generative_retry_not_allowed",
   "generative_service",
+  "generative_storage_budget_exceeded",
   "generative_storage_error",
   "generative_task_not_found",
   "generative_task_not_ready",

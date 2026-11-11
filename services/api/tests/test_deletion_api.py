@@ -480,3 +480,26 @@ def test_purge_plan_and_apply_cover_generative_files(
     assert not any(
         path.exists() for path in (orphan_generated, orphan_result, orphan_mask, orphan_sidecar)
     )
+
+
+def test_deletion_preview_counts_and_404(client: TestClient, settings: Settings):
+    missing = client.get(f"/api/v1/images/{uuid4()}/deletion-preview")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "image_not_found"
+
+    image_id, session_id = _upload_and_session(client)
+    _commit(client, session_id)
+    _insert_pending_analysis(settings, image_id)
+    _accept_generative_edit(client, session_id)
+
+    preview = client.get(f"/api/v1/images/{image_id}/deletion-preview")
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["imageId"] == image_id
+    assert body["sessions"] == 1
+    assert body["revisions"] == 3  # initial + commit + accept
+    assert body["analysisTasks"] == 1
+    assert body["generativeTasks"] == 1
+    assert body["generativeResults"] == 1
+    assert body["generatedAssets"] == 1
+    assert body["generativeMasks"] == 1

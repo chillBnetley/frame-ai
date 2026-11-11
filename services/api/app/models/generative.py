@@ -262,6 +262,15 @@ class GenerativeCapabilitiesResponse(CamelModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class GenerativeStorageResponse(CamelModel):
+    used_bytes: int
+    limit_bytes: int
+    asset_bytes: int
+    result_bytes: int
+    mask_bytes: int
+    retention_days: int
+
+
 class GenerativeTaskRecord(CamelModel):
     id: str
     owner_id: str

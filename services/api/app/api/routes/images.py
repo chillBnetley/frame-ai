@@ -17,6 +17,7 @@ from app.api.deps import (
 from app.core.errors import AppError
 from app.models.schemas import (
     ErrorResponse,
+    ImageDeletionPreviewResponse,
     ImageListItem,
     ImageListResponse,
     SemanticMaskRequest,
@@ -143,6 +144,20 @@ def get_original_image(
         "X-Content-Type-Options": "nosniff",
     }
     return FileResponse(path, media_type=record.mime_type, headers=headers)
+
+
+@router.get(
+    "/{image_id}/deletion-preview",
+    response_model=ImageDeletionPreviewResponse,
+    responses={
+        404: {"model": ErrorResponse, "description": "Image not found"},
+    },
+)
+def preview_image_deletion(
+    image_id: str,
+    service: Annotated[DeletionService, Depends(get_deletion_service)],
+) -> ImageDeletionPreviewResponse:
+    return service.preview_deletion(image_id)
 
 
 @router.delete("/{image_id}", status_code=204)

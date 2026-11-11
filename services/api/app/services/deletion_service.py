@@ -7,6 +7,7 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.imaging.loader import PROXY_EDGE_STEP, proxy_cache_directory, proxy_cache_path
 from app.imaging.semantic_mattes import purge_mattes_for_image
+from app.models.schemas import ImageDeletionPreviewResponse
 from app.repositories.deletion_repo import ImageDeletionRecord, SqliteDeletionRepository
 from app.repositories.generative_repo import SqliteGenerativeRepository
 from app.services.analysis_task_service import AnalysisTaskService
@@ -64,6 +65,22 @@ class DeletionService:
         if self.export_jobs is not None:
             active.update(self.export_jobs.active_sessions())
         return frozenset(active)
+
+    def preview_deletion(self, image_id: str) -> ImageDeletionPreviewResponse:
+        normalized = _normalize_or_404(image_id, "image_not_found", IMAGE_NOT_FOUND)
+        record = self.repository.deletion_preview(normalized)
+        if record is None:
+            raise AppError(404, "image_not_found", IMAGE_NOT_FOUND)
+        return ImageDeletionPreviewResponse(
+            image_id=UUID(record.image_id),
+            sessions=record.sessions,
+            revisions=record.revisions,
+            analysis_tasks=record.analysis_tasks,
+            generative_tasks=record.generative_tasks,
+            generative_results=record.generative_results,
+            generated_assets=record.generated_assets,
+            generative_masks=record.generative_masks,
+        )
 
     def delete_image(self, image_id: str) -> None:
         normalized = _normalize_or_404(image_id, "image_not_found", IMAGE_NOT_FOUND)

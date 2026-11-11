@@ -419,3 +419,49 @@ def test_export_of_a_generated_base_carries_ai_provenance(
 
     with tifffile.TiffFile(BytesIO(tiff.content)) as handle:
         assert "local_edit" in handle.pages[0].tags["ImageDescription"].value
+
+
+def test_generative_storage_endpoint_returns_budget_and_usage(
+    client: TestClient,
+    settings: Settings,
+):
+    initial = client.get("/api/v1/generative/storage")
+    assert initial.status_code == 200, initial.text
+    body = initial.json()
+    assert body["limitBytes"] == settings.generative_disk_budget_bytes
+    assert body["retentionDays"] == settings.generative_result_ttl_seconds // 86400
+    assert body["usedBytes"] == body["assetBytes"] + body["resultBytes"] + body["maskBytes"]
+
+    session = _new_session(client)
+    task = _run_task(client, session)
+    result = task["results"][0]
+    accepted = client.post(f"/api/v1/generative/results/{result['resultId']}/accept")
+    assert accepted.status_code == 200, accepted.text
+
+    after = client.get("/api/v1/generative/storage").json()
+    assert after["assetBytes"] > 0
+    assert after["usedBytes"] >= after["assetBytes"]
+
+
+def test_generative_storage_budget_exceeded_blocks_new_task(
+    client: TestClient,
+    monkeypatch,
+):
+    session = _new_session(client)
+    service = client.app.state.generative_service
+
+    # Monkeypatch storage_usage to simulate exceeding budget
+    original_storage = service.storage_usage
+
+    def _mock_storage():
+        real = original_storage()
+        return real.model_copy(update={"used_bytes": real.limit_bytes + 1024})
+
+    monkeypatch.setattr(service, "storage_usage", _mock_storage)
+
+    blocked = _create_task(client, session, instruction="new edit while budget exceeded")
+    assert blocked.status_code == 413, blocked.text
+    body = blocked.json()["error"]
+    assert body["code"] == "generative_storage_budget_exceeded"
+    assert "usedBytes" in body["details"]
+    assert "limitBytes" in body["details"]

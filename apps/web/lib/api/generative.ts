@@ -5,6 +5,7 @@ import type {
   GenerativeMaskListResponse,
   GenerativeMaskView,
   GenerativeResultView,
+  GenerativeStorageResponse,
   GenerativeTaskCreated,
   GenerativeTaskRequest,
   GenerativeTaskStatusResponse,
@@ -97,6 +98,16 @@ export async function getGenerativeCapabilities(
 ): Promise<GenerativeCapabilitiesResponse> {
   return apiJson<GenerativeCapabilitiesResponse>(
     `${PREFIX}/capabilities`,
+    { cache: "no-store" },
+    { signal, timeoutMs: TASK_TIMEOUT_MS },
+  );
+}
+
+export async function getGenerativeStorage(
+  signal?: AbortSignal,
+): Promise<GenerativeStorageResponse> {
+  return apiJson<GenerativeStorageResponse>(
+    `${PREFIX}/storage`,
     { cache: "no-store" },
     { signal, timeoutMs: TASK_TIMEOUT_MS },
   );

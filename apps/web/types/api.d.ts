@@ -159,6 +159,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/{image_id}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Image Deletion */
+        get: operations["preview_image_deletion_api_v1_images__image_id__deletion_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/{image_id}": {
         parameters: {
             query?: never;
@@ -1254,6 +1271,23 @@ export interface paths {
         };
         /** Get Capabilities */
         get: operations["get_capabilities_api_v1_generative_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/generative/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Storage */
+        get: operations["get_storage_api_v1_generative_storage_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2861,6 +2895,21 @@ export interface components {
             /** Decidedat */
             decidedAt?: string | null;
         };
+        /** GenerativeStorageResponse */
+        GenerativeStorageResponse: {
+            /** Usedbytes */
+            usedBytes: number;
+            /** Limitbytes */
+            limitBytes: number;
+            /** Assetbytes */
+            assetBytes: number;
+            /** Resultbytes */
+            resultBytes: number;
+            /** Maskbytes */
+            maskBytes: number;
+            /** Retentiondays */
+            retentionDays: number;
+        };
         /** GenerativeTaskCreated */
         GenerativeTaskCreated: {
             /**
@@ -3039,6 +3088,28 @@ export interface components {
              * @default 0
              */
             luminance: number;
+        };
+        /** ImageDeletionPreviewResponse */
+        ImageDeletionPreviewResponse: {
+            /**
+             * Imageid
+             * Format: uuid
+             */
+            imageId: string;
+            /** Sessions */
+            sessions: number;
+            /** Revisions */
+            revisions: number;
+            /** Analysistasks */
+            analysisTasks: number;
+            /** Generativetasks */
+            generativeTasks: number;
+            /** Generativeresults */
+            generativeResults: number;
+            /** Generatedassets */
+            generatedAssets: number;
+            /** Generativemasks */
+            generativeMasks: number;
         };
         /** ImageListItem */
         ImageListItem: {
@@ -6521,6 +6592,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Invalid or empty upload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Image is being analyzed or exported */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Upload or pixel limit exceeded */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unsupported or invalid image */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Storage failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask model is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Semantic mask inference timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_image_deletion_api_v1_images__image_id__deletion_preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageDeletionPreviewResponse"];
                 };
             };
             /** @description Invalid or empty upload */
@@ -12375,6 +12549,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerativeCapabilitiesResponse"];
+                };
+            };
+            /** @description Generative task, result, mask, or asset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Task state, mask, or base revision conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generative input or output exceeds the configured limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request, unsupported capability, or missing consent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider returned an invalid or blank image */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation queue is full or the pipeline is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_storage_api_v1_generative_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerativeStorageResponse"];
                 };
             };
             /** @description Generative task, result, mask, or asset not found */

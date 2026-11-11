@@ -15,6 +15,7 @@ from app.models.generative import (
     GenerativeMaskListResponse,
     GenerativeMaskView,
     GenerativeResultView,
+    GenerativeStorageResponse,
     GenerativeTaskCreated,
     GenerativeTaskListResponse,
     GenerativeTaskRequest,
@@ -51,6 +52,17 @@ def get_capabilities(
     service: Annotated[GenerativeTaskService, Depends(get_generative_service)],
 ) -> GenerativeCapabilitiesResponse:
     return service.capabilities()
+
+
+@router.get(
+    "/storage",
+    response_model=GenerativeStorageResponse,
+    dependencies=[Depends(get_owner_scope)],
+)
+def get_storage(
+    service: Annotated[GenerativeTaskService, Depends(get_generative_service)],
+) -> GenerativeStorageResponse:
+    return service.storage_usage()
 
 
 @router.post("/masks", response_model=GenerativeMaskView, status_code=201)

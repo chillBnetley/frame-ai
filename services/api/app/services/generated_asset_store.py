@@ -128,6 +128,19 @@ class GeneratedAssetStore:
             return False
         return True
 
+    def measure_masks_bytes(self) -> int:
+        if not self.masks_dir.exists():
+            return 0
+        total = 0
+        try:
+            for entry in self.masks_dir.iterdir():
+                if entry.is_file():
+                    with contextlib.suppress(OSError):
+                        total += entry.stat().st_size
+        except OSError:
+            pass
+        return total
+
     def _write(self, storage_key: str, data: bytes) -> str:
         return self._write_payload(
             storage_key,

@@ -3,6 +3,17 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { DeletePhotoDialog } from "@/features/editor/components/delete-photo-dialog";
+import * as clientApi from "@/lib/api/client";
+
+vi.mock("@/lib/api/client", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/api/client")>("@/lib/api/client");
+  return {
+    ...actual,
+    fetchDeletionPreview: vi.fn(),
+  };
+});
+
+const mockFetchPreview = vi.mocked(clientApi.fetchDeletionPreview);
 
 describe("DeletePhotoDialog", () => {
   it("shows the consequence and focuses the safe action", () => {
@@ -19,7 +30,59 @@ describe("DeletePhotoDialog", () => {
     const dialog = screen.getByRole("dialog", { name: "删除这张照片？" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(screen.getByText(/无法恢复/)).toBeInTheDocument();
+    expect(screen.getByText(/AI 分析、生成结果与蒙版/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "取消" })).toHaveFocus();
+  });
+
+  it("renders the itemized breakdown when deletion preview loads", async () => {
+    mockFetchPreview.mockResolvedValue({
+      imageId: "img-001",
+      sessions: 2,
+      revisions: 5,
+      analysisTasks: 1,
+      generativeTasks: 2,
+      generativeResults: 3,
+      generatedAssets: 1,
+      generativeMasks: 1,
+    });
+
+    render(
+      <DeletePhotoDialog
+        open
+        busy={false}
+        error={null}
+        imageId="img-001"
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByTestId("deletion-breakdown")).toBeInTheDocument();
+    expect(screen.getByText("编辑会话：")).toBeInTheDocument();
+    expect(screen.getByText("历史版本：")).toBeInTheDocument();
+    expect(screen.getByText("AI 分析：")).toBeInTheDocument();
+    expect(screen.getByText("生成任务：")).toBeInTheDocument();
+    expect(screen.getByText("生成资产：")).toBeInTheDocument();
+    expect(screen.getByText("临时候选：")).toBeInTheDocument();
+    expect(screen.getByText("绘制蒙版：")).toBeInTheDocument();
+  });
+
+  it("falls back to static copy when deletion preview fails", async () => {
+    mockFetchPreview.mockRejectedValue(new Error("500"));
+
+    render(
+      <DeletePhotoDialog
+        open
+        busy={false}
+        error={null}
+        imageId="img-001"
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("deletion-breakdown")).toBeNull();
+    expect(screen.getByText(/AI 分析、生成结果与蒙版/)).toBeInTheDocument();
   });
 
   it("cancels on Escape and confirms on the destructive action", async () => {

@@ -23,6 +23,18 @@ class ImageDeletionRecord:
 
 
 @dataclass(frozen=True)
+class ImageDeletionPreviewRecord:
+    image_id: str
+    sessions: int
+    revisions: int
+    analysis_tasks: int
+    generative_tasks: int
+    generative_results: int
+    generated_assets: int
+    generative_masks: int
+
+
+@dataclass(frozen=True)
 class SessionDeletionRecord:
     status: DeletionStatus
     image_id: str | None = None
@@ -208,6 +220,77 @@ class SqliteDeletionRepository:
         finally:
             connection.close()
         return tuple(str(row["id"]) for row in rows)
+
+    def deletion_preview(self, image_id: str) -> ImageDeletionPreviewRecord | None:
+        normalized = _normalize_id(image_id)
+        connection = connect(self._path)
+        try:
+            row = connection.execute(
+                "SELECT 1 FROM image_asset WHERE id = ?",
+                (normalized,),
+            ).fetchone()
+            if row is None:
+                return None
+            sessions = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS total FROM edit_session WHERE image_id = ?",
+                    (normalized,),
+                ).fetchone()["total"]
+            )
+            revisions = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS total FROM edit_revision "
+                    "JOIN edit_session ON edit_session.id = edit_revision.session_id "
+                    "WHERE edit_session.image_id = ?",
+                    (normalized,),
+                ).fetchone()["total"]
+            )
+            analysis_tasks = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS total FROM analysis_task WHERE image_id = ?",
+                    (normalized,),
+                ).fetchone()["total"]
+            )
+            generative_tasks = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS total FROM generative_task WHERE image_id = ?",
+                    (normalized,),
+                ).fetchone()["total"]
+            )
+            generative_results = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS total FROM generative_result "
+                    "JOIN generative_task ON generative_task.id = generative_result.task_id "
+                    "WHERE generative_task.image_id = ?",
+                    (normalized,),
+                ).fetchone()["total"]
+            )
+            generated_assets = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS total FROM generated_asset "
+                    "WHERE image_id = ? AND deleted_at IS NULL",
+                    (normalized,),
+                ).fetchone()["total"]
+            )
+            generative_masks = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS total FROM generative_mask "
+                    "WHERE image_id = ? AND deleted_at IS NULL",
+                    (normalized,),
+                ).fetchone()["total"]
+            )
+        finally:
+            connection.close()
+        return ImageDeletionPreviewRecord(
+            image_id=normalized,
+            sessions=sessions,
+            revisions=revisions,
+            analysis_tasks=analysis_tasks,
+            generative_tasks=generative_tasks,
+            generative_results=generative_results,
+            generated_assets=generated_assets,
+            generative_masks=generative_masks,
+        )
 
     def list_images(self) -> list[StoredImageRecord]:
         connection = connect(self._path)

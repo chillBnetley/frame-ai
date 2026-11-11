@@ -1,16 +1,18 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId } from "react";
 
 import { GenerativeMaskSelect } from "../components/generative-mask-select";
 import { GenerativeTaskResult } from "../components/generative-task-result";
 import { OutpaintParamsForm } from "../components/outpaint-params-form";
 import type { GenerativeSuggestion } from "../suggestions";
 import { buildStyleInstruction } from "../style-instruction";
+import { useGenerativeStorage } from "../use-generative-storage";
 import { StudioSuggestions } from "./studio-suggestions";
 import { STUDIO_CAPABILITIES } from "./studio-tool-rail";
 import type { CreativeStudioController } from "./use-creative-studio";
 import { createGenerativeMask } from "@/lib/api/generative";
+import { formatBytes } from "@/lib/format";
 import type { GenerativeBaseMode } from "@/types/generative";
 
 export interface StudioTaskPanelProps {
@@ -120,10 +122,23 @@ export function StudioTaskPanel({
   const { studio, capability, task, masks, geometry, capabilities, validationMessage, canSubmit } =
     controller;
   const { baseMode, gradedBaseAvailable, styleOptions, subjectMaskAvailable } = controller;
+  const { storage, reload: reloadStorage } = useGenerativeStorage();
   const state = studio.state;
   const meta = STUDIO_CAPABILITIES.find((item) => item.value === capability);
   const prompt = PROMPT_FIELDS[capability];
   const maskSection = MASK_SECTION[capability];
+
+  useEffect(() => {
+    if (task.status === "succeeded" || task.candidates.length === 0) {
+      reloadStorage();
+    }
+  }, [task.status, task.candidates.length, reloadStorage]);
+
+  const isBudgetExceeded = Boolean(storage && storage.usedBytes >= storage.limitBytes);
+  const effectiveCanSubmit = canSubmit && !isBudgetExceeded;
+  const effectiveValidationMessage = isBudgetExceeded
+    ? "生成式存储已达上限，请删除不需要的照片或等待临时候选过期。"
+    : validationMessage;
 
   const applySuggestion = (suggestion: GenerativeSuggestion): void => {
     if (suggestion.capability) {
@@ -351,7 +366,7 @@ export function StudioTaskPanel({
           <button
             type="button"
             onClick={() => void controller.submitTask()}
-            disabled={task.isSubmitting || task.isRunning || !canSubmit}
+            disabled={task.isSubmitting || task.isRunning || !effectiveCanSubmit}
             className="w-full py-2.5 px-4 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:bg-neutral-800 disabled:text-neutral-500 disabled:cursor-not-allowed text-white text-xs font-semibold shadow transition-colors flex items-center justify-center gap-2"
           >
             {task.isSubmitting || task.isRunning ? (
@@ -365,8 +380,8 @@ export function StudioTaskPanel({
           </button>
         )}
 
-        {validationMessage && task.status !== "failed" && (
-          <p className="text-[11px] leading-relaxed text-amber-300">{validationMessage}</p>
+        {effectiveValidationMessage && task.status !== "failed" && (
+          <p className="text-[11px] leading-relaxed text-amber-300">{effectiveValidationMessage}</p>
         )}
 
         <p className="text-[11px] leading-relaxed text-neutral-500">
@@ -381,6 +396,51 @@ export function StudioTaskPanel({
             : ""}
         </p>
       </div>
+
+      {storage && (
+        <div
+          data-testid="generative-storage-meter"
+          className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-2.5 text-[11px] text-neutral-400 flex flex-col gap-1.5"
+        >
+          <div className="flex items-center justify-between font-mono text-[11px]">
+            <span className="text-neutral-400">本机 AI 存储预算</span>
+            <span
+              className={
+                storage.usedBytes >= storage.limitBytes
+                  ? "text-rose-400 font-semibold"
+                  : storage.usedBytes / storage.limitBytes >= 0.8
+                    ? "text-amber-300 font-medium"
+                    : "text-neutral-300"
+              }
+            >
+              {formatBytes(storage.usedBytes)} / {formatBytes(storage.limitBytes)}
+            </span>
+          </div>
+          <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all ${
+                storage.usedBytes >= storage.limitBytes
+                  ? "bg-rose-500"
+                  : storage.usedBytes / storage.limitBytes >= 0.8
+                    ? "bg-amber-400"
+                    : "bg-sky-500"
+              }`}
+              style={{
+                width: `${Math.min(100, Math.round((storage.usedBytes / Math.max(1, storage.limitBytes)) * 100))}%`,
+              }}
+            />
+          </div>
+          {storage.usedBytes >= storage.limitBytes ? (
+            <p className="text-[10px] text-rose-300 leading-tight">
+              存储预算已耗尽，请删除不需要的照片或等待临时候选过期后重试。
+            </p>
+          ) : storage.usedBytes / storage.limitBytes >= 0.8 ? (
+            <p className="text-[10px] text-amber-300 leading-tight">
+              存储已使用超过 80%，临时候选结果保留 {storage.retentionDays} 天。
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {task.candidates.map((result) => (
         <GenerativeTaskResult

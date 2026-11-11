@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+import { fetchDeletionPreview } from "@/lib/api/client";
+import type { ImageDeletionPreview } from "@/types/image";
 
 export interface DeletePhotoDialogProps {
   open: boolean;
   busy: boolean;
   error: string | null;
+  imageId?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -18,10 +22,29 @@ export function DeletePhotoDialog({
   open,
   busy,
   error,
+  imageId,
   onCancel,
   onConfirm,
 }: DeletePhotoDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const [fetched, setFetched] = useState<{ imageId: string; data: ImageDeletionPreview } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!open || !imageId) {
+      return;
+    }
+    const controller = new AbortController();
+    fetchDeletionPreview(imageId, controller.signal)
+      .then((data) => setFetched({ imageId, data }))
+      .catch(() => {
+        // Fall back to static copy if deletion preview cannot be loaded.
+      });
+    return () => controller.abort();
+  }, [open, imageId]);
+
+  const preview = open && imageId && fetched?.imageId === imageId ? fetched.data : null;
 
   useEffect(() => {
     if (!open) {
@@ -86,9 +109,51 @@ export function DeletePhotoDialog({
           id="delete-photo-description"
           className="mt-2 text-[11px] leading-relaxed text-white/55"
         >
-          原图、编辑会话与历史版本、AI 分析与缓存副本会从本机永久删除，无法恢复。
+          原图、编辑会话与历史版本、AI 分析、生成结果与蒙版以及缓存副本会从本机永久删除，无法恢复。
           如需保留，请先下载原图或导出成片。
         </p>
+
+        {preview && (
+          <div
+            data-testid="deletion-breakdown"
+            className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[11px] text-white/70"
+          >
+            <p className="mb-1.5 font-medium text-white/85">将永久清除以下关联记录：</p>
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+              <li>
+                编辑会话：<span className="font-mono text-white">{preview.sessions}</span>
+              </li>
+              <li>
+                历史版本：<span className="font-mono text-white">{preview.revisions}</span>
+              </li>
+              {preview.analysisTasks > 0 && (
+                <li>
+                  AI 分析：<span className="font-mono text-white">{preview.analysisTasks}</span>
+                </li>
+              )}
+              {preview.generativeTasks > 0 && (
+                <li>
+                  生成任务：<span className="font-mono text-white">{preview.generativeTasks}</span>
+                </li>
+              )}
+              {preview.generatedAssets > 0 && (
+                <li>
+                  生成资产：<span className="font-mono text-white">{preview.generatedAssets}</span>
+                </li>
+              )}
+              {preview.generativeResults > 0 && (
+                <li>
+                  临时候选：<span className="font-mono text-white">{preview.generativeResults}</span>
+                </li>
+              )}
+              {preview.generativeMasks > 0 && (
+                <li>
+                  绘制蒙版：<span className="font-mono text-white">{preview.generativeMasks}</span>
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
 
         {error && (
           <p

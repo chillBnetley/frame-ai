@@ -86,6 +86,17 @@ class ImageListResponse(CamelModel):
     next_offset: int | None = None
 
 
+class ImageDeletionPreviewResponse(CamelModel):
+    image_id: UUID
+    sessions: int
+    revisions: int
+    analysis_tasks: int
+    generative_tasks: int
+    generative_results: int
+    generated_assets: int
+    generative_masks: int
+
+
 class SemanticMaskRequest(CamelModel):
     semantic_class: Literal["person", "sky"]
 

@@ -54,6 +54,7 @@ from app.models.generative import (
     GenerativeResultRecord,
     GenerativeResultStatus,
     GenerativeResultView,
+    GenerativeStorageResponse,
     GenerativeTaskCreated,
     GenerativeTaskListResponse,
     GenerativeTaskRecord,
@@ -150,6 +151,21 @@ class GenerativeTaskService:
             allowed_output_formats=list(capabilities.allowed_output_formats),
             declared_retention=capabilities.declared_retention,
             notes=list(capabilities.notes),
+        )
+
+    def storage_usage(self) -> GenerativeStorageResponse:
+        asset_bytes, result_bytes = self.repository.storage_usage()
+        mask_bytes = self.store.measure_masks_bytes()
+        used_bytes = asset_bytes + result_bytes + mask_bytes
+        limit_bytes = self.settings.generative_disk_budget_bytes
+        retention_days = max(1, self.settings.generative_result_ttl_seconds // 86400)
+        return GenerativeStorageResponse(
+            used_bytes=used_bytes,
+            limit_bytes=limit_bytes,
+            asset_bytes=asset_bytes,
+            result_bytes=result_bytes,
+            mask_bytes=mask_bytes,
+            retention_days=retention_days,
         )
 
     def create(
@@ -307,6 +323,25 @@ class GenerativeTaskService:
         existing = self.repository.find_by_dedupe(dedupe_key)
         if existing is not None:
             return self._created(self._expire(existing), deduplicated=True), True
+
+        storage = self.storage_usage()
+        if storage.used_bytes >= storage.limit_bytes:
+            if self.maybe_cleanup_expired_results(force=True) > 0:
+                storage = self.storage_usage()
+            if storage.used_bytes >= storage.limit_bytes:
+                raise AppError(
+                    413,
+                    "generative_storage_budget_exceeded",
+                    (
+                        f"Generative storage budget exceeded "
+                        f"({storage.used_bytes} / {storage.limit_bytes} bytes). "
+                        "Delete unneeded sessions or wait for candidates to expire."
+                    ),
+                    {
+                        "usedBytes": storage.used_bytes,
+                        "limitBytes": storage.limit_bytes,
+                    },
+                )
 
         if self.repository.count_active(owner.owner_id) >= self.settings.generative_queue_max:
             raise AppError(

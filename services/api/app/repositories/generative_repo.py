@@ -798,6 +798,21 @@ class SqliteGenerativeRepository:
             connection.close()
         return _to_asset(row) if row is not None else None
 
+    def storage_usage(self) -> tuple[int, int]:
+        """Return (generated_asset_bytes, generative_result_bytes)."""
+        connection = connect(self._path)
+        try:
+            row_asset = connection.execute(
+                "SELECT COALESCE(SUM(bytes), 0) AS total FROM generated_asset "
+                "WHERE deleted_at IS NULL"
+            ).fetchone()
+            row_result = connection.execute(
+                "SELECT COALESCE(SUM(bytes), 0) AS total FROM generative_result"
+            ).fetchone()
+        finally:
+            connection.close()
+        return (int(row_asset["total"]), int(row_result["total"]))
+
     # ------------------------------------------------------------------ masks
 
     def create_mask(self, mask: GenerativeMaskRecord) -> None:

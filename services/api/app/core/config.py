@@ -125,6 +125,7 @@ class Settings(BaseSettings):
     generative_provider_max_retries: int = Field(default=1, ge=0, le=5)
     generative_max_download_bytes: int = Field(default=96 * 1024 * 1024, gt=0)
     generative_max_outpaint_scale: float = Field(default=4.0, ge=1.0, le=16.0)
+    generative_disk_budget_mb: int = Field(default=2048, ge=1)
 
     @field_validator("data_dir")
     @classmethod
@@ -230,6 +231,10 @@ class Settings(BaseSettings):
     @property
     def generative_tmp_dir(self) -> Path:
         return self.data_dir / self.generative_tmp_dirname
+
+    @property
+    def generative_disk_budget_bytes(self) -> int:
+        return self.generative_disk_budget_mb * 1024 * 1024
 
 
 @lru_cache

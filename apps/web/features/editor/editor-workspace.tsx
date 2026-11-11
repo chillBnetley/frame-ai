@@ -1161,6 +1161,7 @@ function EditorStage({
         open={deleteOpen}
         busy={deleting}
         error={deleteError}
+        imageId={state.imageId}
         onCancel={() => {
           if (!deleting) {
             setDeleteOpen(false);
