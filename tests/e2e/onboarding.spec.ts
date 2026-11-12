@@ -38,7 +38,7 @@ test.describe("首次启动引导", () => {
     markCompleted();
   });
 
-  test("开场 → 结束页 → 照片工作台", async ({ page }) => {
+  test("开场 → 暂不配置 → 结束页 → 照片工作台", async ({ page }) => {
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/welcome$/);
@@ -46,8 +46,13 @@ test.describe("首次启动引导", () => {
       page.getByRole("heading", { name: "私人 AI 摄影大师" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "开始你的摄影之旅" }),
+      page.getByRole("heading", { name: "视觉模型" }),
     ).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole("button", { name: "暂不配置" }).click();
+    await expect(
+      page.getByRole("heading", { name: "开始你的摄影之旅" }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "开始" }).click();
 
@@ -55,6 +60,38 @@ test.describe("首次启动引导", () => {
       page.getByRole("heading", { name: "照片工作台" }),
     ).toBeVisible();
     await expect(page).not.toHaveURL(/\/welcome$/);
+    expect(fs.existsSync(MARKER_PATH!)).toBe(true);
+  });
+
+  test("开场 → 三步配置 → 结束页 → 照片工作台", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(
+      page.getByRole("heading", { name: "视觉模型" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole("button", { name: "下一步" }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "下一步" }).click();
+    await expect(
+      page.getByRole("heading", { name: "决策模型" }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "下一步" }).click();
+    await expect(
+      page.getByRole("heading", { name: "生成式图像" }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "完成" }).click();
+    await expect(
+      page.getByRole("heading", { name: "开始你的摄影之旅" }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "开始" }).click();
+    await expect(
+      page.getByRole("heading", { name: "照片工作台" }),
+    ).toBeVisible();
     expect(fs.existsSync(MARKER_PATH!)).toBe(true);
   });
 

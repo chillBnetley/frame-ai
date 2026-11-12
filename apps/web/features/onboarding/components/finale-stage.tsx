@@ -10,6 +10,7 @@ import styles from "../onboarding.module.css";
 export interface FinaleStageProps {
   busy: boolean;
   error: string | null;
+  modelReady: boolean;
   onStart: () => void;
   onEnterAnyway: () => void;
 }
@@ -17,6 +18,7 @@ export interface FinaleStageProps {
 export function FinaleStage({
   busy,
   error,
+  modelReady,
   onStart,
   onEnterAnyway,
 }: FinaleStageProps) {
@@ -41,7 +43,9 @@ export function FinaleStage({
       </h1>
 
       <p className={styles.finaleNote}>
-        进入后可在右上角「模型设置」中配置视觉与生成模型。
+        {modelReady
+          ? "视觉与决策模型已就绪，可以开始调整照片了。"
+          : "当前使用模拟模型，可随时在右上角「模型设置」中配置。"}
       </p>
 
       <button

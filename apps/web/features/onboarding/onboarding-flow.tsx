@@ -8,12 +8,13 @@ import {
   ONBOARDING_SESSION_VALUE,
 } from "@/lib/onboarding-cookie";
 
+import { ConfigStage } from "./components/config-stage";
 import { FinaleStage } from "./components/finale-stage";
 import { IntroStage } from "./components/intro-stage";
 import { useReducedMotion } from "./use-reduced-motion";
 import styles from "./onboarding.module.css";
 
-type OnboardingStage = "intro" | "finale";
+type OnboardingStage = "intro" | "config" | "finale";
 
 const COMPLETE_ENDPOINT = "/api/onboarding";
 
@@ -46,8 +47,14 @@ export function OnboardingFlow() {
   const [stage, setStage] = useState<OnboardingStage>("intro");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modelReady, setModelReady] = useState(false);
 
-  const goToFinale = useCallback(() => {
+  const goToConfig = useCallback(() => {
+    setStage("config");
+  }, []);
+
+  const finishConfig = useCallback((ready: boolean) => {
+    setModelReady(ready);
     setStage("finale");
   }, []);
 
@@ -75,12 +82,20 @@ export function OnboardingFlow() {
   return (
     <main className={styles.screen}>
       <div className={styles.aurora} aria-hidden="true" />
-      {stage === "intro" ? (
-        <IntroStage reducedMotion={reducedMotion} onContinue={goToFinale} />
-      ) : (
+      {stage === "intro" && (
+        <IntroStage reducedMotion={reducedMotion} onContinue={goToConfig} />
+      )}
+      {stage === "config" && (
+        <ConfigStage
+          onComplete={finishConfig}
+          onSkip={finishConfig}
+        />
+      )}
+      {stage === "finale" && (
         <FinaleStage
           busy={busy}
           error={error}
+          modelReady={modelReady}
           onStart={() => void finish()}
           onEnterAnyway={enterAnyway}
         />

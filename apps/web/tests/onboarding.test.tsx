@@ -5,12 +5,55 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INTRO_AUTO_ADVANCE_MS } from "@/features/onboarding/components/intro-stage";
 import { OnboardingFlow } from "@/features/onboarding/onboarding-flow";
+import type { ProviderSettingsView } from "@/types/provider-settings";
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
+const settingsApi = vi.hoisted(() => ({
+  fetchProviderSettings: vi.fn(),
+  saveProviderSettings: vi.fn(),
+  testProviderSettings: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
 }));
+
+vi.mock("@/lib/api/settings", () => settingsApi);
+
+const VIEW: ProviderSettingsView = {
+  vision: {
+    provider: "mock",
+    model: "mock-vision",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+  },
+  decision: {
+    provider: "mock",
+    model: "mock-decision",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+  },
+  planner: {
+    provider: "mock",
+    model: "mock-planner",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+  },
+  generative: {
+    provider: "mock",
+    model: "wanx2.1-imageedit",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+    dailyImageLimit: 0,
+    ready: true,
+  },
+  isMock: true,
+  hasSavedOverrides: false,
+};
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -31,6 +74,9 @@ async function severeViolations(container: HTMLElement) {
 beforeEach(() => {
   router.replace.mockReset();
   router.push.mockReset();
+  settingsApi.fetchProviderSettings.mockReset().mockResolvedValue(VIEW);
+  settingsApi.saveProviderSettings.mockReset().mockResolvedValue(VIEW);
+  settingsApi.testProviderSettings.mockReset();
 });
 
 afterEach(() => {
@@ -40,16 +86,26 @@ afterEach(() => {
 });
 
 describe("OnboardingFlow", () => {
-  it("shows the intro copy and moves to the finale", async () => {
-    const user = userEvent.setup();
+  it("shows the intro copy", () => {
     render(<OnboardingFlow />);
 
     expect(
       screen.getByRole("heading", { name: "私人 AI 摄影大师" }),
     ).toBeInTheDocument();
     expect(screen.getByText("FRAME AI")).toBeInTheDocument();
+  });
+
+  it("moves from the intro to the config step and can skip to the finale", async () => {
+    const user = userEvent.setup();
+    render(<OnboardingFlow />);
 
     await user.click(screen.getByRole("button", { name: "继续" }));
+
+    expect(
+      screen.getByRole("heading", { name: "视觉模型" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "暂不配置" }));
 
     expect(
       screen.getByRole("heading", { name: "开始你的摄影之旅" }),
@@ -69,7 +125,7 @@ describe("OnboardingFlow", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "开始你的摄影之旅" }),
+      screen.getByRole("heading", { name: "视觉模型" }),
     ).toBeInTheDocument();
   });
 
@@ -106,6 +162,7 @@ describe("OnboardingFlow", () => {
     render(<OnboardingFlow />);
 
     await user.click(screen.getByRole("button", { name: "继续" }));
+    await user.click(screen.getByRole("button", { name: "暂不配置" }));
     await user.click(screen.getByRole("button", { name: "开始" }));
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/"));
@@ -128,6 +185,7 @@ describe("OnboardingFlow", () => {
     render(<OnboardingFlow />);
 
     await user.click(screen.getByRole("button", { name: "继续" }));
+    await user.click(screen.getByRole("button", { name: "暂不配置" }));
     await user.click(screen.getByRole("button", { name: "开始" }));
 
     expect(
@@ -145,6 +203,7 @@ describe("OnboardingFlow", () => {
     render(<OnboardingFlow />);
 
     await user.click(screen.getByRole("button", { name: "继续" }));
+    await user.click(screen.getByRole("button", { name: "暂不配置" }));
     await user.click(screen.getByRole("button", { name: "开始" }));
     await screen.findByRole("alert");
     await user.click(
@@ -161,11 +220,22 @@ describe("OnboardingFlow", () => {
     expect(await severeViolations(container)).toEqual([]);
   });
 
+  it("has no serious or critical axe violations on the config step", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<OnboardingFlow />);
+
+    await user.click(screen.getByRole("button", { name: "继续" }));
+    await screen.findByLabelText("模型名");
+
+    expect(await severeViolations(container)).toEqual([]);
+  });
+
   it("has no serious or critical axe violations on the finale", async () => {
     const user = userEvent.setup();
     const { container } = render(<OnboardingFlow />);
 
     await user.click(screen.getByRole("button", { name: "继续" }));
+    await user.click(screen.getByRole("button", { name: "暂不配置" }));
 
     expect(await severeViolations(container)).toEqual([]);
   });
