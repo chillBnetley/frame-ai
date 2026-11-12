@@ -12,25 +12,10 @@
 | 开发阶段 1.1：阶段 1 审查收尾 | 已完成 | `a494e45` | 2026-11-02 |
 | 开发阶段 2：图像管线与非破坏编辑 | 已完成 | `a7e8fca`（T2.13 代码验证；T2.14 文档随后提交） | 2026-11-02 |
 | 开发阶段 2.1：阶段 2 审查修复 | 已完成 | `22ed468`（F2-00…F2-14；F2-15 回归与交接随最终提交） | 2026-11-03 |
-| 开发阶段 3：AI 摄影理解与智能诊断 | 已完成（commit `1f8909b`） | 见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md) | 2026-11-03 |
-| 开发阶段 4：专业摄影调色引擎 | 已完成（Task 1–8，含色彩管理收尾与性能/内存治理；commit `1f8909b`） | 见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md) | 2026-11-04 |
-| 开发阶段 5：AI 摄影师与智能后期决策 | 已完成（Task 0–9） | 见 [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md) | 2026-11-06 |
-| 开发阶段 6：Master Vision（V6.1） | 已完成（Batch 0–11；真实照片人工评价待用户） | 见 [V6_1_RELEASE_NOTES.md](V6_1_RELEASE_NOTES.md) | 2026-11-09 |
-
-阶段 1.1 的完整命令、退出码与测试清单见 [docs/handoff/phase-1.1.md](docs/handoff/phase-1.1.md)；阶段 2 的完整交接见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md)；阶段 2.1 审查修复见 [docs/handoff/phase-2.1.md](docs/handoff/phase-2.1.md)；阶段 3 的测试、性能与遗留问题见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md)；阶段 4 的逐 Task 交付、验收对照与回滚方式见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md)；阶段 5 的逐 Task 交付、测试计数与未评估项见 [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md)；阶段 6 的发布、部署、性能与限制见 [V6_1_RELEASE_NOTES.md](V6_1_RELEASE_NOTES.md)、[V6_1_DEPLOYMENT.md](V6_1_DEPLOYMENT.md)、[V6_1_PERFORMANCE.md](V6_1_PERFORMANCE.md)、[V6_1_KNOWN_LIMITATIONS.md](V6_1_KNOWN_LIMITATIONS.md)。
-
-### 根目录文档索引
-
-根目录保留多份阶段性文档，职责与重叠关系如下（未移动或删除任何文件）：
-
-- [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md) / [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md) / [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md)：对应阶段的正式交接，含逐 Task 交付、门禁与测试计数、性能实测、验收对照与回滚。
-- [STAGE_3_INITIAL_AUDIT.md](STAGE_3_INITIAL_AUDIT.md) / [STAGE_4_AUDIT_REPORT.md](STAGE_4_AUDIT_REPORT.md) / [STAGE_5_AUDIT_REPORT.md](STAGE_5_AUDIT_REPORT.md) / [STAGE_6_AUDIT_REPORT.md](STAGE_6_AUDIT_REPORT.md)：阶段开工前的现状审查与风险清单，属于历史快照，结论以完成报告为准。
-- [V6_1_RELEASE_NOTES.md](V6_1_RELEASE_NOTES.md) / [V6_1_DEPLOYMENT.md](V6_1_DEPLOYMENT.md) / [V6_1_PERFORMANCE.md](V6_1_PERFORMANCE.md) / [V6_1_KNOWN_LIMITATIONS.md](V6_1_KNOWN_LIMITATIONS.md)：V6.1 发布说明、部署与回滚、性能成本、已知限制。
-- [STAGE_6_QUALITY_REPORT.md](STAGE_6_QUALITY_REPORT.md)：阶段 6 自动矩阵、异常矩阵与人工评价准入线。
-- [STAGE_3_4_CODE_REVIEW_2026-11-04.md](STAGE_3_4_CODE_REVIEW_2026-11-04.md)：阶段 3/4 联合代码复审；逐条整改方案见 [docs/plans/stage-3-4-review-remediation.md](docs/plans/stage-3-4-review-remediation.md)，两份文档的问题编号一一对应。
-- [阶段三.md](阶段三.md) / [阶段四任务书.md](阶段四任务书.md) / [阶段四操作建议.md](阶段四操作建议.md) / [第五阶段任务书.md](第五阶段任务书.md) / [第五阶段实施方法.md](第五阶段实施方法.md)：各阶段的任务书与操作建议，是验收口径的来源；完成报告只引用、不改写任务书。
-- [phase 2 review.md](phase%202%20review.md) / [建议与标准.md](建议与标准.md)：阶段 2 复审与通用标准素材，保留为参考，不属于当前交付链。
-- [FRAME_AI_UI_改造记录.md](FRAME_AI_UI_改造记录.md) / [FRAME_AI_滑杆预览闪烁_解决方案.md](FRAME_AI_滑杆预览闪烁_解决方案.md) / [FRAME_AI_上传后未知错误_排查与解决方案.md](FRAME_AI_上传后未知错误_排查与解决方案.md)：用户侧 UI 改造记录与两次问题排查方案；其中滑杆闪烁与上传错误诊断已落地，UI 改造记录描述目标而非现状。
+| 开发阶段 3：AI 摄影理解与智能诊断 | 已完成（commit `1f8909b`） | 内部归档 | 2026-11-03 |
+| 开发阶段 4：专业摄影调色引擎 | 已完成（Task 1–8，含色彩管理收尾与性能/内存治理；commit `1f8909b`） | 内部归档 | 2026-11-04 |
+| 开发阶段 5：AI 摄影师与智能后期决策 | 已完成（Task 0–9） | 内部归档 | 2026-11-06 |
+| 开发阶段 6：Master Vision（V6.1） | 已完成（Batch 0–11；真实照片人工评价待用户） | 内部归档 | 2026-11-09 |
 
 系统化规范与决策见 [docs/](docs/) 下的 `architecture.md`、`api-contract.md`、`color-management.md`、`performance.md`、`known-issues.md`、`backup-restore.md`、`deployment-boundaries.md` 与 `decisions/`；阶段 5 的人工评估规范、14 类测试图与 A/B/C/D 模板见 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md)。
 
@@ -624,8 +609,7 @@ E2E_BASE_URL=http://127.0.0.1:3000 E2E_API_PORT=8001 E2E_API_URL=http://127.0.0.
 E2E_BROWSER_CHANNEL=msedge npx playwright test
 ```
 
-若现有 Next.js 开发服务器因单实例锁不能同时启动第二个实例，可把 `apps/web` 复制到临时子目录（不复制 `node_modules`/`.next`，子目录会向上复用 `apps/web/node_modules`），用独立端口启动后把 `E2E_BASE_URL` 指向它；Playwright 仍会自启隔离 API。本轮回归采用该方式，未终止用户正在运行的 `:3000`/`:8000`。命令与结果见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md)。
-
+若现有 Next.js 开发服务器因单实例锁不能同时启动第二个实例，可把 `apps/web` 复制到临时子目录（不复制 `node_modules`/`.next`，子目录会向上复用 `apps/web/node_modules`），用独立端口启动后把 `E2E_BASE_URL` 指向它；Playwright 仍会自启隔离 API。本轮回归采用该方式，未终止用户正在运行的 `:3000`/`:8000`。
 分析评估与真实 Provider 冒烟（需要人工标注集/密钥时手动运行，默认不参与门禁）：
 
 ```bash
@@ -666,18 +650,14 @@ services/api/.venv/Scripts/python.exe scripts/bench_analysis.py --iterations 5 \
   --json C:/Temp/frame-bench-analysis.json
 ```
 
-阶段 3 最终真实运行结果（2026-11-03）：`scripts/verify.py` **12/12 gates 退出码 0**；后端 **657 passed, 1 skipped**（跳过项为 Windows 符号链接权限测试），`mypy app` 检查 **78 个源文件**无错误，`ruff` **130 个文件**格式通过，OpenAPI 与前端类型同步；前端 **22 个测试文件 / 212 tests passed**，lint/typecheck/契约/生产构建通过；Playwright **11 passed / 5 skipped（35.2 s）**（跳过项是视口不匹配的既有用例），包含新增分析 E2E 与上传/编辑/导出回归。明细与性能数字见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md)。
-
-阶段 4 最终真实运行结果（2026-11-04，Task 0–8 完成；后随 commit `1f8909b` 一并提交）：`scripts/verify.py` **12/12 gates 退出码 0**；`ruff format --check` **144 个文件**已格式化，`mypy app`（strict）**84 个源文件**无错误，后端 **899 passed, 1 skipped**（跳过项同上），OpenAPI 与前端类型同步，两条阶段 2.1 复审复现仍通过（旋转越界 0.000%、ICC 最大通道差 0）；前端 **29 个测试文件 / 317 tests passed**，lint/typecheck/契约/生产构建全部退出码 0；Playwright 当时 **11 passed / 5 skipped（21.8 s）**；黄金图 **27 张**（3 张合成源图 × 9 个配方，容差 1 灰阶；`test_golden.py` 收集 28 条含 manifest 元测试）逐例通过，当时编码 `frame-engine/8` / 代理 `loader/3`。阶段四全程**未新增任何第三方依赖**。已知未达标项：24 MP 满配方全尺寸导出 p50 29.6 s / p95 32.2 s 超过 20 s 目标（保留 FAIL），以及任务书 §八 的真实照片测试集与人工评估记录尚未建立。逐条数字与验收对照见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md)。
-
-阶段 3/4 复审整改（2026-11-05，commit `1f8909b`）：当前引擎 `frame-engine/10`；`scripts/verify.py` **12/12 gates passed**——后端 `mypy app`（strict）83 个源文件无错误、**1020 passed / 1 skipped**，前端 Vitest **29 文件 / 328 tests passed**，lint/typecheck/契约/生产构建全部退出码 0，两条复审复现仍为旋转越界 0.000% / ICC 最大通道差 0。新增 4 个阶段四面板的 Playwright 用例后 E2E 为 **13 passed / 7 skipped（33.3 s，隔离栈 :3010/:8012）**，无障碍 axe 覆盖“编辑器打开且四面板展开”状态且未放宽规则。逐条 finding 结论见 [复审整改计划](docs/plans/stage-3-4-review-remediation.md) §12。
-
+阶段 3 最终真实运行结果（2026-11-03）：`scripts/verify.py` **12/12 gates 退出码 0**；后端 **657 passed, 1 skipped**（跳过项为 Windows 符号链接权限测试），`mypy app` 检查 **78 个源文件**无错误，`ruff` **130 个文件**格式通过，OpenAPI 与前端类型同步；前端 **22 个测试文件 / 212 tests passed**，lint/typecheck/契约/生产构建通过；Playwright **11 passed / 5 skipped（35.2 s）**（跳过项是视口不匹配的既有用例），包含新增分析 E2E 与上传/编辑/导出回归。
+阶段 4 最终真实运行结果（2026-11-04，Task 0–8 完成；后随 commit `1f8909b` 一并提交）：`scripts/verify.py` **12/12 gates 退出码 0**；`ruff format --check` **144 个文件**已格式化，`mypy app`（strict）**84 个源文件**无错误，后端 **899 passed, 1 skipped**（跳过项同上），OpenAPI 与前端类型同步，两条阶段 2.1 复审复现仍通过（旋转越界 0.000%、ICC 最大通道差 0）；前端 **29 个测试文件 / 317 tests passed**，lint/typecheck/契约/生产构建全部退出码 0；Playwright 当时 **11 passed / 5 skipped（21.8 s）**；黄金图 **27 张**（3 张合成源图 × 9 个配方，容差 1 灰阶；`test_golden.py` 收集 28 条含 manifest 元测试）逐例通过，当时编码 `frame-engine/8` / 代理 `loader/3`。阶段四全程**未新增任何第三方依赖**。已知未达标项：24 MP 满配方全尺寸导出 p50 29.6 s / p95 32.2 s 超过 20 s 目标（保留 FAIL），以及任务书 §八 的真实照片测试集与人工评估记录尚未建立。
+阶段 3/4 复审整改（2026-11-05，commit `1f8909b`）：当前引擎 `frame-engine/10`；`scripts/verify.py` **12/12 gates passed**——后端 `mypy app`（strict）83 个源文件无错误、**1020 passed / 1 skipped**，前端 Vitest **29 文件 / 328 tests passed**，lint/typecheck/契约/生产构建全部退出码 0，两条复审复现仍为旋转越界 0.000% / ICC 最大通道差 0。新增 4 个阶段四面板的 Playwright 用例后 E2E 为 **13 passed / 7 skipped（33.3 s，隔离栈 :3010/:8012）**，无障碍 axe 覆盖“编辑器打开且四面板展开”状态且未放宽规则。
 历史记录：阶段 2（2026-11-02，commit `a7e8fca`）验证脚本 **10/10**、后端 **298 passed, 1 skipped**、前端 **113 tests passed**、Playwright **2 passed**；阶段 2.1（2026-11-03，commit `22ed468`）验证脚本 **12/12**、后端 **385 passed, 1 skipped**、Playwright **9 passed / 5 skipped**。逐条命令与退出码见对应交接文档。
 
 历史：2026-11-03 的预览可见性修复、上传错误诊断与滑杆预览闪烁修复在未提交工作区复跑：`scripts/verify.py` **10/10 gates**；前端 **17 个测试文件 / 132 tests passed**；后端 **298 passed, 1 skipped**。Playwright 最近一次完整运行 **7 passed / 5 skipped**（桌面 1280×800、1280×640，手机 390×844、320×568）；错误诊断改动后因 3000 端口开发服务器占用未重跑，已用浏览器实际上传正常图片与无效图片验证。滑杆闪烁修复另用 Playwright（Edge）对运行中的应用做真实鼠标拖拽：桌面 1280×900 与手机 390×844 分别连续采样 750 / 740 帧，均无空白帧与加载占位帧；约 1.8 s 的持续拖动触发 3 次 draft，松手后只发送 1 次 final。
 
-2026-11-03 阶段 2.1 最终回归（`22ed468`，仅文档随后提交）：`scripts/verify.py` **12/12 gates 退出码 0**，后端 **385 passed, 1 skipped**；两条审查复现脚本作为独立 gate 通过；Playwright 复用现有 3000 服务运行 **9 passed / 5 skipped（17.5 s）**；完整基准退出码 0、总耗时 517.7 s，§7.8 可测项目全部 PASS，40 MP 满配方按默认预算返回预期 `413 export_too_large`。明细见 [docs/handoff/phase-2.1.md](docs/handoff/phase-2.1.md)。
-
+2026-11-03 阶段 2.1 最终回归（`22ed468`，仅文档随后提交）：`scripts/verify.py` **12/12 gates 退出码 0**，后端 **385 passed, 1 skipped**；两条审查复现脚本作为独立 gate 通过；Playwright 复用现有 3000 服务运行 **9 passed / 5 skipped（17.5 s）**；完整基准退出码 0、总耗时 517.7 s，§7.8 可测项目全部 PASS，40 MP 满配方按默认预算返回预期 `413 export_too_large`。
 ## 性能
 
 完整数据与测量方法见 [docs/performance.md](docs/performance.md)。最新的阶段 4 Task 8 结果在下方“阶段 4 Task 8”小节；阶段 2 摘要保留为历史记录，其中的内存估算系数已在 Task 8 重标定。阶段 2 本机结果摘要：
@@ -825,7 +805,7 @@ SQLite 记录仍存在但文件被移动/删除时，预览接口返回 `404 ima
 
 **阶段：** 开发阶段 4 — 专业摄影调色引擎（Task 0–8 已完成；全部改动见 commit `1f8909b`）。
 
-完整交接（逐 Task 交付、修改与新增清单、依赖结论、12 道门禁与测试计数、性能与内存实测、任务书 §十/§十一 与操作建议 §十七 的逐条验收对照、未完成项、启动/验证/回滚、下一阶段建议）见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md)。逐 Task 的计划与实施结果见 [docs/plans/](docs/plans/) 下的 `phase-4-task-3…8`。阶段 3 交接见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md)，阶段 2 与 2.1 见 [docs/handoff/phase-2.md](docs/handoff/phase-2.md) 与 [docs/handoff/phase-2.1.md](docs/handoff/phase-2.1.md)。API 契约见 [docs/api-contract.md](docs/api-contract.md)，色彩管理策略与实测见 [docs/color-management.md](docs/color-management.md)，性能数据见 [docs/performance.md](docs/performance.md)，决策记录见 [ADR-0002](docs/decisions/ADR-0002-phase-2-decisions.md)、[ADR-0003](docs/decisions/ADR-0003-compare-geometry-alignment.md) 与 [ADR-0004](docs/decisions/ADR-0004-color-management.md)。
+API 契约见 [docs/api-contract.md](docs/api-contract.md)，色彩管理策略与实测见 [docs/color-management.md](docs/color-management.md)，性能数据见 [docs/performance.md](docs/performance.md)，决策记录见 [ADR-0002](docs/decisions/ADR-0002-phase-2-decisions.md)、[ADR-0003](docs/decisions/ADR-0003-compare-geometry-alignment.md) 与 [ADR-0004](docs/decisions/ADR-0004-color-management.md)。
 
 **本地启动方式：**
 
@@ -847,7 +827,7 @@ npm run dev
 
 **阶段：** 开发阶段 5 — AI 摄影师与智能后期决策（Task 0–9 已完成；改动尚未提交）。
 
-完整交接（逐 Task 交付、测试计数、mock/真实 Provider 与真实照片状态、已知问题、验收对照与回滚）见 [STAGE_5_COMPLETION_REPORT.md](STAGE_5_COMPLETION_REPORT.md)。开工审计见 [STAGE_5_AUDIT_REPORT.md](STAGE_5_AUDIT_REPORT.md)，逐 Task 计划与交付记录见 [docs/plans/phase-5-execution-plan.md](docs/plans/phase-5-execution-plan.md)；评估规范见 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md)。阶段 4 交接见 [STAGE_4_COMPLETION_REPORT.md](STAGE_4_COMPLETION_REPORT.md)，阶段 3 见 [STAGE_3_COMPLETION_REPORT.md](STAGE_3_COMPLETION_REPORT.md)。
+评估规范见 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md)。
 
 阶段 5 最终真实运行结果（2026-11-06）：`scripts/verify.py` **12/12 gates 退出码 0**；`ruff format --check` **174 个文件**通过，`mypy app`（strict）**97 个源文件**无错误，后端 **1324 passed, 1 skipped**（跳过项为 Windows 符号链接权限测试），OpenAPI 与前端类型同步，两条阶段 2.1 复审复现仍为旋转越界 0.000% / ICC 最大通道差 0；前端 **44 个测试文件 / 461 tests passed**，lint/typecheck/契约/生产构建全部退出码 0；Playwright 在隔离栈（`next start -p 3031` + API `:8014`）**21 passed / 15 skipped（1.2 min）**，覆盖上传→分析→方案→接受，以及撤销/重做/导出、风格、对话、点评、反馈与阶段 3/4 回归。所有自动化测试使用 **Mock Provider 与合成夹具**，真实照片评分、A/B/C/D 对照与真实 Provider 稳定性仍未评估。
 
