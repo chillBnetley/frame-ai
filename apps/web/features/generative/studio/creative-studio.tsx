@@ -34,7 +34,8 @@ export interface CreativeStudioProps {
   historySlot?: ReactNode;
 }
 
-const CANVAS_HEIGHT_CLASS = "h-[46vh] min-h-64 lg:h-[58vh]";
+const CANVAS_HEIGHT_CLASS =
+  "h-[46vh] min-h-64 lg:h-[52vh] xl:h-auto xl:min-h-0 xl:flex-1";
 
 export function CreativeStudio({
   sessionId,
@@ -163,7 +164,7 @@ function StudioShell({
         )}
       </div>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_minmax(300px,340px)]">
+      <div className="flex min-h-0 flex-col gap-3 xl:h-[calc(100dvh-15rem)] xl:min-h-[560px]">
         <StudioToolRail
           capability={capability}
           capabilities={capabilities}
@@ -186,52 +187,54 @@ function StudioShell({
           disabled={task.isRunning}
         />
 
-        <div className="flex min-w-0 flex-col gap-3">
-          <div className={CANVAS_HEIGHT_CLASS}>
-            <StudioCanvas
-              baseImageUrl={previewImageUrl}
-              originalImageUrl={originalImageUrl}
-              result={result}
-              baseLayer={state.baseLayer}
-              resultVisible={state.resultVisible}
-              maskOverlayVisible={state.maskOverlayVisible}
-              maskImageUrl={maskImageUrl}
-              outpaintGeometry={outpaintGeometry}
-              baseWidth={baseWidth}
-              baseHeight={baseHeight}
-              view={state.view}
-              compare={state.compare}
-              comparePosition={state.comparePosition}
-              isRunning={task.isRunning}
-              stageLabel={task.stage ? stageLabels[task.stage] ?? null : null}
-              onZoom={studio.zoomBy}
-              onPan={studio.panBy}
-              onFit={studio.fitTo}
-              onComparePositionChange={studio.setComparePosition}
-              onViewportSize={rememberViewport}
-            />
+        <div className="grid min-w-0 gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)] xl:items-stretch">
+          <div className="flex min-w-0 flex-col gap-3 xl:min-h-0">
+            <div className={CANVAS_HEIGHT_CLASS}>
+              <StudioCanvas
+                baseImageUrl={previewImageUrl}
+                originalImageUrl={originalImageUrl}
+                result={result}
+                baseLayer={state.baseLayer}
+                resultVisible={state.resultVisible}
+                maskOverlayVisible={state.maskOverlayVisible}
+                maskImageUrl={maskImageUrl}
+                outpaintGeometry={outpaintGeometry}
+                baseWidth={baseWidth}
+                baseHeight={baseHeight}
+                view={state.view}
+                compare={state.compare}
+                comparePosition={state.comparePosition}
+                isRunning={task.isRunning}
+                stageLabel={task.stage ? stageLabels[task.stage] ?? null : null}
+                onZoom={studio.zoomBy}
+                onPan={studio.panBy}
+                onFit={studio.fitTo}
+                onComparePositionChange={studio.setComparePosition}
+                onViewportSize={rememberViewport}
+              />
+            </div>
+
+            {task.isRunning && task.stage && (
+              <GenerativeTaskStatus
+                stage={task.stage}
+                labels={stageLabels}
+                cancelLabel="取消任务"
+                onCancel={() => void task.cancel()}
+              />
+            )}
+
+            <StudioError error={task.errorInfo} />
           </div>
 
-          {task.isRunning && task.stage && (
-            <GenerativeTaskStatus
-              stage={task.stage}
-              labels={stageLabels}
-              cancelLabel="取消任务"
-              onCancel={() => void task.cancel()}
-            />
-          )}
-
-          <StudioError error={task.errorInfo} />
+          <StudioTaskPanel
+            controller={controller}
+            sessionId={sessionId}
+            imageUrl={previewImageUrl ?? originalImageUrl}
+            baseWidth={baseWidth}
+            baseHeight={baseHeight}
+            suggestions={suggestions}
+          />
         </div>
-
-        <StudioTaskPanel
-          controller={controller}
-          sessionId={sessionId}
-          imageUrl={previewImageUrl ?? originalImageUrl}
-          baseWidth={baseWidth}
-          baseHeight={baseHeight}
-          suggestions={suggestions}
-        />
       </div>
 
       {historySlot && <div className="editor-history">{historySlot}</div>}

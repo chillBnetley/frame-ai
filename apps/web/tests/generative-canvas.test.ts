@@ -142,6 +142,14 @@ describe("fitCanvasView", () => {
     });
   });
 
+  it("fits a full-resolution portrait photo into the canvas well", () => {
+    const view = fitCanvasView(550, 522, 3072, 4096);
+
+    expect(view.scale).toBeCloseTo(522 / 4096, 6);
+    expect(3072 * view.scale).toBeLessThanOrEqual(550);
+    expect(4096 * view.scale).toBeLessThanOrEqual(522);
+  });
+
   it("returns an identity view when either size is not usable", () => {
     expect(fitCanvasView(0, 200, 400, 200)).toEqual({ scale: 1, offsetX: 0, offsetY: 0 });
     expect(fitCanvasView(200, 200, 400, 0)).toEqual({ scale: 1, offsetX: 0, offsetY: 0 });

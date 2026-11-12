@@ -235,7 +235,7 @@ export function StudioCanvas({
       onKeyDown={handleKeyDown}
       className="studio-canvas relative flex h-full min-h-64 w-full cursor-grab touch-none items-center justify-center overflow-hidden rounded-xl border border-[#e4e8e5] bg-[#eceeec] active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#277a68]"
     >
-      <div className="relative" style={frameStyle(boxWidth, boxHeight)}>
+      <div className="relative shrink-0" style={frameStyle(boxWidth, boxHeight)}>
         {expanded && (
           <div
             aria-hidden="true"

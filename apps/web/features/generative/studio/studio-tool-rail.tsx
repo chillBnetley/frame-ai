@@ -1,7 +1,5 @@
 "use client";
 
-import { useId } from "react";
-
 import type { GenerativeCapabilitiesResponse } from "@/types/generative";
 import type { StudioBaseLayer, StudioCapability, StudioCompareMode } from "./use-studio-state";
 
@@ -66,14 +64,12 @@ export interface StudioToolRailProps {
   disabled?: boolean;
 }
 
-const sectionClass = "flex flex-col gap-2";
-const headingClass = "text-[11px] font-medium uppercase tracking-[0.12em] text-[#8a938e]";
-const choiceClass =
-  "w-full px-3 py-2 text-left text-xs rounded-lg border transition-all disabled:cursor-not-allowed disabled:opacity-45";
-const choiceActiveClass =
-  "bg-[#277a68] border-[#277a68] text-[#ffffff] font-semibold shadow-[0_4px_12px_-6px_rgba(39,122,104,0.6)]";
-const choiceIdleClass =
-  "bg-[#f6f7f6] border-[#dfe4e0] text-[#3d4541] hover:border-[#c3cec8] hover:bg-[#eef1ef]";
+const groupLabelClass = "text-[11px] text-[#8a938e]";
+const chipClass =
+  "min-h-9 rounded-lg border px-2.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45";
+const chipActiveClass = "border-[#277a68] bg-[#277a68] font-semibold text-[#ffffff]";
+const chipIdleClass =
+  "border-[#dfe4e0] bg-[#ffffff] text-[#3d4541] hover:border-[#c3cec8] hover:bg-[#eef1ef]";
 
 export function StudioToolRail({
   capability,
@@ -96,8 +92,16 @@ export function StudioToolRail({
   onResetScale,
   disabled = false,
 }: StudioToolRailProps) {
-  const railId = useId();
-  const activeMeta = STUDIO_CAPABILITIES.find((item) => item.value === capability);
+  const resultLabel = hasResult
+    ? resultVisible
+      ? "结果预览：显示 AI 候选"
+      : "结果预览：已隐藏，仅看底图"
+    : "结果预览：等待候选";
+  const maskLabel = maskRequired
+    ? maskOverlayVisible
+      ? "蒙版选区：高亮显示中"
+      : "蒙版选区：已隐藏"
+    : "该能力不需要蒙版";
 
   const isSupported = (value: StudioCapability): boolean =>
     capabilities === null || capabilities.supportedTaskTypes.includes(value);
@@ -105,42 +109,33 @@ export function StudioToolRail({
   return (
     <div
       aria-label="创意工作台工具区"
-      className="flex flex-col gap-5 p-4 rounded-xl border border-[#e4e8e5] bg-[#f6f7f6] text-[#202522]"
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[#e4e8e5] bg-[#f6f7f6] px-3 py-2"
     >
-      <div className={sectionClass}>
-        <h3 id={`${railId}-capability`} className={headingClass}>
-          生成能力
-        </h3>
-        <div role="radiogroup" aria-labelledby={`${railId}-capability`} className="flex flex-col gap-1.5">
-          {STUDIO_CAPABILITIES.map((item) => {
-            const supported = isSupported(item.value);
-            return (
-              <button
-                key={item.value}
-                type="button"
-                role="radio"
-                aria-checked={item.value === capability}
-                disabled={disabled || !supported}
-                title={supported ? item.hint : "当前 Provider 不支持该任务类型"}
-                onClick={() => onCapabilityChange(item.value)}
-                className={`${choiceClass} ${item.value === capability ? choiceActiveClass : choiceIdleClass}`}
-              >
-                <span className="block font-medium">{item.label}</span>
-                <span className="mt-0.5 block text-[11px] opacity-70">{item.hint}</span>
-              </button>
-            );
-          })}
-        </div>
-        {capabilities?.isMock && (
-          <p className="text-[11px] text-[#8a5a00]">模拟生成模式：结果由 Mock Provider 产出。</p>
-        )}
+      <div role="radiogroup" aria-label="生成能力" className="flex flex-wrap gap-1.5">
+        {STUDIO_CAPABILITIES.map((item) => {
+          const supported = isSupported(item.value);
+          return (
+            <button
+              key={item.value}
+              type="button"
+              role="radio"
+              aria-checked={item.value === capability}
+              disabled={disabled || !supported}
+              title={supported ? item.hint : "当前 Provider 不支持该任务类型"}
+              onClick={() => onCapabilityChange(item.value)}
+              className={`${chipClass} ${
+                item.value === capability ? chipActiveClass : chipIdleClass
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
       </div>
 
-      <div className={sectionClass}>
-        <h3 id={`${railId}-base`} className={headingClass}>
-          底图图层
-        </h3>
-        <div role="radiogroup" aria-labelledby={`${railId}-base`} className="flex gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className={groupLabelClass}>底图</span>
+        <div role="radiogroup" aria-label="底图图层" className="flex gap-1.5">
           {BASE_LAYERS.map((item) => (
             <button
               key={item.value}
@@ -149,56 +144,48 @@ export function StudioToolRail({
               aria-checked={item.value === baseLayer}
               disabled={disabled}
               onClick={() => onBaseLayerChange(item.value)}
-              className={`flex-1 px-2 py-1.5 text-center ${choiceClass} ${
-                item.value === baseLayer ? choiceActiveClass : choiceIdleClass
+              className={`${chipClass} ${
+                item.value === baseLayer ? chipActiveClass : chipIdleClass
               }`}
             >
               {item.label}
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
-          aria-pressed={resultVisible}
+          aria-label={resultLabel}
+          aria-pressed={resultVisible && hasResult}
           disabled={disabled || !hasResult}
-          title={hasResult ? undefined : "生成候选就绪后可用"}
+          title={resultLabel}
           onClick={() => onResultVisibleChange(!resultVisible)}
-          className={`${choiceClass} ${
-            resultVisible && hasResult ? choiceActiveClass : choiceIdleClass
+          className={`${chipClass} ${
+            resultVisible && hasResult ? chipActiveClass : chipIdleClass
           }`}
         >
-          {hasResult
-            ? resultVisible
-              ? "结果预览：显示 AI 候选"
-              : "结果预览：已隐藏，仅看底图"
-            : "结果预览：等待候选"}
+          {hasResult ? "候选" : "等待候选"}
         </button>
-      </div>
-
-      <div className={sectionClass}>
-        <h3 className={headingClass}>蒙版显示</h3>
         <button
           type="button"
-          aria-pressed={maskOverlayVisible}
+          aria-label={maskLabel}
+          aria-pressed={maskOverlayVisible && maskRequired}
           disabled={disabled || !maskRequired}
+          title={maskLabel}
           onClick={onToggleMaskOverlay}
-          className={`${choiceClass} ${
-            maskOverlayVisible && maskRequired ? choiceActiveClass : choiceIdleClass
+          className={`${chipClass} ${
+            maskOverlayVisible && maskRequired ? chipActiveClass : chipIdleClass
           }`}
         >
-          {maskRequired
-            ? maskOverlayVisible
-              ? "蒙版选区：高亮显示中"
-              : "蒙版选区：已隐藏"
-            : "该能力不需要蒙版"}
+          蒙版
         </button>
       </div>
 
-      <div className={sectionClass}>
-        <h3 id={`${railId}-compare`} className={headingClass}>
-          前后对比
-        </h3>
-        <div role="radiogroup" aria-labelledby={`${railId}-compare`} className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className={groupLabelClass}>对比</span>
+        <div role="radiogroup" aria-label="前后对比" className="flex gap-1.5">
           {COMPARE_MODES.map((item) => (
             <button
               key={item.value}
@@ -208,8 +195,8 @@ export function StudioToolRail({
               disabled={disabled || !hasResult}
               title={hasResult ? undefined : "生成候选就绪后可用"}
               onClick={() => onCompareChange(item.value)}
-              className={`px-2 py-1.5 text-center ${choiceClass} ${
-                item.value === compare ? choiceActiveClass : choiceIdleClass
+              className={`${chipClass} ${
+                item.value === compare ? chipActiveClass : chipIdleClass
               }`}
             >
               {item.label}
@@ -218,55 +205,43 @@ export function StudioToolRail({
         </div>
       </div>
 
-      <div className={sectionClass}>
-        <h3 className={headingClass}>画布视图</h3>
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            onClick={onZoomOut}
-            disabled={disabled}
-            aria-label="缩小画布"
-            className={`px-2 py-1.5 text-center ${choiceClass} ${choiceIdleClass}`}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={onResetScale}
-            disabled={disabled}
-            aria-label="恢复 100% 显示"
-            className={`px-2 py-1.5 text-center font-mono ${choiceClass} ${choiceIdleClass}`}
-          >
-            {Math.round(scale * 100)}%
-          </button>
-          <button
-            type="button"
-            onClick={onZoomIn}
-            disabled={disabled}
-            aria-label="放大画布"
-            className={`px-2 py-1.5 text-center ${choiceClass} ${choiceIdleClass}`}
-          >
-            +
-          </button>
-        </div>
+      <div className="ml-auto flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onZoomOut}
+          disabled={disabled}
+          aria-label="缩小画布"
+          className={`${chipClass} ${chipIdleClass}`}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={onResetScale}
+          disabled={disabled}
+          aria-label="恢复 100% 显示"
+          className={`${chipClass} ${chipIdleClass} w-16 font-mono`}
+        >
+          {Math.round(scale * 100)}%
+        </button>
+        <button
+          type="button"
+          onClick={onZoomIn}
+          disabled={disabled}
+          aria-label="放大画布"
+          className={`${chipClass} ${chipIdleClass}`}
+        >
+          +
+        </button>
         <button
           type="button"
           onClick={onFitToWindow}
           disabled={disabled}
-          className={`px-2 py-1.5 text-center ${choiceClass} ${choiceIdleClass}`}
+          className={`${chipClass} ${chipIdleClass}`}
         >
           适应窗口
         </button>
-        <p className="text-[11px] leading-relaxed text-[#8a938e]">
-          画布内：滚轮缩放、拖动或方向键平移、双指区域无需额外模式。
-        </p>
       </div>
-
-      {activeMeta && (
-        <p className="text-[11px] leading-relaxed text-[#69716c] border-t border-[#e4e8e5] pt-3">
-          当前：{activeMeta.label}
-        </p>
-      )}
     </div>
   );
 }

@@ -183,7 +183,7 @@ export function StudioTaskPanel({
   return (
     <section
       aria-labelledby={`${panelId}-heading`}
-      className="flex flex-col gap-5 p-4 rounded-xl border border-[#e4e8e5] bg-[#f6f7f6] text-[#202522]"
+      className="flex min-h-0 flex-col gap-5 rounded-xl border border-[#e4e8e5] bg-[#f6f7f6] p-4 text-[#202522] xl:h-full xl:overflow-y-auto"
     >
       <div className="flex items-start justify-between gap-3 border-b border-[#e4e8e5] pb-3">
         <div>

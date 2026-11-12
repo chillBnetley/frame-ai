@@ -27,7 +27,9 @@ export interface CanvasView {
   offsetY: number;
 }
 
-export const MIN_CANVAS_SCALE = 0.2;
+// Fitting a 4096px-tall photo into the studio well needs well below 0.2, so the
+// lower bound must leave room for "fit to window" on full-resolution images.
+export const MIN_CANVAS_SCALE = 0.02;
 export const MAX_CANVAS_SCALE = 8;
 export const CANVAS_ZOOM_STEP = 1.25;
 

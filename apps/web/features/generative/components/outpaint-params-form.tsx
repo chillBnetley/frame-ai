@@ -98,7 +98,7 @@ export function OutpaintParamsForm({
         <div
           role="radiogroup"
           aria-labelledby={`${formId}-ratio-label`}
-          className="grid grid-cols-3 sm:grid-cols-5 gap-2"
+          className="grid grid-cols-3 gap-2"
         >
           {PRESET_RATIOS.map((item) => {
             const isSelected = values.aspectRatio === item.value;
@@ -112,7 +112,7 @@ export function OutpaintParamsForm({
                 disabled={disabled || blocked}
                 title={blocked ? `当前模型每边最多扩 ${maxOutpaintScale}×` : undefined}
                 onClick={() => onChange({ ...values, aspectRatio: item.value })}
-                className={`py-1.5 px-3 text-xs rounded-lg border transition-all disabled:opacity-50 ${
+                className={`whitespace-nowrap py-1.5 px-1.5 text-[11px] rounded-lg border transition-all disabled:opacity-50 ${
                   isSelected
                     ? "bg-[#277a68] border-[#277a68] text-[#ffffff] shadow-sm font-semibold"
                     : "bg-[#ffffff] border-[#dfe4e0] text-[#3d4541] hover:border-[#c3cec8] hover:bg-[#eef1ef]"
