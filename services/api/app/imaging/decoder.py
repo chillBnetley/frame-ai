@@ -18,6 +18,9 @@ DECLARED_MIME_TO_FORMAT = {
     "image/tiff": "TIFF",
 }
 
+# Non-standard aliases clients (notably Windows browsers) use for .jpg files.
+JPEG_MIME_ALIASES = frozenset({"image/jpg", "image/pjpeg", "image/x-jpeg", "image/jfif"})
+
 FORMAT_INFO = {
     "JPEG": (".jpg", "image/jpeg"),
     "PNG": (".png", "image/png"),
@@ -45,7 +48,10 @@ class DecodedImage:
 
 
 def normalize_declared_mime(content_type: str | None) -> str:
-    return (content_type or "").split(";", 1)[0].strip().lower()
+    mime = (content_type or "").split(";", 1)[0].strip().lower()
+    if mime in JPEG_MIME_ALIASES:
+        return "image/jpeg"
+    return mime
 
 
 def _read_orientation(image: Image.Image) -> int:

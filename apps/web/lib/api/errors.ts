@@ -7,7 +7,7 @@ const FRIENDLY_MESSAGES: Record<string, string> = {
   payload_too_large: "上传数据超过服务器允许的大小。",
   image_too_many_pixels: "图片像素总数超过允许上限。",
   animated_not_supported: "阶段 1 不支持动图，请换用静态图片。",
-  unsupported_media_type: "仅支持 JPEG、PNG、WebP 与 TIFF 图片。",
+  unsupported_media_type: "仅支持 JPG/JPEG、PNG、WebP 与 TIFF 图片。",
   mime_mismatch: "文件内容与声明的图片类型不一致，已拒绝上传。",
   invalid_image: "文件不是有效图片，或图片已损坏。",
   unsupported_tiff_compression: "这个 TIFF 使用了不支持的压缩方式，请改用未压缩或 Deflate 压缩的单页 TIFF。",

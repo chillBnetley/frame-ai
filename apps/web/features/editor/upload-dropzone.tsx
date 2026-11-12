@@ -134,7 +134,7 @@ export function UploadDropzone({
             </span>
           </span>
           <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-white/8 bg-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35">
-            <span>JPEG · PNG · WebP · TIFF</span>
+            <span>JPG/JPEG · PNG · WebP · TIFF</span>
             <span aria-hidden="true">/</span>
             <span>最大 {formatBytes(maxUploadBytes)}</span>
           </span>

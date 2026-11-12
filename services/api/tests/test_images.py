@@ -22,6 +22,8 @@ from tests.conftest import image_row, make_image, upload
     [
         ("PNG", "photo.png", "image/png", "image/png"),
         ("JPEG", "photo.jpg", "image/jpeg", "image/jpeg"),
+        ("JPEG", "PHOTO.JPG", "image/jpg", "image/jpeg"),
+        ("JPEG", "photo.jpg", "image/pjpeg", "image/jpeg"),
         ("WEBP", "photo.webp", "image/webp", "image/webp"),
         ("TIFF", "photo.tiff", "image/tiff", "image/tiff"),
     ],

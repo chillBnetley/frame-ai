@@ -1,4 +1,5 @@
 import type { UploadedImage, ImageDeletionPreview, HealthResponse, RuntimeConfig } from "@/types/image";
+import { normalizeUploadFile } from "@/lib/upload-validation";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 const UPLOAD_TIMEOUT_MS = 60_000;
@@ -146,8 +147,9 @@ export async function apiJson<T>(
 export async function uploadImage(
   file: File,
   signal?: AbortSignal,
-): Promise<UploadedImage> {  const body = new FormData();
-  body.append("file", file, file.name);
+): Promise<UploadedImage> {
+  const body = new FormData();
+  body.append("file", normalizeUploadFile(file), file.name);
   const timeout = createTimeoutSignal(signal, UPLOAD_TIMEOUT_MS);
 
   try {
