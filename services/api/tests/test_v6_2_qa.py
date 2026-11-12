@@ -39,12 +39,10 @@ def test_eight_scene_dataset_is_legal_reproducible_and_reasoned() -> None:
         assert features.image_id == analysis.image.id, name
         assert features.readings, name
         assert all(reading.evidence for reading in features.readings), name
-        assert any(
-            reading.origin is FeatureOrigin.MEASUREMENT for reading in features.readings
-        ), name
-        assert any(
-            reading.origin is FeatureOrigin.MODEL for reading in features.readings
-        ), name
+        assert any(reading.origin is FeatureOrigin.MEASUREMENT for reading in features.readings), (
+            name
+        )
+        assert any(reading.origin is FeatureOrigin.MODEL for reading in features.readings), name
 
 
 def test_eight_scene_dataset_separates_tone_and_low_light_cases() -> None:

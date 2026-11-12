@@ -410,7 +410,10 @@ def test_create_mask_with_feather_via_api(client: TestClient):
         }
     ]
     response = _create_mask(
-        client, session["sessionId"], strokes=strokes, feather=8,
+        client,
+        session["sessionId"],
+        strokes=strokes,
+        feather=8,
     )
     assert response.status_code == 201, response.text
     view = response.json()
@@ -428,7 +431,10 @@ def test_create_inverted_mask_via_api(client: TestClient):
         }
     ]
     response = _create_mask(
-        client, session["sessionId"], strokes=strokes, inverted=True,
+        client,
+        session["sessionId"],
+        strokes=strokes,
+        inverted=True,
     )
     assert response.status_code == 201, response.text
     view = response.json()
@@ -507,9 +513,7 @@ def test_list_masks_for_session(client: TestClient):
     ]
     _create_mask(client, session["sessionId"], strokes=strokes)
     _create_mask(client, session["sessionId"], strokes=strokes)
-    response = client.get(
-        f"/api/v1/generative/masks?sessionId={session['sessionId']}"
-    )
+    response = client.get(f"/api/v1/generative/masks?sessionId={session['sessionId']}")
     assert response.status_code == 200, response.text
     items = response.json()["items"]
     assert len(items) == 2
@@ -699,12 +703,8 @@ def test_list_masks_isolates_by_session(client: TestClient):
     ]
     _create_mask(client, session1["sessionId"], strokes=strokes)
     _create_mask(client, session2["sessionId"], strokes=strokes)
-    response1 = client.get(
-        f"/api/v1/generative/masks?sessionId={session1['sessionId']}"
-    )
-    response2 = client.get(
-        f"/api/v1/generative/masks?sessionId={session2['sessionId']}"
-    )
+    response1 = client.get(f"/api/v1/generative/masks?sessionId={session1['sessionId']}")
+    response2 = client.get(f"/api/v1/generative/masks?sessionId={session2['sessionId']}")
     assert len(response1.json()["items"]) == 1
     assert len(response2.json()["items"]) == 1
 

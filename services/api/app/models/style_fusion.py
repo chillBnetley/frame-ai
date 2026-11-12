@@ -81,9 +81,7 @@ class PersonalStyleFusionResponse(_FusionModel):
     sections: tuple[PersonalStyleFusionSection, ...] = Field(default=(), max_length=6)
     conflicts: tuple[PersonalStyleFusionConflict, ...] = Field(default=(), max_length=8)
     scenes: tuple[PersonalStyleFusionScene, ...] = Field(default=(), max_length=9)
-    contributions: tuple[PersonalStyleReferenceContribution, ...] = Field(
-        default=(), max_length=20
-    )
+    contributions: tuple[PersonalStyleReferenceContribution, ...] = Field(default=(), max_length=20)
     occasional: tuple[Text, ...] = Field(default=(), max_length=8)
     stability: dict[str, float] = Field(default_factory=dict)
     confidence: float = Field(ge=0.0, le=1.0)

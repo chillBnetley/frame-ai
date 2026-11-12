@@ -170,8 +170,7 @@ def _apply_stroke(mask: MaskArray, stroke: GenerativeMaskStroke) -> None:
     height, width = mask.shape
     radius = max(0.5, stroke.radius * min(width, height))
     points = [
-        (point.x * max(width - 1, 0), point.y * max(height - 1, 0))
-        for point in stroke.points
+        (point.x * max(width - 1, 0), point.y * max(height - 1, 0)) for point in stroke.points
     ]
     for index in range(len(points)):
         start = points[index]

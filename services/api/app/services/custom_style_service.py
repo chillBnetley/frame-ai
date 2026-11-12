@@ -150,9 +150,7 @@ def _profile_from_draft(
         version=version,
         name=draft.name,
         description=draft.description,
-        philosophy=(
-            base.philosophy if base is not None else "由自然语言创建的个人视觉风格。"
-        ),
+        philosophy=(base.philosophy if base is not None else "由自然语言创建的个人视觉风格。"),
         color=draft.color,
         light=draft.light,
         composition=draft.composition,
@@ -176,9 +174,7 @@ def _profile_from_draft(
         ),
         constraints=constraints,
         preserve_notes=(
-            base.preserve_notes
-            if base is not None
-            else "风格约束来自用户描述；不用于模型训练。"
+            base.preserve_notes if base is not None else "风格约束来自用户描述；不用于模型训练。"
         ),
         sources=base.sources if base is not None else (_CUSTOM_SOURCE,),
         engine_style=(

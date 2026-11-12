@@ -354,9 +354,7 @@ def test_local_edit_reject_leaves_the_revision_untouched(client: TestClient) -> 
     task = _wait_for_task(client, str(created.json()["taskId"]))
     assert task["status"] == "succeeded", task
 
-    rejected = client.post(
-        f"/api/v1/generative/results/{task['results'][0]['resultId']}/reject"
-    )
+    rejected = client.post(f"/api/v1/generative/results/{task['results'][0]['resultId']}/reject")
     assert rejected.status_code == 200, rejected.text
     assert rejected.json()["status"] == "rejected"
 

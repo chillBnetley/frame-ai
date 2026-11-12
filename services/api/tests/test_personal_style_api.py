@@ -183,9 +183,7 @@ def test_references_require_consent_and_enable_publishing(personal_client) -> No
     assert published.status_code == 200, published.text
     assert published.json()["status"] == "published"
 
-    removed = client.delete(
-        f"{PREFIX}/{style_id}/references/{references[0]['id']}"
-    )
+    removed = client.delete(f"{PREFIX}/{style_id}/references/{references[0]['id']}")
     assert removed.status_code == 204
     assert client.get(f"{PREFIX}/{style_id}/references").json()["references"] == []
 

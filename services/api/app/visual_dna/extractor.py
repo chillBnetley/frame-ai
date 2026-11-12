@@ -506,9 +506,7 @@ def extract_photo_features(report: AnalysisReport) -> PhotoVisualFeatures:
 
     limitations: list[str] = []
     if report.engine.is_mock:
-        limitations.append(
-            "当前分析由模拟 Provider 生成，场景、光线、色彩与构图语义仅供占位。"
-        )
+        limitations.append("当前分析由模拟 Provider 生成，场景、光线、色彩与构图语义仅供占位。")
     if not color_measurement.hsv_histogram:
         limitations.append("缺少色相直方图，主色关系仅依据模型结果。")
     if overall_confidence < LOW_CONFIDENCE:
@@ -539,9 +537,7 @@ def extract_photo_features(report: AnalysisReport) -> PhotoVisualFeatures:
             color_concentration=color_measurement.color_concentration,
             dominant_colors=report.color.dominant_colors,
             hue_distribution=(
-                color_measurement.hsv_histogram[0]
-                if color_measurement.hsv_histogram
-                else ()
+                color_measurement.hsv_histogram[0] if color_measurement.hsv_histogram else ()
             ),
             harmony=report.color.harmony,
             tendency=report.color.temperature,

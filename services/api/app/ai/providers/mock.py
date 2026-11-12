@@ -638,9 +638,7 @@ def _detect_avoid(text: str) -> tuple[PersonalAvoidEffect, ...]:
     if not text:
         return ()
     return tuple(
-        dict.fromkeys(
-            effect for words, effect in _MOCK_AVOID_WORDS if _contains(text, *words)
-        )
+        dict.fromkeys(effect for words, effect in _MOCK_AVOID_WORDS if _contains(text, *words))
     )
 
 
@@ -721,11 +719,7 @@ def _mock_author_style(request: StyleAuthoringRequest) -> StyleAuthoringDraft:
         else "饱和度适中"
     )
     temperature_text = (
-        "整体偏冷"
-        if cool and not warm
-        else "整体偏暖"
-        if warm and not cool
-        else "色温中性"
+        "整体偏冷" if cool and not warm else "整体偏暖" if warm and not cool else "色温中性"
     )
     contrast_text = (
         "柔和反差"
@@ -817,9 +811,7 @@ def _mock_author_style(request: StyleAuthoringRequest) -> StyleAuthoringDraft:
             geometry="对称或几何结构清晰" if symmetrical else "平衡构图",
             negative_space="较多" if minimal else "适中",
             subject_relation=(
-                "主体与环境关系自然"
-                if SceneLabel.PORTRAIT in scenes
-                else "主体与环境保持克制关系"
+                "主体与环境关系自然" if SceneLabel.PORTRAIT in scenes else "主体与环境保持克制关系"
             ),
         ),
         texture=StyleTextureTraits(

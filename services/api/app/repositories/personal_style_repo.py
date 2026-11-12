@@ -312,8 +312,7 @@ class SqlitePersonalStyleRepository:
                 )
             if _version_key(profile.version) <= _version_key(str(row["current_version"])):
                 raise PersonalStyleVersionConflictError(
-                    f"version '{profile.version}' must be newer than "
-                    f"'{row['current_version']}'"
+                    f"version '{profile.version}' must be newer than '{row['current_version']}'"
                 )
             if profile.personal.source.value != str(row["source"]):
                 raise PersonalStyleVersionConflictError(
@@ -560,8 +559,7 @@ class SqlitePersonalStyleRepository:
                     f"personal style '{style_id}' does not exist for this owner"
                 )
             cursor = connection.execute(
-                "UPDATE personal_style_reference SET analysis_id = ? "
-                "WHERE id = ? AND style_id = ?",
+                "UPDATE personal_style_reference SET analysis_id = ? WHERE id = ? AND style_id = ?",
                 (analysis_id, reference_id, style_id),
             )
             if cursor.rowcount == 0:
@@ -612,8 +610,7 @@ class SqlitePersonalStyleRepository:
                     f"personal style '{style_id}' does not exist for this owner"
                 )
             reference = connection.execute(
-                "SELECT image_sha256 FROM personal_style_reference "
-                "WHERE id = ? AND style_id = ?",
+                "SELECT image_sha256 FROM personal_style_reference WHERE id = ? AND style_id = ?",
                 (reference_id, style_id),
             ).fetchone()
             if reference is None:
@@ -650,8 +647,7 @@ class SqlitePersonalStyleRepository:
                 ),
             )
             connection.execute(
-                "UPDATE personal_style_reference SET analysis_id = ? "
-                "WHERE id = ? AND style_id = ?",
+                "UPDATE personal_style_reference SET analysis_id = ? WHERE id = ? AND style_id = ?",
                 (str(features.analysis_id), reference_id, style_id),
             )
             connection.commit()
@@ -749,8 +745,7 @@ class SqlitePersonalStyleRepository:
     @staticmethod
     def _owns(connection: sqlite3.Connection, style_id: str, owner_id: str) -> bool:
         row = connection.execute(
-            "SELECT 1 FROM personal_style "
-            "WHERE id = ? AND owner_id = ? AND deleted_at IS NULL",
+            "SELECT 1 FROM personal_style WHERE id = ? AND owner_id = ? AND deleted_at IS NULL",
             (style_id, owner_id),
         ).fetchone()
         return row is not None

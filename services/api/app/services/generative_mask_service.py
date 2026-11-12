@@ -252,8 +252,7 @@ class GenerativeMaskService:
             raise AppError(
                 409,
                 "generative_mask_semantic_base_unsupported",
-                "AI-assisted masks currently bind to the original image, "
-                "not to a generated base.",
+                "AI-assisted masks currently bind to the original image, not to a generated base.",
             )
         if self.semantic_masks is None:
             raise AppError(503, "semantic_mask_unavailable", "Semantic masks are not available.")

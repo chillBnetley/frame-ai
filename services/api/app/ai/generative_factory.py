@@ -34,9 +34,7 @@ def build_generative_provider(
             secret = resolved.generative_dashscope_api_key
             key = secret.get_secret_value() if secret is not None else ""
         if not key:
-            raise ProviderConfigurationError(
-                "The DashScope generative model needs an API key."
-            )
+            raise ProviderConfigurationError("The DashScope generative model needs an API key.")
         policy = ProviderEndpointPolicy(
             allow_local=resolved.provider_url_policy == "allow-local",
             allow_insecure_http=resolved.provider_allow_insecure_http,

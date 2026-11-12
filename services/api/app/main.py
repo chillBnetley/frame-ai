@@ -95,6 +95,8 @@ def _build_generative_provider(
             config.provider,
         )
         return build_generative_provider(settings, provider="mock")
+
+
 API_PREFIX = "/api/v1"
 ALLOWED_CORS_METHODS = ["GET", "POST", "DELETE", "OPTIONS"]
 
@@ -244,9 +246,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             photographer_service.update_planner(bundle.planner)
 
         def on_generative_changed(config: ResolvedGenerative) -> None:
-            generative_service.set_provider(
-                _build_generative_provider(resolved_settings, config)
-            )
+            generative_service.set_provider(_build_generative_provider(resolved_settings, config))
 
         providers.set_on_change(on_providers_changed)
         providers.set_on_generative_change(on_generative_changed)

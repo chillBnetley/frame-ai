@@ -59,9 +59,7 @@ def _features(
                 ),
                 "color": base.color.model_copy(update={"confidence": 0.9}),
                 "composition": base.composition.model_copy(update={"confidence": 0.9}),
-                "technical_quality": base.technical_quality.model_copy(
-                    update={"confidence": 0.9}
-                ),
+                "technical_quality": base.technical_quality.model_copy(update={"confidence": 0.9}),
             }
         )
     )

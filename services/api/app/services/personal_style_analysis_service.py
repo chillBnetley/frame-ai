@@ -142,10 +142,7 @@ class PersonalStyleAnalysisService:
         owner_id: str,
         force: bool,
     ) -> PersonalStyleReferenceAnalysis:
-        if (
-            reference.status is PersonalStyleReferenceStatus.MISSING
-            or reference.image_id is None
-        ):
+        if reference.status is PersonalStyleReferenceStatus.MISSING or reference.image_id is None:
             return self._item(reference, PersonalStyleAnalysisStatus.MISSING)
         image_id = str(reference.image_id)
         report = self._analysis.latest_completed(image_id)
@@ -209,10 +206,7 @@ class PersonalStyleAnalysisService:
         *,
         owner_id: str,
     ) -> PersonalStyleReferenceAnalysis:
-        if (
-            reference.status is PersonalStyleReferenceStatus.MISSING
-            or reference.image_id is None
-        ):
+        if reference.status is PersonalStyleReferenceStatus.MISSING or reference.image_id is None:
             return self._item(reference, PersonalStyleAnalysisStatus.MISSING)
         current = self._repository.get_feature(
             style_id,
@@ -317,9 +311,7 @@ class PersonalStyleAnalysisService:
             return list(references)
         by_id = {str(reference.id): reference for reference in references}
         missing = [
-            str(reference_id)
-            for reference_id in requested
-            if str(reference_id) not in by_id
+            str(reference_id) for reference_id in requested if str(reference_id) not in by_id
         ]
         if missing:
             raise _reference_not_found()
@@ -371,9 +363,7 @@ class PersonalStyleAnalysisService:
         style_id: str,
         items: tuple[PersonalStyleReferenceAnalysis, ...],
     ) -> PersonalStyleAnalysisResponse:
-        completed = sum(
-            1 for item in items if item.status is PersonalStyleAnalysisStatus.COMPLETED
-        )
+        completed = sum(1 for item in items if item.status is PersonalStyleAnalysisStatus.COMPLETED)
         return PersonalStyleAnalysisResponse(
             style_id=style_id,
             references=items,

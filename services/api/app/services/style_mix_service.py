@@ -94,9 +94,7 @@ class StyleMixService:
 
     def _resolve(self, ref: StyleMixSourceRef, owner_id: str) -> StyleProfile:
         if ref.style_id.startswith("personal_"):
-            record = self._personal_styles.get(
-                ref.style_id, owner_id=owner_id, version=ref.version
-            )
+            record = self._personal_styles.get(ref.style_id, owner_id=owner_id, version=ref.version)
             if record is None:
                 raise _source_not_found()
             return record.profile

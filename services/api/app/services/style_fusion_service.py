@@ -149,19 +149,9 @@ class StyleFusionService:
         sample_count: int,
     ) -> PersonalStyleProfile:
         overrides = definition.user_overrides
-        scene_fit = (
-            current.scene_fit
-            if "sceneFit.suitable" in overrides
-            else outcome.scene_fit
-        )
-        targets = (
-            current.personal.targets
-            if "personal.targets" in overrides
-            else outcome.targets
-        )
-        constraints = tuple(
-            dict.fromkeys((*current.constraints, *outcome.constraints))
-        )[:11]
+        scene_fit = current.scene_fit if "sceneFit.suitable" in overrides else outcome.scene_fit
+        targets = current.personal.targets if "personal.targets" in overrides else outcome.targets
+        constraints = tuple(dict.fromkeys((*current.constraints, *outcome.constraints)))[:11]
         color = outcome.color.model_copy(
             update={
                 field: getattr(current.color, field)
@@ -195,9 +185,7 @@ class StyleFusionService:
             }
         )
         sources = tuple(
-            source
-            for source in current.sources
-            if not source.title.startswith("个人参考照片分析")
+            source for source in current.sources if not source.title.startswith("个人参考照片分析")
         )
         provenance = StyleSource(
             title=f"个人参考照片分析（{sample_count} 张）",
@@ -207,9 +195,7 @@ class StyleFusionService:
             update={
                 "version": _next_version(current.version),
                 "description": (
-                    current.description
-                    if "description" in overrides
-                    else outcome.summary
+                    current.description if "description" in overrides else outcome.summary
                 ),
                 "color": color,
                 "light": light,
@@ -238,9 +224,7 @@ class StyleFusionService:
             ]
         by_id = {str(reference.id): reference for reference in references}
         missing = [
-            str(reference_id)
-            for reference_id in requested
-            if str(reference_id) not in by_id
+            str(reference_id) for reference_id in requested if str(reference_id) not in by_id
         ]
         if missing:
             raise _reference_not_found()

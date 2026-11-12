@@ -415,21 +415,30 @@ def _constraints(
     conflicts: Sequence[PersonalStyleFusionConflict],
 ) -> tuple[DirectionConstraint, ...]:
     total = sum(weight for _, weight in photos) or 1.0
-    portrait_share = sum(
-        weight
-        for photo, weight in photos
-        if photo.features.scene.primary is SceneLabel.PORTRAIT
-    ) / total
-    highlight_rate = sum(
-        weight
-        for photo, weight in photos
-        if any(item.code == "highlights_clipped" for item in photo.features.anomalies)
-    ) / total
-    shadow_rate = sum(
-        weight
-        for photo, weight in photos
-        if any(item.code == "shadows_clipped" for item in photo.features.anomalies)
-    ) / total
+    portrait_share = (
+        sum(
+            weight
+            for photo, weight in photos
+            if photo.features.scene.primary is SceneLabel.PORTRAIT
+        )
+        / total
+    )
+    highlight_rate = (
+        sum(
+            weight
+            for photo, weight in photos
+            if any(item.code == "highlights_clipped" for item in photo.features.anomalies)
+        )
+        / total
+    )
+    shadow_rate = (
+        sum(
+            weight
+            for photo, weight in photos
+            if any(item.code == "shadows_clipped" for item in photo.features.anomalies)
+        )
+        / total
+    )
 
     result: list[DirectionConstraint] = []
     if portrait_share >= CONFLICT_SUPPORT:
@@ -462,17 +471,12 @@ def _protected(constraints: Sequence[DirectionConstraint]) -> tuple[DirectionCon
 
 def _scene_description(photos: Sequence[tuple[FusionPhoto, float]]) -> str:
     def median(getter: Callable[[PhotoVisualFeatures], float]) -> float:
-        return _weighted_median(
-            (getter(photo.features), weight) for photo, weight in photos
-        )
+        return _weighted_median((getter(photo.features), weight) for photo, weight in photos)
 
     saturation = _saturation_label(median(lambda features: features.color.saturation_mean))
     contrast = _contrast_label(median(lambda features: features.tone.contrast_strength))
     light = _light_label(median(lambda features: features.light.softness))
-    return (
-        f"{_SATURATION_TEXT[saturation]}、{_CONTRAST_TEXT[contrast]}、"
-        f"{_LIGHT_TEXT[light]}"
-    )
+    return f"{_SATURATION_TEXT[saturation]}、{_CONTRAST_TEXT[contrast]}、{_LIGHT_TEXT[light]}"
 
 
 def _scene_summaries(
@@ -638,12 +642,10 @@ def fuse_photo_features(
         for photo, weight in weighted
     )
     tint_shares = _shares(
-        (_tint_label(photo.features.color.tint_offset), weight)
-        for photo, weight in weighted
+        (_tint_label(photo.features.color.tint_offset), weight) for photo, weight in weighted
     )
     light_shares = _shares(
-        (_light_label(photo.features.light.softness), weight)
-        for photo, weight in weighted
+        (_light_label(photo.features.light.softness), weight) for photo, weight in weighted
     )
     key_shares = _shares((_key_label(photo.features), weight) for photo, weight in weighted)
     texture_labels = {
@@ -724,9 +726,7 @@ def fuse_photo_features(
             shares={
                 **group_texture_preference,
                 "monochrome": sum(
-                    weight
-                    for photo, weight in group
-                    if photo.features.color.monochrome
+                    weight for photo, weight in group if photo.features.color.monochrome
                 )
                 / (sum(weight for _, weight in group) or 1.0),
             },
@@ -788,7 +788,8 @@ def fuse_photo_features(
 
     scene_summaries = _scene_summaries(scene_groups, total_weight=total_weight)
     top_scene_labels = [
-        scene for scene, _ in sorted(
+        scene
+        for scene, _ in sorted(
             scene_groups.items(),
             key=lambda item: (-sum(weight for _, weight in item[1]), item[0].value),
         )
@@ -804,16 +805,10 @@ def fuse_photo_features(
     top_key = _top_label(key_shares)
     top_texture = _top_label(texture_shares)
     top_harmony = _top_label(
-        _shares(
-            (photo.features.color.harmony.value, weight)
-            for photo, weight in weighted
-        )
+        _shares((photo.features.color.harmony.value, weight) for photo, weight in weighted)
     )
     top_direction = _top_label(
-        _shares(
-            (photo.features.light.direction.value, weight)
-            for photo, weight in weighted
-        )
+        _shares((photo.features.light.direction.value, weight) for photo, weight in weighted)
     )
     saturation_text = _SATURATION_TEXT[top_saturation]
     contrast_text = _CONTRAST_TEXT[top_contrast]
@@ -918,16 +913,10 @@ def fuse_photo_features(
             continue
         if stability[key] < CANDIDATE_SUPPORT:
             occasional.append(f"{label}倾向不稳定，暂不作为稳定个人特征。")
-    occasional.extend(
-        _minority_messages(saturation_shares, _SATURATION_TEXT, "色彩")
-    )
-    occasional.extend(
-        _minority_messages(temperature_shares, _TEMPERATURE_TEXT, "色温")
-    )
+    occasional.extend(_minority_messages(saturation_shares, _SATURATION_TEXT, "色彩"))
+    occasional.extend(_minority_messages(temperature_shares, _TEMPERATURE_TEXT, "色温"))
     occasional.extend(_minority_messages(light_shares, _LIGHT_TEXT, "光线"))
-    occasional.extend(
-        _minority_messages(texture_shares, _TEXTURE_TEXT, "质感")
-    )
+    occasional.extend(_minority_messages(texture_shares, _TEXTURE_TEXT, "质感"))
     occasional = list(dict.fromkeys(occasional))[:6]
     limitations: list[str] = []
     if len(weighted) < MIN_GLOBAL_PHOTOS:
@@ -941,9 +930,7 @@ def fuse_photo_features(
     if len(scene_groups) > 1 and scene_stability < CANDIDATE_SUPPORT:
         limitations.append("参考照片场景差异较大，全局风格仅保留跨场景一致的方向。")
     if quality_limited_count:
-        limitations.append(
-            f"{quality_limited_count} 张照片噪声或清晰度异常，未计入质感偏好。"
-        )
+        limitations.append(f"{quality_limited_count} 张照片噪声或清晰度异常，未计入质感偏好。")
     if anomaly_count:
         limitations.append(f"{anomaly_count} 张照片存在裁切、清晰度或噪声异常，已降低其权重。")
 
@@ -965,11 +952,7 @@ def fuse_photo_features(
                 else f"{temperature_text}，{saturation_text}"
             ),
             relationships=harmony_text,
-            saturation=(
-                "去饱和至单色，保留灰阶层次"
-                if monochrome
-                else saturation_text
-            ),
+            saturation=("去饱和至单色，保留灰阶层次" if monochrome else saturation_text),
         ),
         light=StyleLightTraits(
             contrast=contrast_text,
@@ -995,11 +978,7 @@ def fuse_photo_features(
         ),
         composition=_composition_traits(weighted),
         texture=StyleTextureTraits(
-            grain=(
-                "质感特征受画质限制，暂不形成偏好"
-                if quality_limited
-                else "颗粒克制"
-            ),
+            grain=("质感特征受画质限制，暂不形成偏好" if quality_limited else "颗粒克制"),
             sharpness=(
                 "清晰度受画质限制，暂不形成偏好"
                 if quality_limited

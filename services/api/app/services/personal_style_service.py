@@ -244,9 +244,7 @@ class PersonalStyleService:
                     "invalid_scene_fit",
                     "At least one suitable scene is required.",
                 )
-            scene_fit = profile.scene_fit.model_copy(
-                update={"suitable": request.suitable_scenes}
-            )
+            scene_fit = profile.scene_fit.model_copy(update={"suitable": request.suitable_scenes})
             profile = profile.model_copy(update={"scene_fit": scene_fit})
             overrides["sceneFit.suitable"] = [scene.value for scene in request.suitable_scenes]
         if request.targets is not None:
@@ -254,9 +252,7 @@ class PersonalStyleService:
                 update={
                     "targets": request.targets,
                     "user_overrides": tuple(
-                        dict.fromkeys(
-                            (*profile.personal.user_overrides, "personal.targets")
-                        )
+                        dict.fromkeys((*profile.personal.user_overrides, "personal.targets"))
                     ),
                 }
             )
@@ -337,8 +333,7 @@ class PersonalStyleService:
         if status is PersonalStyleStatus.PUBLISHED:
             references = self._repository.list_references(style_id, owner_id=owner_id)
             if profile_source_is_photos(record) and not any(
-                reference.status is PersonalStyleReferenceStatus.ACTIVE
-                for reference in references
+                reference.status is PersonalStyleReferenceStatus.ACTIVE for reference in references
             ):
                 raise AppError(
                     409,
@@ -388,9 +383,7 @@ class PersonalStyleService:
         record = self._require(style_id, owner_id)
         existing = self._repository.list_references(style_id, owner_id=owner_id)
         existing_image_ids = {
-            str(reference.image_id)
-            for reference in existing
-            if reference.image_id is not None
+            str(reference.image_id) for reference in existing if reference.image_id is not None
         }
         requested = {str(image_id) for image_id in request.image_ids}
         new_count = len(requested - existing_image_ids)
@@ -411,8 +404,7 @@ class PersonalStyleService:
             )
             analysis_id = (
                 report.analysis_id
-                if report is not None
-                and report.image.sha256.lower() == image.sha256.lower()
+                if report is not None and report.image.sha256.lower() == image.sha256.lower()
                 else None
             )
             references.append(

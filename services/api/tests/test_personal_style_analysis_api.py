@@ -111,9 +111,7 @@ def test_analysis_extracts_and_persists_visual_features(analysis_client) -> None
     assert item["confidence"] is not None
     assert item["anomalyCount"] >= 0
 
-    features_response = client.get(
-        f"{PREFIX}/{style_id}/references/{reference['id']}/features"
-    )
+    features_response = client.get(f"{PREFIX}/{style_id}/references/{reference['id']}/features")
     assert features_response.status_code == 200, features_response.text
     features = features_response.json()
     assert features["schemaVersion"] == "visual-dna-photo/1"
@@ -137,9 +135,7 @@ def test_analysis_extracts_and_persists_visual_features(analysis_client) -> None
     assert stored is not None
     assert stored.image_sha256 == features["imageSha256"]
 
-    again = client.get(
-        f"{PREFIX}/{style_id}/references/{reference['id']}/features"
-    ).json()
+    again = client.get(f"{PREFIX}/{style_id}/references/{reference['id']}/features").json()
     assert again["analysisId"] == features["analysisId"]
 
 
@@ -191,9 +187,9 @@ def test_missing_image_is_reported_without_deleting_the_style(analysis_client) -
     status = client.get(f"{PREFIX}/{style_id}/analysis").json()
     assert status["references"][0]["status"] == "missing"
     assert client.get(f"{PREFIX}/{style_id}").status_code == 200
-    assert client.get(
-        f"{PREFIX}/{style_id}/references/{reference['id']}/features"
-    ).status_code == 409
+    assert (
+        client.get(f"{PREFIX}/{style_id}/references/{reference['id']}/features").status_code == 409
+    )
 
 
 def test_removing_a_reference_removes_its_features(analysis_client) -> None:
@@ -204,13 +200,10 @@ def test_removing_a_reference_removes_its_features(analysis_client) -> None:
     client.post(f"{PREFIX}/{style_id}/analyze", json={})
     _wait_for_analysis(client, style_id)
 
+    assert client.delete(f"{PREFIX}/{style_id}/references/{reference['id']}").status_code == 204
     assert (
-        client.delete(f"{PREFIX}/{style_id}/references/{reference['id']}").status_code
-        == 204
+        client.get(f"{PREFIX}/{style_id}/references/{reference['id']}/features").status_code == 404
     )
-    assert client.get(
-        f"{PREFIX}/{style_id}/references/{reference['id']}/features"
-    ).status_code == 404
     status = client.get(f"{PREFIX}/{style_id}/analysis").json()
     assert status["references"] == []
     assert status["totalCount"] == 0
@@ -231,9 +224,7 @@ def test_force_analysis_replaces_the_stored_feature_record(analysis_client) -> N
     assert second["completedCount"] == 1
     assert second["references"][0]["analysisId"] != first_analysis_id
 
-    features = client.get(
-        f"{PREFIX}/{style_id}/references/{reference['id']}/features"
-    ).json()
+    features = client.get(f"{PREFIX}/{style_id}/references/{reference['id']}/features").json()
     assert features["analysisId"] == second["references"][0]["analysisId"]
 
 
@@ -261,8 +252,6 @@ def test_a_reference_cannot_be_read_through_another_style(analysis_client) -> No
     client.post(f"{PREFIX}/{first_style}/analyze", json={})
     _wait_for_analysis(client, first_style)
 
-    response = client.get(
-        f"{PREFIX}/{second_style}/references/{reference['id']}/features"
-    )
+    response = client.get(f"{PREFIX}/{second_style}/references/{reference['id']}/features")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "personal_style_reference_not_found"

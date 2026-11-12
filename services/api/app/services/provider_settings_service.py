@@ -573,9 +573,7 @@ class ProviderSettingsService:
                     saved_generative.api_key,
                     provider_settings_aad(_GENERATIVE_SECRET_KIND),
                 )
-                secrets[_GENERATIVE_SECRET_KIND] = StoredSecret.model_validate(
-                    blob_to_record(blob)
-                )
+                secrets[_GENERATIVE_SECRET_KIND] = StoredSecret.model_validate(blob_to_record(blob))
         document = StoredProviderSettingsV2(
             vision=entries["vision"],
             decision=entries["decision"],
@@ -796,9 +794,7 @@ class ProviderSettingsService:
                 )
             )
         if any(character in generative.model for character in "\r\n"):
-            issues.append(
-                ("generative.model", "invalid_characters", "Must not contain newlines.")
-            )
+            issues.append(("generative.model", "invalid_characters", "Must not contain newlines."))
         if generative.base_url:
             try:
                 validate_for_save(parse_endpoint(generative.base_url), self._policy())
@@ -919,9 +915,7 @@ def _apply_generative_patch(
             validate_for_save(endpoint, policy)
             validate_host_for_save(endpoint.host)
         except EndpointPolicyError:
-            issues.append(
-                ("generative.baseUrl", "invalid_url", "Must be an allowed http(s) URL.")
-            )
+            issues.append(("generative.baseUrl", "invalid_url", "Must be an allowed http(s) URL."))
     if entry.api_key and any(character in entry.api_key for character in "\r\n"):
         issues.append(("generative.apiKey", "invalid_characters", "Must not contain newlines."))
     return issues

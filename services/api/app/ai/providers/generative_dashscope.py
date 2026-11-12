@@ -317,9 +317,9 @@ class DashScopeGenerativeProvider:
         prompt = self._prompts.pop(task_id, "")
         return GeneratedImage(
             data=data,
-            mime_type="image/png" if resized_from else (
-                content_type or ("image/png" if image_format == "png" else "image/jpeg")
-            ),
+            mime_type="image/png"
+            if resized_from
+            else (content_type or ("image/png" if image_format == "png" else "image/jpeg")),
             width=width,
             height=height,
             provider_job_id=task_id,

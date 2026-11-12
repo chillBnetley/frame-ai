@@ -55,9 +55,7 @@ def test_monochrome_and_low_high_key_are_detected() -> None:
     low_key_luminance = base.measurements.luminance.model_copy(update={"p95": 0.5})
     low_key_report = base.model_copy(
         update={
-            "measurements": base.measurements.model_copy(
-                update={"luminance": low_key_luminance}
-            )
+            "measurements": base.measurements.model_copy(update={"luminance": low_key_luminance})
         }
     )
     monochrome = extract_photo_features(low_key_report)
@@ -99,9 +97,7 @@ def test_low_confidence_reduces_overall_confidence_and_records_limits() -> None:
             "lighting": base.lighting.model_copy(update={"confidence": 0.2}),
             "color": base.color.model_copy(update={"confidence": 0.2}),
             "composition": base.composition.model_copy(update={"confidence": 0.2}),
-            "technical_quality": base.technical_quality.model_copy(
-                update={"confidence": 0.2}
-            ),
+            "technical_quality": base.technical_quality.model_copy(update={"confidence": 0.2}),
         }
     )
     features = extract_photo_features(weak)

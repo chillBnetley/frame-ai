@@ -77,10 +77,7 @@ class MockGenerativeProvider:
                 "generative_invalid_input",
                 f"{request.task_type.value} requests require a mask.",
             )
-        if (
-            request.task_type == GenerativeTaskType.LOCAL_EDIT
-            and not request.instruction.strip()
-        ):
+        if request.task_type == GenerativeTaskType.LOCAL_EDIT and not request.instruction.strip():
             raise GenerativeProviderError(
                 "generative_invalid_input",
                 "local_edit requests require a non-empty instruction.",
