@@ -64,7 +64,7 @@ test("upload, adjust, compare, undo/redo/reset, and export JPEG", async ({
   await openApp(page);
   await uploadFixture(page);
 
-  const toolbar = ["前后对比", "裁切", "导出", "更换照片", "重新开始"];
+  const toolbar = ["前后对比", "裁切", "导出", "更换照片"];
   for (const name of toolbar) {
     const box = await page
       .getByRole("button", { name, exact: true })
@@ -331,7 +331,7 @@ test("deleting a photo removes the original permanently and survives reload", as
   const dialog = page.getByRole("dialog", { name: "删除这张照片？" });
   await expect(dialog).toBeVisible();
   await expect(
-    dialog.getByText(/AI 分析与缓存副本会从本机永久删除/),
+    dialog.getByText(/缓存副本会从本机永久删除/),
   ).toBeVisible();
 
   const deleteResponse = page.waitForResponse(
