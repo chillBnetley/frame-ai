@@ -3,6 +3,15 @@ import path from "node:path";
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  ONBOARDING_SESSION_COOKIE,
+  ONBOARDING_SESSION_VALUE,
+} from "./lib/onboarding-cookie";
+import {
+  readOnboardingCompleted,
+  resolveFrameDataDir,
+} from "./lib/onboarding-state";
+
 const TOKEN_FILENAME = "api-token";
 
 function tokenFile(): string {
@@ -10,11 +19,7 @@ function tokenFile(): string {
   if (explicit) {
     return explicit;
   }
-  const dataDir = process.env.FRAME_DATA_DIR?.trim();
-  return path.join(
-    dataDir && dataDir.length > 0 ? dataDir : path.resolve(process.cwd(), "..", "..", "data"),
-    TOKEN_FILENAME,
-  );
+  return path.join(resolveFrameDataDir(), TOKEN_FILENAME);
 }
 
 /**
@@ -31,6 +36,21 @@ export function readApiToken(): string | null {
 }
 
 export function proxy(request: NextRequest): NextResponse {
+  const sessionBypass =
+    request.cookies.get(ONBOARDING_SESSION_COOKIE)?.value === ONBOARDING_SESSION_VALUE;
+
+  if (
+    request.nextUrl.pathname === "/" &&
+    !sessionBypass &&
+    !readOnboardingCompleted()
+  ) {
+    return NextResponse.redirect(new URL("/welcome", request.url));
+  }
+
+  if (!request.nextUrl.pathname.startsWith("/api/v1")) {
+    return NextResponse.next();
+  }
+
   const token = readApiToken();
   if (token === null) {
     if (!request.headers.has("X-FRAME-Token")) {
@@ -46,5 +66,5 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ["/api/v1/:path*", "/api/v1"],
+  matcher: ["/", "/api/v1/:path*", "/api/v1"],
 };

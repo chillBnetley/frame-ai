@@ -6,6 +6,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { ONBOARDING_SESSION_COOKIE } from "../lib/onboarding-cookie";
 import { config, proxy, readApiToken } from "../proxy";
 
 describe("proxy token injection", () => {
@@ -105,7 +106,78 @@ describe("proxy token injection", () => {
     expect(response.headers.get("x-middleware-request-x-frame-token")).toBe("runtime-token");
   });
 
-  it("only matches /api/v1 paths", () => {
-    expect(config.matcher).toEqual(["/api/v1/:path*", "/api/v1"]);
+  it("redirects the root to onboarding when no completion marker exists", () => {
+    process.env.FRAME_DATA_DIR = directory;
+    const request = new NextRequest("http://localhost:3000/");
+
+    const response = proxy(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/welcome");
+  });
+
+  it("serves the root once onboarding is complete", () => {
+    process.env.FRAME_DATA_DIR = directory;
+    fs.writeFileSync(
+      path.join(directory, "onboarding.json"),
+      JSON.stringify({ version: 1, completed: true }),
+      "utf8",
+    );
+    const request = new NextRequest("http://localhost:3000/");
+
+    const response = proxy(request);
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-middleware-request-x-frame-token")).toBeNull();
+  });
+
+  it("allows the root with a session-only fallback cookie", () => {
+    process.env.FRAME_DATA_DIR = directory;
+    const request = new NextRequest("http://localhost:3000/", {
+      headers: { cookie: `${ONBOARDING_SESSION_COOKIE}=1` },
+    });
+
+    const response = proxy(request);
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("does not accept a forged fallback cookie value", () => {
+    process.env.FRAME_DATA_DIR = directory;
+    const request = new NextRequest("http://localhost:3000/", {
+      headers: { cookie: `${ONBOARDING_SESSION_COOKIE}=yes` },
+    });
+
+    const response = proxy(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/welcome");
+  });
+
+  it("treats a corrupt completion marker as incomplete", () => {
+    process.env.FRAME_DATA_DIR = directory;
+    fs.writeFileSync(path.join(directory, "onboarding.json"), "{", "utf8");
+    const request = new NextRequest("http://localhost:3000/");
+
+    const response = proxy(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/welcome");
+  });
+
+  it("does not gate API requests", () => {
+    process.env.FRAME_DATA_DIR = directory;
+    const request = new NextRequest("http://localhost:3000/api/v1/config");
+
+    const response = proxy(request);
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("matches the root and /api/v1 paths", () => {
+    expect(config.matcher).toEqual(["/", "/api/v1/:path*", "/api/v1"]);
   });
 });

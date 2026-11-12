@@ -27,6 +27,24 @@ function generate(
 }
 
 export default function globalSetup(): void {
+  const dataDir = process.env.E2E_DATA_DIR?.trim();
+  if (dataDir) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dataDir, "onboarding.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          completed: true,
+          completedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+  }
+
   fs.mkdirSync(ARTIFACTS, { recursive: true });
   generate(path.join(ARTIFACTS, "fixture.jpg"), FIXTURE_JSON, 0);
   generate(path.join(ARTIFACTS, "alpha-fixture.png"), ALPHA_FIXTURE_JSON, 3, "alpha");

@@ -1,0 +1,477 @@
+.screen {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: clamp(20px, 6vw, 64px);
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #f1f8f4 0%, rgba(246, 247, 246, 0) 62%),
+    linear-gradient(180deg, #f7f8f6 0%, #f2f4f1 100%);
+  color: var(--frame-ink);
+  font-family: var(--font-sans);
+}
+
+.aurora {
+  position: absolute;
+  inset: -30% -20%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(32% 28% at 28% 22%, rgba(39, 122, 104, 0.16), transparent 70%),
+    radial-gradient(30% 26% at 72% 78%, rgba(216, 198, 162, 0.24), transparent 72%),
+    radial-gradient(24% 22% at 62% 18%, rgba(111, 183, 163, 0.12), transparent 70%);
+  filter: blur(22px);
+  animation: auroraDrift 22s ease-in-out infinite alternate;
+}
+
+.intro,
+.finale {
+  position: relative;
+  z-index: 1;
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 720px);
+  text-align: center;
+  animation: stageIn 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: clamp(148px, 24vw, 188px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: clamp(34px, 5.6vw, 44px);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.96), rgba(237, 243, 239, 0.72));
+  box-shadow:
+    0 42px 80px -42px rgba(16, 54, 41, 0.5),
+    0 14px 34px -24px rgba(16, 54, 41, 0.28),
+    inset 0 1px 0 #fff;
+  animation: tileIn 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.halo {
+  position: absolute;
+  inset: -30%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(39, 122, 104, 0.28) 0%,
+    rgba(111, 183, 163, 0.16) 38%,
+    transparent 68%
+  );
+  filter: blur(18px);
+  animation: haloPulse 5.2s ease-in-out infinite;
+}
+
+.brandMark {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  -webkit-mask-image: url("/brand/frame-ai-mark-mask.png");
+  mask-image: url("/brand/frame-ai-mark-mask.png");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+  filter: drop-shadow(0 12px 18px rgba(15, 61, 51, 0.24));
+}
+
+.brandMarkFill {
+  position: absolute;
+  inset: -42%;
+  background: conic-gradient(
+    from 210deg at 50% 50%,
+    #0f3d33 0deg,
+    #277a68 64deg,
+    #6fb7a3 142deg,
+    #d8c6a2 218deg,
+    #277a68 296deg,
+    #0f3d33 360deg
+  );
+  animation: gradientSpin 16s linear infinite;
+}
+
+.heroMark {
+  width: 58%;
+}
+
+.wordmark {
+  margin: clamp(22px, 3.4vh, 34px) 0 0;
+  color: #53665e;
+  font-family: Avenir, "Avenir Next", Montserrat, Inter, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  animation: fadeUp 700ms 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.rule {
+  display: block;
+  width: 44px;
+  height: 1px;
+  margin: 18px 0 0;
+  background: linear-gradient(90deg, transparent, #b6c9c0, transparent);
+  transform-origin: center;
+  animation: lineGrow 800ms 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.tagline {
+  margin: clamp(14px, 2.2vh, 20px) 0 0;
+  color: #17201c;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  font-size: clamp(34px, 5.4vw, 58px);
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: 0.06em;
+  text-wrap: balance;
+  animation: taglineIn 900ms 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.continueButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: clamp(26px, 5vh, 52px);
+  padding: 0 20px;
+  border: 1px solid #d5e1db;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #28443a;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  animation: fadeUp 700ms 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.continueButton:hover {
+  border-color: #b9d2c8;
+  background: #fff;
+  box-shadow: 0 12px 26px -18px rgba(15, 61, 51, 0.45);
+  transform: translateY(-1px);
+}
+
+.continueIcon,
+.startIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.finale {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 920px);
+  text-align: center;
+  animation: stageIn 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.finaleMark {
+  width: 64px;
+  filter: drop-shadow(0 10px 16px rgba(15, 61, 51, 0.24));
+  animation: markFloat 6s ease-in-out infinite;
+}
+
+.finaleKicker {
+  margin: 18px 0 0;
+  color: #5c7068;
+  font-family: Avenir, "Avenir Next", Montserrat, Inter, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  animation: fadeUp 700ms 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.finaleTitle {
+  margin: clamp(14px, 2.4vh, 22px) 0 0;
+  padding: 0 0 0.12em;
+  color: transparent;
+  background-image: linear-gradient(
+    100deg,
+    #123c31 0%,
+    #277a68 30%,
+    #6fb7a3 48%,
+    #c9b58c 66%,
+    #123c31 100%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  font-size: clamp(40px, 7.4vw, 84px);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: 0.04em;
+  text-wrap: balance;
+  animation:
+    shimmer 8s linear infinite,
+    titleIn 900ms 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.finaleTitle:focus {
+  outline: none;
+}
+
+.finaleNote {
+  max-width: 34em;
+  margin: clamp(16px, 2.4vh, 22px) 0 0;
+  color: #6b7771;
+  font-size: 13px;
+  line-height: 1.75;
+  letter-spacing: 0.03em;
+  animation: fadeUp 700ms 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.startButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  margin-top: clamp(26px, 4.6vh, 42px);
+  padding: 0 30px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #1c5f50, #277a68 55%, #2f8a74);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  box-shadow:
+    0 20px 42px -18px rgba(20, 80, 62, 0.68),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  transition:
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: fadeUp 700ms 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.startButton:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow:
+    0 26px 52px -20px rgba(20, 80, 62, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.startButton:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.error {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  border: 1px solid #e7c9c3;
+  border-radius: 10px;
+  background: #fff5f3;
+  color: #8a3d31;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.fallbackButton {
+  min-height: 40px;
+  margin-top: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #5c7068;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.fallbackButton:hover {
+  color: #28443a;
+}
+
+.privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 26px 0 0;
+  color: #8a9690;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  animation: fadeUp 700ms 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.privacyIcon {
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes tileIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes taglineIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lineGrow {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes stageIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes titleIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes gradientSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes haloPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes auroraDrift {
+  from {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2%, 1.5%, 0) scale(1.06);
+  }
+}
+
+@keyframes markFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@media (max-width: 480px) {
+  .tile {
+    width: 140px;
+  }
+
+  .wordmark {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+  }
+
+  .tagline {
+    font-size: 32px;
+  }
+
+  .finaleTitle {
+    font-size: 38px;
+  }
+
+  .startButton {
+    min-height: 50px;
+    padding: 0 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora,
+  .halo,
+  .brandMarkFill,
+  .finaleMark {
+    animation: none;
+  }
+}
