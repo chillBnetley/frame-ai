@@ -92,7 +92,12 @@ const CODE_ENTRIES: Record<string, CodeEntry> = {
   generative_provider_endpoint_error: {
     category: "provider",
     message: "Provider 接口地址不可用。",
-    nextStep: "核对 Provider Base URL 与模型名称。",
+    nextStep: "在模型设置里点「测试连接」核对 Base URL 与模型名称。",
+  },
+  generative_provider_result_download_failed: {
+    category: "provider",
+    message: "图片已在 Provider 生成，但结果下载失败。",
+    nextStep: "重新提交一次；若持续失败，检查本机网络能否访问服务商的结果 CDN。",
   },
   generative_provider_invalid_response: {
     category: "provider",
@@ -181,7 +186,8 @@ const CODE_ENTRIES: Record<string, CodeEntry> = {
   },
   generative_invalid_output_size: {
     category: "size_limit",
-    message: "目标画幅尺寸超出允许范围。",
+    message: "Provider 返回的画面尺寸与请求的画幅不一致。",
+    nextStep: "重新提交一次；若持续出现，请把当前画幅比例与尺寸一起反馈。",
   },
   image_too_many_pixels: {
     category: "size_limit",

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import time
 from typing import Any
+from uuid import uuid4
 
 from PIL import Image
 
@@ -94,6 +96,9 @@ class DashScopeGenerativeProvider:
         # Result URLs are only known after polling; keep the mapping in memory.
         self._results: dict[str, str] = {}
         self._prompts: dict[str, str] = {}
+        # The vendor downscales large inputs to its inference budget (~1 MP), so
+        # remember what we asked for and restore that exact canvas afterwards.
+        self._targets: dict[str, tuple[int, int]] = {}
 
     # ------------------------------------------------------------------ spec
 
@@ -215,6 +220,7 @@ class DashScopeGenerativeProvider:
                 details={"requestId": response.get("request_id")},
             )
         self._prompts[task_id] = prompt
+        self._targets[task_id] = (request.image.width, request.image.height)
         return GenerativeProviderJob(provider_job_id=task_id, status="queued")
 
     def poll(self, job: GenerativeProviderJob) -> GenerativeProviderJob:
@@ -285,6 +291,11 @@ class DashScopeGenerativeProvider:
                 max_retries=self._max_retries,
             )
         except ProviderError as exc:
+            if exc.code == "provider_endpoint_error":
+                raise GenerativeProviderError(
+                    "generative_provider_result_download_failed",
+                    "The generated image could not be downloaded from the provider CDN.",
+                ) from None
             raise normalize_generative_error(exc) from None
         try:
             with Image.open(io.BytesIO(data)) as opened:
@@ -301,14 +312,23 @@ class DashScopeGenerativeProvider:
                 "The provider returned an unsupported image format.",
                 details={"format": image_format},
             )
+        target = self._targets.pop(task_id, None)
+        data, width, height, resized_from = _fit_to_target(data, width, height, target)
         prompt = self._prompts.pop(task_id, "")
         return GeneratedImage(
             data=data,
-            mime_type=content_type or ("image/png" if image_format == "png" else "image/jpeg"),
+            mime_type="image/png" if resized_from else (
+                content_type or ("image/png" if image_format == "png" else "image/jpeg")
+            ),
             width=width,
             height=height,
             provider_job_id=task_id,
-            metadata={"provider": self.name, "model": self.model, "promptChars": len(prompt)},
+            metadata={
+                "provider": self.name,
+                "model": self.model,
+                "promptChars": len(prompt),
+                **({"resizedFrom": resized_from} if resized_from else {}),
+            },
         )
 
     def cancel(self, job: GenerativeProviderJob) -> None:
@@ -317,19 +337,49 @@ class DashScopeGenerativeProvider:
         return None
 
     def check_connection(self, *, timeout: float | None = None) -> int:
+        """Verify the submit route and credentials without creating a task.
+
+        The model name is deliberately bogus: a reachable, correctly routed
+        endpoint answers 400 ``InvalidParameter`` (no task, no charge), while a
+        wrong path/region gives 404 and bad credentials give 401/403.
+        """
+
         probe_timeout = self._timeout if timeout is None else timeout
         started = time.perf_counter()
+        body = json.dumps(
+            {"model": f"frame-ai-probe-{uuid4().hex[:8]}", "input": {}},
+            ensure_ascii=False,
+        ).encode("utf-8")
         try:
-            self._client.poll_json(
-                f"{self._base_url}{DASHSCOPE_TASK_PATH}/00000000-0000-0000-0000-000000000000",
+            response = self._transport.request(
+                "POST",
+                f"{self._base_url}{DASHSCOPE_SYNTHESIS_PATH}",
+                body,
                 self._headers(),
-                timeout=probe_timeout,
-                max_retries=0,
+                probe_timeout,
+                64 * 1024,
             )
         except ProviderError as exc:
-            if exc.code == "provider_endpoint_error":
-                return int((time.perf_counter() - started) * 1000.0)
             raise normalize_generative_error(exc) from None
+        if response.status in {401, 403}:
+            raise GenerativeProviderError(
+                "generative_provider_auth_failed",
+                "The provider rejected the configured credentials.",
+                details={"status": response.status},
+            )
+        if response.status == 404:
+            raise GenerativeProviderError(
+                "generative_provider_endpoint_error",
+                "The configured provider endpoint does not serve this model.",
+                details={"status": response.status},
+            )
+        if response.status >= 500:
+            raise GenerativeProviderError(
+                "generative_provider_unavailable",
+                "The provider is temporarily unavailable.",
+                retryable=True,
+                details={"status": response.status},
+            )
         return int((time.perf_counter() - started) * 1000.0)
 
     # ---------------------------------------------------------------- helpers
@@ -386,6 +436,52 @@ class DashScopeGenerativeProvider:
             return None
         url = first.get("url")
         return url if isinstance(url, str) and url else None
+
+
+ASPECT_TOLERANCE = 0.02
+
+
+def _fit_to_target(
+    data: bytes,
+    width: int,
+    height: int,
+    target: tuple[int, int] | None,
+) -> tuple[bytes, int, int, str | None]:
+    """Scale the vendor result back to the canvas we submitted.
+
+    The vendor caps inference at roughly one megapixel and answers at that
+    resolution, so the returned size never matches a large photo. Rescaling is
+    safe only while the aspect ratio survives; otherwise the composition no
+    longer aligns with the protected region and the task must fail loudly.
+    """
+
+    if target is None or (width, height) == target:
+        return data, width, height, None
+    target_width, target_height = target
+    width_ratio = width / target_width
+    height_ratio = height / target_height
+    if abs(width_ratio - height_ratio) / max(width_ratio, height_ratio) > ASPECT_TOLERANCE:
+        raise GenerativeProviderError(
+            "generative_invalid_output_size",
+            "The provider returned an image whose aspect ratio does not match the request.",
+            details={
+                "expected": [target_width, target_height],
+                "actual": [width, height],
+            },
+        )
+    with Image.open(io.BytesIO(data)) as opened:
+        fitted = opened.convert("RGB").resize(
+            (target_width, target_height),
+            Image.Resampling.LANCZOS,
+        )
+    buffer = io.BytesIO()
+    fitted.save(buffer, format="PNG", optimize=True)
+    return (
+        buffer.getvalue(),
+        target_width,
+        target_height,
+        f"{width}x{height}",
+    )
 
 
 def _error_code(code: Any) -> str:

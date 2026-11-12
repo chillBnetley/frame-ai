@@ -640,7 +640,65 @@ def test_test_endpoint_reports_mock_providers_without_network(client: TestClient
             "code": None,
             "message": None,
         },
+        "generative": {
+            "ok": True,
+            "provider": "mock",
+            "model": "generative-mock-1",
+            "latencyMs": 0,
+            "code": None,
+            "message": None,
+        },
     }
+
+
+def test_test_endpoint_reports_generative_key_errors(client: TestClient):
+    response = client.post(
+        f"{PREFIX}/test",
+        json={"generative": {"provider": "dashscope", "apiKey": ""}},
+    )
+    # Same contract as the text providers: an incomplete candidate is rejected
+    # before any network call, naming the missing field.
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["error"]["code"] == "invalid_provider_settings"
+    assert "generative.apiKey" in json.dumps(body["error"]["details"])
+
+
+def test_test_endpoint_checks_the_generative_provider_with_the_new_key(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls: list[str] = []
+
+    def fake_check(self, *, timeout=None):
+        calls.append(self.model)
+        return 12
+
+    monkeypatch.setattr(
+        "app.ai.providers.generative_dashscope.DashScopeGenerativeProvider.check_connection",
+        fake_check,
+    )
+    response = client.post(
+        f"{PREFIX}/test",
+        json={
+            "generative": {
+                "provider": "dashscope",
+                "model": "wanx2.1-imageedit",
+                "apiKey": "sk-unsaved-key",
+            }
+        },
+    )
+    assert response.status_code == 200, response.text
+    generative = response.json()["generative"]
+    assert generative == {
+        "ok": True,
+        "provider": "dashscope",
+        "model": "wanx2.1-imageedit",
+        "latencyMs": 12,
+        "code": None,
+        "message": None,
+    }
+    assert calls == ["wanx2.1-imageedit"]
 
 
 def test_test_endpoint_sends_text_only_requests_and_reports_success(

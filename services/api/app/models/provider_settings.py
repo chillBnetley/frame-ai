@@ -95,7 +95,7 @@ class ProviderSettingsView(ProviderSettingsModel):
 
 class ProviderTestResult(ProviderSettingsModel):
     ok: bool
-    provider: ProviderKind
+    provider: ProviderKind | GenerativeProviderKind
     model: str
     latency_ms: int
     code: str | None = None
@@ -106,6 +106,7 @@ class ProviderTestResponse(ProviderSettingsModel):
     vision: ProviderTestResult
     decision: ProviderTestResult
     planner: ProviderTestResult
+    generative: ProviderTestResult
 
 
 class ProviderUsageEntry(ProviderSettingsModel):

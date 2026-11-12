@@ -18085,6 +18085,9 @@
           },
           "planner": {
             "$ref": "#/components/schemas/ProviderTestResult"
+          },
+          "generative": {
+            "$ref": "#/components/schemas/ProviderTestResult"
           }
         },
         "additionalProperties": false,
@@ -18092,7 +18095,8 @@
         "required": [
           "vision",
           "decision",
-          "planner"
+          "planner",
+          "generative"
         ],
         "title": "ProviderTestResponse"
       },
@@ -18103,10 +18107,21 @@
             "title": "Ok"
           },
           "provider": {
-            "type": "string",
-            "enum": [
-              "mock",
-              "openai"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "mock",
+                  "openai"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "mock",
+                  "dashscope"
+                ]
+              }
             ],
             "title": "Provider"
           },

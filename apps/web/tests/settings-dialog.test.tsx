@@ -186,6 +186,14 @@ const TEST_RESULTS: ProviderTestResponse = {
     code: null,
     message: null,
   },
+  generative: {
+    ok: false,
+    provider: "dashscope",
+    model: "wanx2.1-imageedit",
+    latencyMs: 0,
+    code: "provider_auth_error",
+    message: "The model provider rejected the configured credentials.",
+  },
 };
 
 function renderDialog(open = true) {
@@ -246,6 +254,18 @@ describe("SettingsDialog", () => {
     const payload = JSON.parse(String(postCalls[0][1]?.body));
     expect(payload).toEqual({ vision: { model: "gpt-4o-mini" } });
     expect(within(vision).getByLabelText("模型名")).toHaveValue("gpt-4o-mini");
+  });
+
+  it("reports the generative model in the connection test", async () => {
+    stubApi();
+    renderDialog();
+
+    await visionGroup();
+    await userEvent.click(screen.getByRole("button", { name: "测试连接" }));
+
+    expect(
+      await screen.findByText(/生成式图像模型：连接失败（provider_auth_error）/),
+    ).toBeInTheDocument();
   });
 
   it("saves the dashscope generative key and daily limit", async () => {

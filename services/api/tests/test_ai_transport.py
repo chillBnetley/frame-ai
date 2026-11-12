@@ -396,6 +396,44 @@ def test_pinned_transport_round_trip_against_local_server():
     assert requests[0]["headers"]["Authorization"] == "Bearer test-key"
 
 
+def test_pinned_transport_keeps_query_strings_on_get_downloads():
+    """Signed CDN URLs (OSS/S3) carry the authorization in the query string."""
+
+    with pinned_server() as (url, requests):
+        transport = PinnedHttpTransport(
+            LOCAL_POLICY,
+            resolver=local_resolver("127.0.0.1"),
+        )
+        response = transport.request(
+            "GET",
+            f"{url}?Expires=1794534287&Signature=abc%3D",
+            None,
+            {},
+            5,
+            MAX_RESPONSE_BYTES,
+        )
+
+    assert response.status == 200
+    assert requests[0]["path"].endswith("?Expires=1794534287&Signature=abc%3D")
+
+
+def test_pinned_transport_still_rejects_query_strings_on_posts():
+    transport = PinnedHttpTransport(
+        LOCAL_POLICY,
+        resolver=local_resolver("127.0.0.1"),
+    )
+    with pytest.raises(ProviderError) as excinfo:
+        transport.request(
+            "POST",
+            "http://provider.test/v1/chat?key=value",
+            b"{}",
+            HEADERS,
+            5,
+            MAX_RESPONSE_BYTES,
+        )
+    assert excinfo.value.code == "provider_endpoint_error"
+
+
 def test_pinned_transport_connects_to_the_validated_ip(monkeypatch: pytest.MonkeyPatch):
     seen: list[tuple[str, int]] = []
     real_create = socket.create_connection

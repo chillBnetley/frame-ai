@@ -274,7 +274,10 @@ class PinnedHttpTransport:
         timeout: float,
         max_response_bytes: int,
     ) -> HttpResponse:
-        endpoint = parse_endpoint(url)
+        # Signed CDN result URLs (OSS/S3) carry the authorization in the query
+        # string, so read-only requests must keep it. POSTs stay query-free: the
+        # saved base URL is rejected at save time when it carries a query.
+        endpoint = parse_endpoint(url, allow_query=method.upper() in {"GET", "HEAD"})
         payload: bytes | None = body
         request_headers = dict(headers)
         redirects = 0

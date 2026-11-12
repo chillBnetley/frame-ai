@@ -330,11 +330,18 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     setFeedback(null);
     setTestResults(null);
     try {
-      const results = await testProviderSettings(toUpdate(form, view));
+      const update = toUpdate(form, view);
+      if (generative) {
+        const generativePatch = toGenerativeUpdate(generative, view);
+        if (Object.keys(generativePatch).length > 0) {
+          update.generative = generativePatch;
+        }
+      }
+      const results = await testProviderSettings(update);
       setTestResults(results);
       setFeedback({
         tone: "info",
-        message: "连接测试完成。测试只发送文本提示，不会上传图片。",
+        message: "连接测试完成。测试只发送文本提示，不会上传图片；生图模型只探测任务接口。",
       });
     } catch (error) {
       setFeedback({ tone: "error", message: describeSettingsError(error) });
@@ -712,6 +719,28 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                     </p>
                   );
                 })}
+                {(() => {
+                  const result = testResults.generative;
+                  return (
+                    <p
+                      className={`flex items-start gap-1.5 text-[11px] ${
+                        result.ok ? "text-accent/90" : "text-red-200/90"
+                      }`}
+                    >
+                      {result.ok ? (
+                        <CheckCircleIcon className="mt-0.5 size-3.5 shrink-0" />
+                      ) : (
+                        <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
+                      )}
+                      生成式图像模型：
+                      {result.ok
+                        ? `连接正常（${result.latencyMs} ms）`
+                        : `连接失败（${result.code ?? "provider_test_failed"}）${
+                            result.message ? `：${result.message}` : ""
+                          }`}
+                    </p>
+                  );
+                })()}
               </div>
             )}
 

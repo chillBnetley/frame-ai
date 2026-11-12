@@ -59,7 +59,7 @@ export interface ProviderSettingsUpdate {
 
 export interface ProviderTestResult {
   ok: boolean;
-  provider: ProviderKind;
+  provider: ProviderKind | GenerativeProviderKind;
   model: string;
   latencyMs: number;
   code?: string | null;
@@ -70,4 +70,5 @@ export interface ProviderTestResponse {
   vision: ProviderTestResult;
   decision: ProviderTestResult;
   planner: ProviderTestResult;
+  generative: ProviderTestResult;
 }

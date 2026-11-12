@@ -217,11 +217,24 @@ def test_outpaint_defaults_to_a_continuation_prompt():
     assert "自然延续画面构图" in payload["input"]["prompt"]
 
 
-def test_check_connection_treats_a_missing_task_as_reachable():
+def test_check_connection_accepts_an_invalid_parameter_reply():
+    """A 400 proves the route and credentials work without creating a task."""
+
+    transport = FakeTransport()
+    transport.queue(400, {"code": "InvalidParameter", "message": "model not found"})
+    provider = _provider(transport)
+    assert provider.check_connection(timeout=1.0) >= 0
+    payload = json.loads(transport.requests[0][2] or b"{}")
+    assert payload["model"].startswith("frame-ai-probe-")
+
+
+def test_check_connection_reports_a_missing_route():
     transport = FakeTransport()
     transport.queue(404, {"code": "NotFound"})
     provider = _provider(transport)
-    assert provider.check_connection(timeout=1.0) >= 0
+    with pytest.raises(GenerativeProviderError) as excinfo:
+        provider.check_connection(timeout=1.0)
+    assert excinfo.value.code == "generative_provider_endpoint_error"
 
 
 def test_check_connection_reports_bad_credentials():
@@ -296,6 +309,56 @@ def test_transport_errors_are_normalized():
     with pytest.raises(GenerativeProviderError) as excinfo:
         provider.submit(_request())
     assert excinfo.value.code == "generative_provider_rate_limited"
+
+
+def test_fetch_rescales_a_downscaled_result_back_to_the_requested_canvas():
+    transport = FakeTransport()
+    transport.queue(200, {"output": {"task_id": "t-8", "task_status": "PENDING"}})
+    transport.queue(
+        200,
+        {
+            "output": {
+                "task_id": "t-8",
+                "task_status": "SUCCEEDED",
+                "results": [{"url": "https://result.example/out.png"}],
+            }
+        },
+    )
+    transport.queue(200, _png(320, 240), {"content-type": "image/png"})
+    provider = _provider(transport)
+    job = provider.submit(_request(width=640, height=480))
+    job = provider.poll(job)
+
+    image = provider.fetch(job)
+
+    assert (image.width, image.height) == (640, 480)
+    assert image.metadata["resizedFrom"] == "320x240"
+    with Image.open(io.BytesIO(image.data)) as opened:
+        assert opened.size == (640, 480)
+
+
+def test_fetch_rejects_a_result_with_a_different_aspect_ratio():
+    transport = FakeTransport()
+    transport.queue(200, {"output": {"task_id": "t-9", "task_status": "PENDING"}})
+    transport.queue(
+        200,
+        {
+            "output": {
+                "task_id": "t-9",
+                "task_status": "SUCCEEDED",
+                "results": [{"url": "https://result.example/out.png"}],
+            }
+        },
+    )
+    transport.queue(200, _png(240, 240), {"content-type": "image/png"})
+    provider = _provider(transport)
+    job = provider.submit(_request(width=640, height=480))
+    job = provider.poll(job)
+
+    with pytest.raises(GenerativeProviderError) as excinfo:
+        provider.fetch(job)
+    assert excinfo.value.code == "generative_invalid_output_size"
+    assert excinfo.value.details == {"expected": [640, 480], "actual": [240, 240]}
 
 
 def test_cancel_is_a_noop_because_the_vendor_has_no_cancel_endpoint():

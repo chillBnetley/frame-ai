@@ -4646,16 +4646,14 @@ export interface components {
             vision: components["schemas"]["ProviderTestResult"];
             decision: components["schemas"]["ProviderTestResult"];
             planner: components["schemas"]["ProviderTestResult"];
+            generative: components["schemas"]["ProviderTestResult"];
         };
         /** ProviderTestResult */
         ProviderTestResult: {
             /** Ok */
             ok: boolean;
-            /**
-             * Provider
-             * @enum {string}
-             */
-            provider: "mock" | "openai";
+            /** Provider */
+            provider: ("mock" | "openai") | ("mock" | "dashscope");
             /** Model */
             model: string;
             /** Latencyms */

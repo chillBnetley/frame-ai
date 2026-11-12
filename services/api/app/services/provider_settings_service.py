@@ -11,6 +11,8 @@ from pydantic import SecretStr, ValidationError
 
 from app.ai.errors import ProviderConfigurationError, ProviderError
 from app.ai.factory import ProviderBundle, build_provider_bundle
+from app.ai.generative import GenerativeProviderError
+from app.ai.generative_factory import build_generative_provider
 from app.ai.net_policy import (
     EndpointPolicyError,
     ProviderEndpointPolicy,
@@ -313,10 +315,71 @@ class ProviderSettingsService:
             results["decision"].ok,
             results["planner"].ok,
         )
+        generative_result = self._test_generative(candidate)
+        logger.info("provider_test_completed generative_ok=%s", generative_result.ok)
         return ProviderTestResponse(
             vision=results["vision"],
             decision=results["decision"],
             planner=results["planner"],
+            generative=generative_result,
+        )
+
+    def _test_generative(self, candidate: StoredProviderSettings) -> ProviderTestResult:
+        config = self._resolve_generative(candidate)
+        try:
+            provider = build_generative_provider(
+                self._base,
+                provider=config.provider,
+                model=config.model,
+                base_url=config.base_url,
+                api_key=config.api_key or None,
+            )
+        except ProviderConfigurationError:
+            return ProviderTestResult(
+                ok=False,
+                provider=config.provider,
+                model=config.model,
+                latency_ms=0,
+                code="generative_provider_not_configured",
+                message="The generative model has no usable API key.",
+            )
+        if provider.is_mock:
+            return ProviderTestResult(
+                ok=True,
+                provider=config.provider,
+                model=provider.model,
+                latency_ms=0,
+            )
+        timeout = min(TEST_TIMEOUT_SECONDS, self._base.generative_provider_timeout_seconds)
+        try:
+            latency_ms = provider.check_connection(timeout=timeout)
+        except GenerativeProviderError as exc:
+            return ProviderTestResult(
+                ok=False,
+                provider=config.provider,
+                model=provider.model,
+                latency_ms=0,
+                code=exc.code,
+                message=exc.message,
+            )
+        except Exception as exc:
+            logger.warning(
+                "provider_test_failed stage=generative error_type=%s",
+                type(exc).__name__,
+            )
+            return ProviderTestResult(
+                ok=False,
+                provider=config.provider,
+                model=provider.model,
+                latency_ms=0,
+                code="provider_test_failed",
+                message="The provider connection test failed.",
+            )
+        return ProviderTestResult(
+            ok=True,
+            provider=config.provider,
+            model=provider.model,
+            latency_ms=latency_ms,
         )
 
     def _load(
