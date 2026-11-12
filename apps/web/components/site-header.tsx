@@ -2,13 +2,25 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { SettingsIcon } from "@/components/icons";
 import { SettingsDialog } from "@/components/settings-dialog";
 
+const NAV_LINKS = [
+  { href: "/", label: "照片工作台" },
+  { href: "/visual-dna", label: "Visual DNA" },
+  { href: "/master-vision", label: "Master Vision" },
+] as const;
+
+function isActivePath(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function SiteHeader() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
     <>
@@ -32,38 +44,42 @@ export function SiteHeader() {
           </span>
         </Link>
         <nav aria-label="主导航" className="hidden items-center gap-1 md:flex">
-          <Link
-            href="/"
-            className="inline-flex min-h-9 items-center rounded-full px-3 text-xs font-medium text-[#69716c] transition-colors hover:bg-[#f1f4f2] hover:text-[#2c3a34] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            照片工作台
-          </Link>
-          <Link
-            href="/visual-dna"
-            className="inline-flex min-h-9 items-center rounded-full px-3 text-xs font-medium text-[#69716c] transition-colors hover:bg-[#f1f4f2] hover:text-[#2c3a34] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            Visual DNA
-          </Link>
-          <Link
-            href="/master-vision"
-            className="inline-flex min-h-9 items-center rounded-full bg-[#eaf3ef] px-3 text-xs font-medium text-[#1f6a5a] transition-colors hover:bg-[#dfeee8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            Master Vision
-          </Link>
+          {NAV_LINKS.map((link) => {
+            const active = isActivePath(pathname, link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex min-h-9 items-center rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                  active
+                    ? "bg-[#eaf3ef] text-[#1f6a5a] hover:bg-[#dfeee8]"
+                    : "text-[#69716c] hover:bg-[#f1f4f2] hover:text-[#2c3a34]"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="flex items-center gap-2">
-          <Link
-            href="/visual-dna"
-            className="inline-flex min-h-11 items-center rounded-xl border border-[#d7dfda] bg-white px-3 text-xs font-medium text-[#277a68] md:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            Visual DNA
-          </Link>
-          <Link
-            href="/master-vision"
-            className="inline-flex min-h-11 items-center rounded-xl border border-[#d7dfda] bg-white px-3 text-xs font-medium text-[#277a68] md:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            Master Vision
-          </Link>
+          {NAV_LINKS.slice(1).map((link) => {
+            const active = isActivePath(pathname, link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex min-h-11 items-center rounded-xl border px-3 text-xs font-medium md:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                  active
+                    ? "border-[#bfe0d5] bg-[#eaf3ef] text-[#1f6a5a]"
+                    : "border-[#d7dfda] bg-white text-[#277a68]"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
