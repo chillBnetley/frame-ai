@@ -69,6 +69,26 @@ def _write_token(path: Path, token: str) -> None:
     _harden_windows_acl(path)
 
 
+def _run_icacls(args: list[str]) -> None:
+    """Run icacls without flashing a console window in the packaged app."""
+
+    command = ["icacls", *args]
+    if sys.platform == "win32":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            startupinfo=startupinfo,
+        )
+    else:
+        subprocess.run(command, check=False, capture_output=True, timeout=10)
+
+
 def _grant_replace_access(path: Path) -> None:
     """Let the current user delete the previous token file on Windows.
 
@@ -83,12 +103,7 @@ def _grant_replace_access(path: Path) -> None:
     if not user:
         return
     try:
-        subprocess.run(
-            ["icacls", str(path), "/grant:r", f"{user}:(R,W,D)"],
-            check=False,
-            capture_output=True,
-            timeout=10,
-        )
+        _run_icacls([str(path), "/grant:r", f"{user}:(R,W,D)"])
     except (OSError, subprocess.SubprocessError):
         logger.warning("api_token_replace_acl_failed")
 
@@ -102,12 +117,7 @@ def _harden_windows_acl(path: Path) -> None:
     if not user:
         return
     try:
-        subprocess.run(
-            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(R,W,D)"],
-            check=False,
-            capture_output=True,
-            timeout=10,
-        )
+        _run_icacls([str(path), "/inheritance:r", "/grant:r", f"{user}:(R,W,D)"])
     except (OSError, subprocess.SubprocessError):
         logger.warning("api_token_acl_failed")
 

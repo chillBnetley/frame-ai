@@ -1,0 +1,8 @@
+# Build-only dependencies for packaging/build.py and the packaged launcher.
+pyinstaller==6.22.3
+pystray==0.19.5
+pywebview==6.2.1
+pythonnet==3.2.1
+clr_loader==0.3.1
+proxy_tools==0.1.0
+bottle==0.13.4

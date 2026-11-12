@@ -52,16 +52,31 @@ export function proxy(request: NextRequest): NextResponse {
   }
 
   const token = readApiToken();
-  if (token === null) {
-    if (!request.headers.has("X-FRAME-Token")) {
-      return NextResponse.next();
-    }
-    const headers = new Headers(request.headers);
-    headers.delete("X-FRAME-Token");
-    return NextResponse.next({ request: { headers } });
-  }
   const headers = new Headers(request.headers);
-  headers.set("X-FRAME-Token", token);
+  if (token === null) {
+    headers.delete("X-FRAME-Token");
+  } else {
+    headers.set("X-FRAME-Token", token);
+  }
+
+  // The packaged app chooses its API port at launch, so the build-time
+  // rewrite cannot be used; forward from the Node runtime instead.
+  const packagedTarget =
+    process.env.FRAME_PACKAGED === "1"
+      ? process.env.API_INTERNAL_URL?.trim().replace(/\/+$/, "")
+      : "";
+  if (packagedTarget) {
+    return NextResponse.rewrite(
+      new URL(request.nextUrl.pathname + request.nextUrl.search, packagedTarget),
+      { request: { headers } },
+    );
+  }
+
+  if (token === null) {
+    return request.headers.has("X-FRAME-Token")
+      ? NextResponse.next({ request: { headers } })
+      : NextResponse.next();
+  }
   return NextResponse.next({ request: { headers } });
 }
 

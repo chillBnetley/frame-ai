@@ -25,9 +25,25 @@ apps/web/.e2e-web/
 
 # next.js
 .next/
+.next-*/
 out/
 *.tsbuildinfo
 next-env.d.ts
+
+# windows packaging output
+/dist/
+/dist-installer/
+/build/
+/.pyinstaller/
+/packaging/out/
+*.zip
+
+# runtime databases (also covered by /data/, repeated for safety)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # environment
 .env
@@ -37,6 +53,11 @@ next-env.d.ts
 
 # runtime image data: only the repository-root data directory is generated.
 /data/
+
+# uploads, masks and local backups
+/backups/
+/backup/
+*.imported.bak
 
 # in-app provider overrides may contain API keys
 provider-settings.json

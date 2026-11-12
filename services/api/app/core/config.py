@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -8,11 +10,45 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+APP_DATA_DIRNAME = "FRAME AI"
+
+
+def is_frozen() -> bool:
+    """True when running from a packaged executable (PyInstaller)."""
+
+    return bool(getattr(sys, "frozen", False))
+
+
+def default_data_dir() -> Path:
+    """User-writable data directory for packaged builds.
+
+    Development keeps the repository ``data`` directory; a packaged app must
+    never read or write next to its program files (the install directory is
+    replaced on upgrade and may be read-only).
+    """
+
+    if not is_frozen():
+        return REPO_ROOT / "data"
+    if os.name == "nt":
+        base = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
+        if base:
+            return Path(base) / APP_DATA_DIRNAME / "data"
+        return Path.home() / "AppData" / "Roaming" / APP_DATA_DIRNAME / "data"
+    base = os.environ.get("XDG_DATA_HOME")
+    if base:
+        return Path(base) / "frame-ai" / "data"
+    return Path.home() / ".local" / "share" / "frame-ai" / "data"
+
+
+BASE_DIR = REPO_ROOT if not is_frozen() else Path.cwd()
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(REPO_ROOT / ".env", ".env"),
+        # A packaged app must not inherit a stray .env from the install or
+        # working directory: provider keys are entered in the UI and stored in
+        # the isolated user data directory instead.
+        env_file=() if is_frozen() else (REPO_ROOT / ".env", ".env"),
         env_prefix="FRAME_",
         extra="ignore",
         case_sensitive=False,
@@ -23,7 +59,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    data_dir: Path = REPO_ROOT / "data"
+    data_dir: Path = Field(default_factory=default_data_dir)
     originals_dirname: str = "originals"
     registry_filename: str = "image_registry.json"
     database_filename: str = "frame.db"
@@ -136,7 +172,7 @@ class Settings(BaseSettings):
     def _absolute_data_dir(cls, value: Path) -> Path:
         expanded = value.expanduser()
         if not expanded.is_absolute():
-            expanded = REPO_ROOT / expanded
+            expanded = BASE_DIR / expanded
         return expanded.resolve()
 
     @field_validator(

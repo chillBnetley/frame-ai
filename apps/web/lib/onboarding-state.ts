@@ -1,18 +1,28 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const ONBOARDING_FILENAME = "onboarding.json";
 const ONBOARDING_VERSION = 1;
+const APP_DATA_DIRNAME = "FRAME AI";
 
 /**
  * Resolves the same data directory the API token and provider settings use.
- * `FRAME_DATA_DIR` must be set to a user-writable directory in a packaged app;
- * the repository data directory is only the development fallback.
+ * A packaged app always receives `FRAME_DATA_DIR` from its launcher; the
+ * fallback below still points at the per-user directory so starting the Next
+ * server directly cannot accidentally write into the program directory.
  */
 export function resolveFrameDataDir(): string {
   const configured = process.env.FRAME_DATA_DIR?.trim();
   if (configured) {
     return configured;
+  }
+  if (process.env.FRAME_PACKAGED === "1") {
+    const base =
+      process.env.APPDATA ||
+      process.env.LOCALAPPDATA ||
+      path.join(os.homedir(), ".frame-ai");
+    return path.join(base, APP_DATA_DIRNAME, "data");
   }
   return path.resolve(process.cwd(), "..", "..", "data");
 }
