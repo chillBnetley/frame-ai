@@ -32,7 +32,7 @@
 - [phase 2 review.md](phase%202%20review.md) / [建议与标准.md](建议与标准.md)：阶段 2 复审与通用标准素材，保留为参考，不属于当前交付链。
 - [FRAME_AI_UI_改造记录.md](FRAME_AI_UI_改造记录.md) / [FRAME_AI_滑杆预览闪烁_解决方案.md](FRAME_AI_滑杆预览闪烁_解决方案.md) / [FRAME_AI_上传后未知错误_排查与解决方案.md](FRAME_AI_上传后未知错误_排查与解决方案.md)：用户侧 UI 改造记录与两次问题排查方案；其中滑杆闪烁与上传错误诊断已落地，UI 改造记录描述目标而非现状。
 
-系统化规范与决策见 [docs/](docs/) 下的 `architecture.md`、`api-contract.md`、`color-management.md`、`performance.md`、`known-issues.md` 与 `decisions/`；阶段 5 的人工评估规范、14 类测试图与 A/B/C/D 模板见 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md)。
+系统化规范与决策见 [docs/](docs/) 下的 `architecture.md`、`api-contract.md`、`color-management.md`、`performance.md`、`known-issues.md`、`backup-restore.md`、`deployment-boundaries.md` 与 `decisions/`；阶段 5 的人工评估规范、14 类测试图与 A/B/C/D 模板见 [docs/evaluation/stage-5-evaluation.md](docs/evaluation/stage-5-evaluation.md)。
 
 ## 当前范围（阶段 3 + 阶段 4 + 阶段 5 + 阶段 6）
 
@@ -388,7 +388,7 @@ Provider 出站默认只允许公网 HTTPS。使用本机 Ollama/LM Studio（例
 
 - **旧文件自动迁移**：首次以 v2 启动时读 v1 → 校验生效配置（含 Provider 网络策略）→ 构建 Provider → 再原子写 v2，成功记录 `provider_settings_migrated from=1 to=2`。迁移失败时 v1 字节完全不变、临时文件清理、启动明确失败，不会以明文继续运行。
 - **篡改与换机**：密文绑定 `provider` 角色（AAD），把 vision 密文挪到 decision 或改动任一字节都会 fail-closed。主密钥丢失/损坏时启动失败并提示重新输入 API Key，**不会静默回退明文，也不会自动生成替代主密钥**：只要文件里还有已保存的密文，缺失的主密钥就只会报错，不会在磁盘/钥匙串里留下一把新的、解不开旧数据的密钥。
-- **备份必须成对**：`provider-settings.json` 与 `provider-master-key` 要一起备份。DPAPI/Keychain 保护的主密钥通常**无法在另一台机器或另一个用户下解开**；换机后请直接重新输入 API Key。
+- **备份必须成对**：`provider-settings.json` 与 `provider-master-key` 要一起备份。DPAPI/Keychain 保护的主密钥通常**无法在另一台机器或另一个用户下解开**；换机后请直接重新输入 API Key。完整备份/校验/恢复步骤见 [docs/backup-restore.md](docs/backup-restore.md)（`scripts/backup_data.py`），部署边界见 [docs/deployment-boundaries.md](docs/deployment-boundaries.md)。
 - **恢复路径**：① 删除 `provider-settings.json`（必要时连 `provider-master-key` 一起删除）后重新在“模型设置”里输入密钥——这是丢失主密钥后唯一的正常恢复方式；② 需要回退到不支持 v2 的旧代码时，先用 `FRAME_PROVIDER_SETTINGS_ENCRYPTION=off` 保存一次，把文件写成明文 v1 再回退。
 - 首次使用（没有覆盖文件、或 v2 文件里还没有任何 `secrets`）仍会正常创建第一把主密钥；迁移 v1 明文文件时同样需要创建主密钥。只有“已有密文却缺主密钥”这一种情况禁止创建。
 - 支持矩阵之外的平台（如 BSD）沿用 POSIX 文件后端：仍强制 `0600` 并在读取时复检权限，无法建立私有权限即失败，不存在明文回落；这是有意的回落决策，不是平台白名单。
