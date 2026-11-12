@@ -111,4 +111,29 @@ describe("CropOverlay", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "应用裁切" })).toBeDisabled();
   });
+
+  it("sizes the canvas from the measured frame so the base image is visible", () => {
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({
+        width: 600,
+        height: 260,
+        top: 0,
+        left: 0,
+        right: 600,
+        bottom: 260,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+    try {
+      renderOverlay();
+      const canvas = screen.getByAltText("裁切基准画面").parentElement;
+
+      expect(canvas).toHaveStyle({ width: "600px", height: "450px" });
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
 });

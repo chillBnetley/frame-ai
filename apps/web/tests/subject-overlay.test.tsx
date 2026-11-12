@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { SubjectOverlay } from "@/features/analysis/components/subject-overlay";
@@ -84,5 +84,55 @@ describe("SubjectOverlay", () => {
     expect(
       screen.getByAltText("原图主体框叠加预览").getAttribute("src"),
     ).toContain("/api/v1/images/22222222-2222-4222-8222-222222222222/original");
+  });
+
+  it("opens an enlarged preview on click and closes it with the × button", () => {
+    render(
+      <SubjectOverlay
+        imageId="22222222-2222-4222-8222-222222222222"
+        imageWidth={1600}
+        imageHeight={1200}
+        subjects={[]}
+      />,
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "放大查看主体框" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "主体框放大预览" }),
+    ).toBeInTheDocument();
+    expect(screen.getByAltText("主体框放大预览图")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "关闭主体框放大预览" }),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "主体框放大预览" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the enlarged preview from the keyboard and closes it with Escape", () => {
+    render(
+      <SubjectOverlay
+        imageId="22222222-2222-4222-8222-222222222222"
+        imageWidth={1600}
+        imageHeight={1200}
+        subjects={[]}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "放大查看主体框" }), {
+      key: "Enter",
+    });
+    expect(
+      screen.getByRole("dialog", { name: "主体框放大预览" }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "主体框放大预览" }),
+    ).not.toBeInTheDocument();
   });
 });

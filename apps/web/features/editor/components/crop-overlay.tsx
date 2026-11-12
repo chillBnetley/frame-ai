@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -107,8 +107,47 @@ export function CropOverlay({
 }: CropOverlayProps) {
   const current = crop ?? FULL_CROP;
   const [error, setError] = useState<string | null>(null);
+  const [canvasBox, setCanvasBox] = useState<{ width: number; height: number } | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+
+  // Percentage heights do not resolve inside the flex frame, and a pure CSS
+  // max-width clamp would distort wide images, so the fitted canvas is sized
+  // explicitly. Height is capped like .editor-preview-image; measuring it would
+  // feed the canvas size back into the content-sized frame.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) {
+      return;
+    }
+    const ratio = canvasWidth / canvasHeight;
+    const measure = () => {
+      const availableWidth = frame.getBoundingClientRect().width;
+      if (availableWidth <= 0) {
+        return;
+      }
+      const maxHeight = Math.min(760, window.innerHeight * 0.76);
+      const width = Math.min(availableWidth, maxHeight * ratio);
+      const next = { width, height: width / ratio };
+      setCanvasBox((previous) =>
+        previous !== null &&
+        Math.abs(previous.width - next.width) < 0.5 &&
+        Math.abs(previous.height - next.height) < 0.5
+          ? previous
+          : next,
+      );
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(frame);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, [canvasWidth, canvasHeight]);
 
   const updateCrop = (next: Crop) => {
     const normalized = normalize(next);
@@ -212,6 +251,7 @@ export function CropOverlay({
       </div>
 
       <div
+        ref={frameRef}
         className="flex flex-1 items-center justify-center"
         style={{ minHeight: "260px" }}
       >
@@ -220,8 +260,9 @@ export function CropOverlay({
           className="relative overflow-hidden rounded-xl bg-black ring-1 ring-white/10"
           style={{
             aspectRatio: `${canvasWidth} / ${canvasHeight}`,
-            height: "100%",
-            maxWidth: "100%",
+            ...(canvasBox === null
+              ? { width: "100%", maxWidth: "100%" }
+              : { width: `${canvasBox.width}px`, height: `${canvasBox.height}px` }),
           }}
           onPointerMove={handlePointerMove}
           onPointerUp={endDrag}

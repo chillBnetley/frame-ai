@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ANALYSIS_STAGE_STEPS,
+  analysisActiveStep,
+  analysisElapsedSeconds,
+  analysisSlowHint,
   balanceLabel,
   describeAnalysisStage,
+  formatAnalysisElapsed,
   harmonyLabel,
   negativeSpaceLabel,
   occlusionLabel,
@@ -109,5 +114,50 @@ describe("analysis presentation", () => {
     ["unknown", "未知"],
   ] as const)("maps subject position %s to a label", (value, label) => {
     expect(subjectPositionLabel(value)).toBe(label);
+  });
+});
+
+describe("analysis progress presentation", () => {
+  it("maps backend stages onto four ordered steps", () => {
+    expect(ANALYSIS_STAGE_STEPS.map((step) => step.stage)).toEqual([
+      "preprocessing",
+      "vision",
+      "features",
+      "diagnosis",
+    ]);
+  });
+
+  it.each([
+    [null, null, 0],
+    ["pending", "queued", 0],
+    ["processing", "preprocessing", 0],
+    ["processing", "vision", 1],
+    ["processing", "features", 2],
+    ["processing", "diagnosis", 3],
+    ["completed", "completed", 4],
+  ] as const)(
+    "maps status %s and stage %s to step %s",
+    (status, stage, step) => {
+      expect(analysisActiveStep(status, stage)).toBe(step);
+    },
+  );
+
+  it("never reports negative elapsed time", () => {
+    expect(analysisElapsedSeconds(null, 1_000)).toBe(0);
+    expect(analysisElapsedSeconds(2_000, 1_000)).toBe(0);
+    expect(analysisElapsedSeconds(1_000, 6_500)).toBe(5);
+  });
+
+  it("formats elapsed time with minutes for long runs", () => {
+    expect(formatAnalysisElapsed(0)).toBe("0 秒");
+    expect(formatAnalysisElapsed(59)).toBe("59 秒");
+    expect(formatAnalysisElapsed(60)).toBe("1 分");
+    expect(formatAnalysisElapsed(95)).toBe("1 分 35 秒");
+  });
+
+  it("adds a reassurance hint only after a slow run", () => {
+    expect(analysisSlowHint(29)).toBeNull();
+    expect(analysisSlowHint(30)).toContain("比平时慢");
+    expect(analysisSlowHint(60)).toContain("仍在等待模型返回");
   });
 });

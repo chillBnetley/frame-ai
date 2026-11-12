@@ -1,4 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -27,7 +28,11 @@ const CREATED: AnalysisTaskCreated = {
 
 type StatusSource =
   | AnalysisStatusResponse
-  | (() => Promise<AnalysisStatusResponse>);
+  | Response
+  | (() =>
+      | AnalysisStatusResponse
+      | Response
+      | Promise<AnalysisStatusResponse | Response>);
 
 interface RecordedCall {
   kind: "create" | "status" | "result";
@@ -83,7 +88,8 @@ function installApi(options: {
             Math.min(statusIndex, options.statuses.length - 1)
           ];
         statusIndex += 1;
-        return json(typeof source === "function" ? await source() : source);
+        const value = typeof source === "function" ? await source() : source;
+        return value instanceof Response ? value : json(value);
       }
       return json(
         { error: { code: "not_found", message: "Not found", details: {} } },
@@ -146,6 +152,7 @@ const PROCESSING = analysisStatus({
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-03T00:00:00Z"));
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -354,6 +361,120 @@ describe("useAnalysis", () => {
 
     expect(hook.result.current.report).toBeNull();
     expect(hook.result.current.error?.code).toBe("analysis_mismatch");
+  });
+
+  it("stores the running task so a remount can resume it", async () => {
+    const storageKey = `frame-ai:analysis:${IMAGE_ID}`;
+    installApi({ statuses: [PROCESSING] });
+    const hook = renderHook(() => useAnalysis(IMAGE_ID));
+
+    await start(hook);
+
+    const stored = window.localStorage.getItem(storageKey);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored ?? "{}")).toMatchObject({
+      analysisId: ANALYSIS_ID,
+    });
+    expect(hook.result.current.startedAt).toBe(Date.now());
+  });
+
+  it("resumes a stored task after a remount and clears it on completion", async () => {
+    const storageKey = `frame-ai:analysis:${IMAGE_ID}`;
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({ analysisId: ANALYSIS_ID, startedAt: Date.now() - 3_000 }),
+    );
+    const { calls } = installApi({
+      statuses: [
+        analysisStatus({
+          status: "completed",
+          stage: "completed",
+          resultAvailable: true,
+          result: analysisReport(),
+        }),
+      ],
+    });
+    const hook = renderHook(() => useAnalysis(IMAGE_ID));
+
+    await act(async () => {
+      await flush();
+    });
+
+    expect(count(calls, "status")).toBe(1);
+    expect(hook.result.current.status).toBe("completed");
+    expect(hook.result.current.report?.analysisId).toBe(ANALYSIS_ID);
+    expect(window.localStorage.getItem(storageKey)).toBeNull();
+  });
+
+  it("keeps polling after Strict Mode runs the effects twice", async () => {
+    const storageKey = `frame-ai:analysis:${IMAGE_ID}`;
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({ analysisId: ANALYSIS_ID, startedAt: Date.now() - 3_000 }),
+    );
+    const { calls } = installApi({ statuses: [PROCESSING] });
+    renderHook(() => useAnalysis(IMAGE_ID), { wrapper: StrictMode });
+
+    await act(async () => {
+      await flush();
+    });
+    expect(count(calls, "status")).toBeGreaterThanOrEqual(1);
+
+    await tick(ANALYSIS_FAST_POLL_MS);
+    expect(count(calls, "status")).toBeGreaterThanOrEqual(2);
+  });
+
+  it("drops a stored task that the backend no longer knows", async () => {
+    const storageKey = `frame-ai:analysis:${IMAGE_ID}`;
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({ analysisId: ANALYSIS_ID, startedAt: Date.now() - 3_000 }),
+    );
+    installApi({
+      statuses: [
+        () =>
+          json(
+            {
+              error: {
+                code: "analysis_not_found",
+                message: "Not found",
+                details: {},
+              },
+            },
+            404,
+          ),
+      ],
+    });
+    const hook = renderHook(() => useAnalysis(IMAGE_ID));
+
+    await act(async () => {
+      await flush();
+    });
+
+    expect(hook.result.current.status).toBeNull();
+    expect(hook.result.current.error).toBeNull();
+    expect(window.localStorage.getItem(storageKey)).toBeNull();
+  });
+
+  it("ignores a stored task older than a day", async () => {
+    const storageKey = `frame-ai:analysis:${IMAGE_ID}`;
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        analysisId: ANALYSIS_ID,
+        startedAt: Date.now() - 25 * 60 * 60 * 1_000,
+      }),
+    );
+    const { calls } = installApi({ statuses: [PROCESSING] });
+    const hook = renderHook(() => useAnalysis(IMAGE_ID));
+
+    await act(async () => {
+      await flush();
+    });
+
+    expect(count(calls, "status")).toBe(0);
+    expect(hook.result.current.status).toBeNull();
+    expect(window.localStorage.getItem(storageKey)).toBeNull();
   });
 
   it("pauses polling while the page is hidden and queries immediately on resume", async () => {

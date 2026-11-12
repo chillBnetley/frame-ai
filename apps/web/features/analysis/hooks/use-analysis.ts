@@ -34,6 +34,7 @@ export interface AnalysisState {
   report: AnalysisReport | null;
   error: AnalysisError | null;
   requestPending: boolean;
+  startedAt: number | null;
 }
 
 export interface UseAnalysisResult extends AnalysisState {
@@ -51,7 +52,78 @@ const INITIAL_STATE: AnalysisState = {
   report: null,
   error: null,
   requestPending: false,
+  startedAt: null,
 };
+
+const ANALYSIS_STORAGE_PREFIX = "frame-ai:analysis:";
+const ANALYSIS_STORAGE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+
+interface PersistedAnalysis {
+  analysisId: string;
+  startedAt: number;
+}
+
+function analysisStorageKey(imageId: string): string {
+  return `${ANALYSIS_STORAGE_PREFIX}${imageId}`;
+}
+
+/** Best-effort only: private-mode storage or a full quota must not break analysis. */
+function readPersistedAnalysis(imageId: string): PersistedAnalysis | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem(analysisStorageKey(imageId));
+  } catch {
+    return null;
+  }
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const value = JSON.parse(raw) as Partial<PersistedAnalysis> | null;
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      typeof value.analysisId === "string" &&
+      value.analysisId.length > 0 &&
+      typeof value.startedAt === "number" &&
+      Date.now() - value.startedAt <= ANALYSIS_STORAGE_MAX_AGE_MS
+    ) {
+      return { analysisId: value.analysisId, startedAt: value.startedAt };
+    }
+  } catch {
+    // fall through to cleanup
+  }
+  clearPersistedAnalysis(imageId);
+  return null;
+}
+
+function persistAnalysis(imageId: string, entry: PersistedAnalysis): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      analysisStorageKey(imageId),
+      JSON.stringify(entry),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function clearPersistedAnalysis(imageId: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(analysisStorageKey(imageId));
+  } catch {
+    // ignore
+  }
+}
 
 const MISMATCH_ERROR: AnalysisError = {
   code: "analysis_mismatch",
@@ -90,6 +162,10 @@ function isTerminal(status: TaskStatus): boolean {
   return status === "completed" || status === "failed";
 }
 
+function isMissingTaskError(error: unknown): boolean {
+  return error instanceof ApiClientError && error.status === 404;
+}
+
 class AnalysisController {
   private state: AnalysisState = INITIAL_STATE;
   private imageId: string | null = null;
@@ -110,7 +186,28 @@ class AnalysisController {
     this.imageId = imageId;
     this.stop();
     this.state = INITIAL_STATE;
-    this.emit(this.state);
+    this.restorePersisted(imageId);
+  }
+
+  /** Reattaches to a task that was still stored when the page was left. */
+  private restorePersisted(imageId: string | null): void {
+    const persisted = imageId === null ? null : readPersistedAnalysis(imageId);
+    if (persisted === null) {
+      this.emit(this.state);
+      return;
+    }
+    this.active = true;
+    this.paused = false;
+    this.taskId = persisted.analysisId;
+    this.startedAt = persisted.startedAt;
+    this.patch({
+      analysisId: persisted.analysisId,
+      status: "pending",
+      stage: "queued",
+      requestPending: true,
+      startedAt: persisted.startedAt,
+    });
+    void this.poll(this.generation);
   }
 
   start(force = false): void {
@@ -125,12 +222,14 @@ class AnalysisController {
     this.startedAt = Date.now();
     this.clearTimer();
     this.request?.abort();
+    clearPersistedAnalysis(imageId);
     this.patch({
       analysisId: null,
       status: "pending",
       stage: "queued",
       error: null,
       requestPending: true,
+      startedAt: this.startedAt,
     });
 
     const request = this.newRequest();
@@ -140,6 +239,10 @@ class AnalysisController {
           return;
         }
         this.taskId = created.analysisId;
+        persistAnalysis(imageId, {
+          analysisId: created.analysisId,
+          startedAt: this.startedAt,
+        });
         this.patch({
           analysisId: created.analysisId,
           status: created.status,
@@ -187,6 +290,10 @@ class AnalysisController {
 
   dispose(): void {
     this.stop();
+    // The image id must not survive the unmount, otherwise a remount with the
+    // same image (as React Strict Mode simulates) would skip the restore path
+    // and leave the stored task unpolled.
+    this.imageId = null;
   }
 
   private stop(): void {
@@ -258,8 +365,44 @@ class AnalysisController {
       if (request.signal.aborted || !this.isCurrent(generation)) {
         return;
       }
+      if (isMissingTaskError(error)) {
+        this.expire(generation);
+        return;
+      }
       this.fail(toAnalysisError(error));
     }
+  }
+
+  /** The stored task no longer exists, so drop it and fall back to the idle state. */
+  private expire(generation: number): void {
+    if (this.generation !== generation) {
+      return;
+    }
+    this.clearPersistedTask();
+    this.stop();
+    this.state = INITIAL_STATE;
+    this.emit(this.state);
+  }
+
+  private clearPersistedTask(): void {
+    if (this.imageId !== null) {
+      clearPersistedAnalysis(this.imageId);
+    }
+  }
+
+  /**
+   * A deduplicated task may have started earlier than this page did, so the
+   * server timestamps win for the elapsed-time display.
+   */
+  private taskBaseline(response: AnalysisStatusResponse): number | null {
+    const candidate = Date.parse(response.startedAt ?? response.createdAt);
+    if (
+      Number.isFinite(candidate) &&
+      (this.startedAt === 0 || candidate < this.startedAt)
+    ) {
+      this.startedAt = candidate;
+    }
+    return this.startedAt === 0 ? null : this.startedAt;
   }
 
   private applyStatus(
@@ -272,11 +415,13 @@ class AnalysisController {
       stage: response.stage,
       isMock: response.isMock,
       requestPending: false,
+      startedAt: this.taskBaseline(response),
     });
 
     if (response.status === "completed") {
       this.active = false;
       this.clearTimer();
+      this.clearPersistedTask();
       if (response.result) {
         this.acceptReport(response.result, generation);
       } else if (response.resultAvailable) {
@@ -290,6 +435,7 @@ class AnalysisController {
     if (response.status === "failed") {
       this.active = false;
       this.clearTimer();
+      this.clearPersistedTask();
       this.patch({
         error: response.error
           ? {
@@ -321,6 +467,10 @@ class AnalysisController {
       if (request.signal.aborted || this.generation !== generation) {
         return;
       }
+      if (isMissingTaskError(error)) {
+        this.expire(generation);
+        return;
+      }
       this.fail(toAnalysisError(error));
     }
   }
@@ -330,6 +480,7 @@ class AnalysisController {
       return;
     }
     if (report.image.id !== this.imageId) {
+      this.clearPersistedTask();
       this.fail(MISMATCH_ERROR);
       return;
     }

@@ -22,6 +22,8 @@ import {
 import { MasterVisionNav } from "../master-vision-nav";
 import { MasterVisionStatus } from "../status";
 import { StyleVisual } from "../style-visual";
+import { AnalysisProgress } from "@/features/analysis/components/analysis-progress";
+
 import { MasterVisionCompare } from "./compare-stage";
 import { useMasterVisionWorkspace } from "./use-master-vision-workspace";
 
@@ -37,23 +39,6 @@ const LOCK_FIELDS = [
   ["grain", "颗粒"],
   ["vignette", "暗角"],
 ] as const;
-
-function stageLabel(stage: string | null): string {
-  switch (stage) {
-    case "queued":
-      return "排队中";
-    case "measurements":
-      return "测量画面";
-    case "vision":
-      return "理解场景";
-    case "decision":
-      return "整理诊断";
-    case "finalizing":
-      return "生成报告";
-    default:
-      return "处理中";
-  }
-}
 
 export function MasterVisionWorkspace({
   initialStyleId,
@@ -136,7 +121,7 @@ export function MasterVisionWorkspace({
   const statusText = uploading
     ? "正在上传照片并建立编辑会话…"
     : analysis.running
-      ? `正在分析照片（${stageLabel(analysis.stage)}）…`
+      ? "正在分析照片…"
       : fitLoading
         ? "正在评估照片与风格的适配度…"
         : planLoading
@@ -221,15 +206,30 @@ export function MasterVisionWorkspace({
             "模型输出不可用，已回退到确定性规则方案。"
           ) : null}
         </MasterVisionStatus>
-        {busy && (
-          <div
-            role="progressbar"
-            aria-label="任务进行中"
-            aria-valuetext={statusText}
-            className="mt-2 h-1 overflow-hidden rounded-full bg-[#e8eeea]"
-          >
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-[#4c9b83]" />
-          </div>
+        {analysis.running ? (
+          <>
+            <AnalysisProgress
+              tone="light"
+              status={analysis.status}
+              stage={analysis.stage}
+              startedAt={analysis.startedAt}
+              className="mt-2"
+            />
+            <p className="mt-1.5 text-[10px] text-[#8a9690]">
+              分析在后台运行，切换页面不会中断，返回后会自动接上。
+            </p>
+          </>
+        ) : (
+          busy && (
+            <div
+              role="progressbar"
+              aria-label="任务进行中"
+              aria-valuetext={statusText}
+              className="mt-2 h-1 overflow-hidden rounded-full bg-[#e8eeea]"
+            >
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-[#4c9b83]" />
+            </div>
+          )
         )}
         {analysis.isMock && analysisReady && (
           <p className="mt-2 text-[10px] text-[#8a9690]">
@@ -283,7 +283,7 @@ export function MasterVisionWorkspace({
             <div className="mt-3">
               <UploadDropzone onFileSelected={(file) => void upload(file)} disabled={uploading} compact />
               <p className="mt-2 text-[10px] leading-relaxed text-[#98a39e]">
-                支持 JPEG / PNG / WebP / TIFF，最大 {formatBytes(MAX_UPLOAD_BYTES)}。原图始终保留。
+                支持 JPG/JPEG / PNG / WebP / TIFF，最大 {formatBytes(MAX_UPLOAD_BYTES)}。原图始终保留。
               </p>
             </div>
           </section>

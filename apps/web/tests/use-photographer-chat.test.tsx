@@ -42,6 +42,7 @@ function analysisState(
     report: analysisReport(),
     error: null,
     requestPending: false,
+    startedAt: null,
     running: false,
     start: vi.fn(),
     retry: vi.fn(),

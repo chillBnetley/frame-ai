@@ -19,6 +19,7 @@ function analysisState(
     report: null,
     error: null,
     requestPending: false,
+    startedAt: null,
     running: false,
     start: vi.fn(),
     retry: vi.fn(),
@@ -56,6 +57,16 @@ describe("AnalysisPanel", () => {
     );
 
     expect(screen.getByText("正在理解照片并识别场景")).toBeInTheDocument();
+    const progress = screen.getByRole("progressbar", {
+      name: "分析阶段进度",
+    });
+    expect(progress).toHaveAttribute("aria-valuenow", "1");
+    expect(progress).toHaveAttribute("aria-valuemax", "4");
+    expect(progress).toHaveAttribute("aria-valuetext", "第 2/4 步 · 识别场景与主体");
+    expect(screen.getByText("第 2/4 步 · 识别场景与主体")).toBeInTheDocument();
+    expect(
+      screen.getByText(/离开页面不会中断分析，返回后会自动接上/),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/\d+\s*%/)).not.toBeInTheDocument();
   });
 

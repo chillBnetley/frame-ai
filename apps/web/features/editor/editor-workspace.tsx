@@ -82,7 +82,11 @@ import {
   withHsl,
   withHslSet,
 } from "@/lib/recipe";
-import { validateUploadFile, type UploadLimits } from "@/lib/upload-validation";
+import {
+  FILE_ACCEPT_ATTRIBUTE,
+  validateUploadFile,
+  type UploadLimits,
+} from "@/lib/upload-validation";
 import type { ApiStatus, UploadedImage, UploadError } from "@/types/image";
 import type { Crop, SessionState } from "@/types/session";
 
@@ -230,7 +234,6 @@ interface EditorStageProps {
   layersEnabled: boolean;
   semanticMasks: RuntimeConfigState["semanticMasks"];
   onFileSelected: (file: File) => void;
-  onStartOver: () => void;
   onPhotoDeleted: () => void;
 }
 
@@ -240,7 +243,6 @@ function EditorStage({
   layersEnabled,
   semanticMasks,
   onFileSelected,
-  onStartOver,
   onPhotoDeleted,
 }: EditorStageProps) {
   const state = useEditorState();
@@ -748,7 +750,7 @@ function EditorStage({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept={FILE_ACCEPT_ATTRIBUTE}
               aria-label="更换照片"
               className="sr-only"
               onChange={(event) => {
@@ -770,13 +772,6 @@ function EditorStage({
                 下载原图
               </a>
             )}
-            <button
-              type="button"
-              onClick={onStartOver}
-              className={toolButtonBase}
-            >
-              重新开始
-            </button>
             <button
               type="button"
               onClick={handleOpenDelete}
@@ -1332,7 +1327,6 @@ function EditorWorkspaceInner() {
               layersEnabled={runtime.layersEnabled}
               semanticMasks={runtime.semanticMasks}
               onFileSelected={handleFileSelected}
-              onStartOver={handleStartOver}
               onPhotoDeleted={handlePhotoDeleted}
             />
           ) : (

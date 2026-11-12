@@ -5,6 +5,7 @@ import type { UseAnalysisResult } from "@/features/analysis/hooks/use-analysis";
 import { describeAnalysisStage } from "@/features/analysis/presentation";
 import type { AnalysisReport } from "@/types/analysis";
 
+import { AnalysisProgress } from "./analysis-progress";
 import { AnalysisReportView } from "./analysis-report";
 
 const primaryButton =
@@ -139,7 +140,7 @@ export function AnalysisPanel({
         {idle && (
           <div className="grid gap-2 rounded-xl border border-white/8 bg-white/[0.02] p-3">
             <p className="text-[11px] leading-relaxed text-white/55">
-              识别场景与主体，分析光线和色彩，生成可执行的摄影建议。分析在后台运行，不会阻塞现有编辑与导出。
+              识别场景与主体，分析光线和色彩，生成可执行的摄影建议。分析在后台运行，不会阻塞编辑与导出；离开页面也不会中断，返回后会自动接上。
             </p>
             <button
               type="button"
@@ -152,17 +153,29 @@ export function AnalysisPanel({
         )}
 
         {running && !report && (
-          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-            <p className="text-[11px] text-white/50">
-              正在分析照片，阶段完成前不会显示虚假进度。通常需要几秒到几十秒。
+          <div className="grid gap-2.5 rounded-xl border border-white/8 bg-white/[0.02] p-3">
+            <AnalysisProgress
+              status={analysis.status}
+              stage={analysis.stage}
+              startedAt={analysis.startedAt}
+            />
+            <p className="text-[11px] leading-relaxed text-white/45">
+              结果按后端返回的真实阶段推进。离开页面不会中断分析，返回后会自动接上。
             </p>
           </div>
         )}
 
         {running && report && (
-          <p className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2 text-[11px] text-white/45">
-            正在重新分析，当前显示上一次结果，完成后自动替换。
-          </p>
+          <div className="grid gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+            <AnalysisProgress
+              status={analysis.status}
+              stage={analysis.stage}
+              startedAt={analysis.startedAt}
+            />
+            <p className="text-[11px] text-white/45">
+              正在重新分析，当前显示上一次结果，完成后自动替换。
+            </p>
+          </div>
         )}
 
         {!analysis.error && analysis.status === "completed" && !report && (

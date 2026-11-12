@@ -186,6 +186,66 @@ const STAGE_LABELS: Record<TaskStage, string> = {
   failed: "分析失败",
 };
 
+export interface AnalysisStageStep {
+  stage: Exclude<TaskStage, "queued" | "completed" | "failed">;
+  label: string;
+}
+
+/**
+ * The backend reports these four real processing stages. The UI advances one
+ * step per reported stage instead of inventing a percentage the provider does
+ * not expose.
+ */
+export const ANALYSIS_STAGE_STEPS: readonly AnalysisStageStep[] = [
+  { stage: "preprocessing", label: "准备图片" },
+  { stage: "vision", label: "识别场景与主体" },
+  { stage: "features", label: "分析光线与色彩" },
+  { stage: "diagnosis", label: "生成摄影诊断" },
+];
+
+export function analysisActiveStep(
+  status: TaskStatus | null,
+  stage: TaskStage | null,
+): number {
+  if (status === "completed" || stage === "completed") {
+    return ANALYSIS_STAGE_STEPS.length;
+  }
+  if (!stage || stage === "queued" || stage === "failed") {
+    return 0;
+  }
+  const index = ANALYSIS_STAGE_STEPS.findIndex((step) => step.stage === stage);
+  return index < 0 ? 0 : index;
+}
+
+export function analysisElapsedSeconds(
+  startedAt: number | null,
+  now: number,
+): number {
+  if (startedAt === null) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+export function formatAnalysisElapsed(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} 秒`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest === 0 ? `${minutes} 分` : `${minutes} 分 ${rest} 秒`;
+}
+
+export function analysisSlowHint(seconds: number): string | null {
+  if (seconds >= 60) {
+    return "仍在等待模型返回。分析完成后结果会自动出现，你可以继续编辑或导出。";
+  }
+  if (seconds >= 30) {
+    return "模型响应比平时慢，仍在不间断处理，可以继续编辑。";
+  }
+  return null;
+}
+
 export function describeAnalysisStage(
   status: TaskStatus | null,
   stage: TaskStage | null,

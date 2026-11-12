@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 
+import { AnalysisProgress } from "@/features/analysis/components/analysis-progress";
 import type { UseAnalysisResult } from "@/features/analysis/hooks/use-analysis";
 import {
   categoryLabel,
@@ -925,6 +926,15 @@ export function PhotographerPanel({
                     ? "已有分析结果，可生成方案"
                     : "尚未分析这张照片"}
         </p>
+
+        {running && (
+          <AnalysisProgress
+            status={analysis.status}
+            stage={analysis.stage}
+            startedAt={analysis.startedAt}
+            className="rounded-lg border border-white/8 bg-white/[0.02] p-2.5"
+          />
+        )}
 
         {analysisError !== null && !ready && (
           <div

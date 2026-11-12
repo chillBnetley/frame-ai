@@ -38,6 +38,7 @@ function analysisState(
     report: null,
     error: null,
     requestPending: false,
+    startedAt: null,
     running: false,
     start: vi.fn(),
     retry: vi.fn(),
@@ -207,6 +208,12 @@ describe("PhotographerPanel", () => {
     });
 
     expect(screen.getByText("正在理解照片并识别场景")).toBeInTheDocument();
+    expect(
+      screen.getByRole("progressbar", { name: "分析阶段进度" }),
+    ).toHaveAttribute("aria-valuenow", "1");
+    expect(
+      screen.getByText("第 2/4 步 · 识别场景与主体"),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/\d+\s*%/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "分析中，完成后自动生成方案" }),
