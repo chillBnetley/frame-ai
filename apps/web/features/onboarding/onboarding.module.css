@@ -888,13 +888,17 @@
     grid-template-columns: 1fr;
   }
 
-  .footerRight {
-    flex: 1 1 100%;
-    justify-content: flex-end;
+  .configFooter {
+    gap: 8px;
   }
 
-  .primaryButton {
+  .footerLeft {
+    flex: 0 0 auto;
+  }
+
+  .footerRight {
     flex: 1 1 auto;
+    justify-content: flex-end;
   }
 }
 

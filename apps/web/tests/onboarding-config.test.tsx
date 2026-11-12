@@ -197,6 +197,9 @@ describe("ConfigStage", () => {
     expect(
       await screen.findByRole("heading", { name: "决策模型" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "暂不配置" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText("API Key")).toHaveAttribute(
       "placeholder",
       "已使用上一步输入的密钥，留空沿用",

@@ -20,6 +20,41 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/api/settings", () => settingsApi);
 
+const READY_VIEW: ProviderSettingsView = {
+  vision: {
+    provider: "openai",
+    model: "qwen-vl-plus",
+    baseUrl: "https://api.example.com/v1",
+    hasApiKey: true,
+    apiKeySource: "saved",
+  },
+  decision: {
+    provider: "openai",
+    model: "deepseek-chat",
+    baseUrl: "https://api.example.com/v1",
+    hasApiKey: true,
+    apiKeySource: "saved",
+  },
+  planner: {
+    provider: "mock",
+    model: "mock-planner",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+  },
+  generative: {
+    provider: "mock",
+    model: "wanx2.1-imageedit",
+    baseUrl: "",
+    hasApiKey: false,
+    apiKeySource: "none",
+    dailyImageLimit: 0,
+    ready: true,
+  },
+  isMock: false,
+  hasSavedOverrides: true,
+};
+
 const VIEW: ProviderSettingsView = {
   vision: {
     provider: "mock",
@@ -152,6 +187,20 @@ describe("OnboardingFlow", () => {
 
     expect(
       screen.getByRole("heading", { name: "私人 AI 摄影大师" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the ready note when the existing models are configured", async () => {
+    settingsApi.fetchProviderSettings.mockResolvedValue(READY_VIEW);
+    const user = userEvent.setup();
+    render(<OnboardingFlow />);
+
+    await user.click(screen.getByRole("button", { name: "继续" }));
+    await screen.findByDisplayValue("qwen-vl-plus");
+    await user.click(screen.getByRole("button", { name: "暂不配置" }));
+
+    expect(
+      screen.getByText("视觉与决策模型已就绪，可以开始调整照片了。"),
     ).toBeInTheDocument();
   });
 
