@@ -241,3 +241,11 @@ scripts/             验证、基准与维护脚本
 - [性能与测量方法](docs/performance.md)
 - [备份与恢复](docs/backup-restore.md)
 - [已知问题](docs/known-issues.md)
+
+---
+
+## License
+
+本项目采用 [MIT License](LICENSE) 授权。
+
+Copyright (c) 2026 chillBnetley
