@@ -1,6 +1,6 @@
 <div align="center">
 
-# FRAME AI
+# FRAME AI <img src="docs/assets/readme/logo.png" width="44" height="44" alt="FRAME AI logo">
 
 ### 你的私人AI摄影师
 
